@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pm="clr-namespace:TranslateReader.PageModels"
+             xmlns:controls="clr-namespace:TranslateReader.Pages.Controls"
+             x:Class="TranslateReader.Pages.ReaderPage"
+             x:DataType="pm:ReaderPageModel"
+             Title="{Binding Book.Title}">
+
+    <Shell.BackButtonBehavior>
+        <BackButtonBehavior IsEnabled="True" />
+    </Shell.BackButtonBehavior>
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" HorizontalOptions="Fill">
+            <Label Grid.Column="0"
+                   Text="{Binding Book.Title}"
+                   VerticalOptions="Center"
+                   LineBreakMode="TailTruncation" />
+            <Button Grid.Column="1"
+                    Text="⚙"
+                    FontSize="18"
+                    BackgroundColor="Transparent"
+                    Clicked="OnSettingsButtonClicked"
+                    WidthRequest="44"
+                    HeightRequest="44" />
+        </Grid>
+    </Shell.TitleView>
+
+    <Grid RowDefinitions="*,Auto">
+        <ActivityIndicator Grid.RowSpan="2"
+                           IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center" />
+
+        <WebView Grid.Row="0"
+                 x:Name="ContentWebView" />
+
+        <Grid Grid.Row="1"
+              ColumnDefinitions="Auto,*,Auto"
+              Padding="8">
+            <Button Grid.Column="0"
+                    x:Name="PreviousButton"
+                    Text="&#8592; Anterior"
+                    Clicked="OnPreviousButtonClicked"
+                    IsVisible="False" />
+            <Button Grid.Column="2"
+                    x:Name="NextButton"
+                    Text="Próximo &#8594;"
+                    Clicked="OnNextButtonClicked"
+                    IsVisible="False" />
+        </Grid>
+
+        <controls:SettingsOverlay Grid.RowSpan="2"
+                                  x:Name="SettingsOverlay"
+                                  IsVisible="False"
+                                  InputTransparent="True" />
+    </Grid>
+</ContentPage>

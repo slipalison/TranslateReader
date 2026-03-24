@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "*",
+      "Bash(cd /d D:REPOTranslateReader)",
+      "Bash(find . -not -path */bin/* -not -path */obj/* -type f -o -type d)",
+      "Bash(find D:REPOTranslateReader/TranslateReader -type f -name *.cs -o -name *.xaml -o -name *.csproj -o -name *.json -o -name *.xml -o -name *.plist)",
+      "Bash(cd:*)",
+      "Bash(mkdir -p test)",
+      "Bash(touch test/.gitkeep)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "mcp__context7__resolve-library-id",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet:*)",
+      "Bash(mv src/TranslateReader/Models/*.cs src/TranslateReader.Core/Models/)",
+      "Bash(mv src/TranslateReader/Contracts/Managers/*.cs src/TranslateReader.Core/Contracts/Managers/)",
+      "Bash(mv src/TranslateReader/Contracts/Engines/*.cs src/TranslateReader.Core/Contracts/Engines/)",
+      "Bash(mv src/TranslateReader/Contracts/Access/*.cs src/TranslateReader.Core/Contracts/Access/)",
+      "Bash(mv src/TranslateReader/Contracts/Utilities/*.cs src/TranslateReader.Core/Contracts/Utilities/)",
+      "Bash(mv:*)",
+      "Bash(rm -f test/TranslateReader.Tests/UnitTest1.cs)",
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Bash(xargs:*)",
+      "Bash(rm -rf src/TranslateReader/Models src/TranslateReader/Contracts src/TranslateReader/Business src/TranslateReader/Access)",
+      "Bash(rm -f src/TranslateReader/Utilities/FileUtility.cs)",
+      "Bash(find src/TranslateReader/Utilities -empty -type d -delete)",
+      "Bash(find D:/REPO/TranslateReader/src/TranslateReader.Core -name *.cs -newer D:/REPO/TranslateReader/CLAUDE.md)",
+      "Bash(xargs grep:*)",
+      "WebSearch",
+      "Bash(unzip -l \"/d/REPO/TranslateReader/test/TranslateReader.Tests/TestData/Practice Makes Perfect- English Conversation, Premium Fourth -- Jean Yates; -- \\( WeLib.org \\).epub\")",
+      "Bash(grep -r \"Source=\" /d/REPO/TranslateReader/src/TranslateReader/Pages/*.xaml)"
+    ]
+  }
+}

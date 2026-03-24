@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+    <File Path="CLAUDE.md" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Folder Name="/.claude/">
+    <File Path=".claude/settings.local.json" />
+    <Folder Name="/skills/">
+      <Folder Name="/the-method-design/">
+        <File Path=".claude/skills/the-method-design/SKILL.md" />
+        <Folder Name="/references/">
+          <File Path=".claude/skills/the-method-design/references/IMPLEMENTATION-PATTERNS.md" />
+          <File Path=".claude/skills/the-method-design/references/VALIDATION-WORKFLOW.md" />
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+  <Folder Name="/.idea/">
+    <File Path=".idea/.idea.TranslateReader/.idea/encodings.xml" />
+    <File Path=".idea/.idea.TranslateReader/.idea/indexLayout.xml" />
+    <File Path=".idea/.idea.TranslateReader/.idea/vcs.xml" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/TranslateReader.Core/TranslateReader.Core.csproj" />
+    <Project Path="src/TranslateReader/TranslateReader.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/TranslateReader.Tests/TranslateReader.Tests.csproj" />
+  </Folder>
+</Solution>

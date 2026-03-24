@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pm="clr-namespace:TranslateReader.PageModels"
+             xmlns:models="clr-namespace:TranslateReader.Models;assembly=TranslateReader.Core"
+             x:Class="TranslateReader.Pages.LibraryPage"
+             x:DataType="pm:LibraryPageModel"
+             Title="Biblioteca">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Importar"
+                     Command="{Binding ImportBookCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <Grid>
+        <ActivityIndicator IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center"
+                           ZIndex="1" />
+
+        <CollectionView x:Name="BooksCollection"
+                        ItemsSource="{Binding Books}"
+                        IsVisible="True"
+                        Margin="8,8,8,0"
+                        EmptyView="Nenhum livro importado. Toque em Importar para adicionar um EPUB.">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical"
+                                 Span="3"
+                                 HorizontalItemSpacing="10"
+                                 VerticalItemSpacing="14" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:BookSummary">
+                    <Grid Padding="2"
+                          MaximumWidthRequest="160"
+                          HorizontalOptions="Center">
+                        <FlyoutBase.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Excluir"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
+                                                CommandParameter="{Binding}" />
+                            </MenuFlyout>
+                        </FlyoutBase.ContextFlyout>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=OpenBookCommand}"
+                                CommandParameter="{Binding}" />
+                        </Grid.GestureRecognizers>
+
+                            <!-- Livro físico: capa + info abaixo -->
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+
+                                <!-- Capa com proporção 2:3, sombra e borda arredondada -->
+                                <Border Grid.Row="0"
+                                        StrokeShape="RoundRectangle 4"
+                                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                                        StrokeThickness="1"
+                                        Padding="0"
+                                        WidthRequest="140"
+                                        HeightRequest="210">
+                                    <Border.Shadow>
+                                        <Shadow Brush="{AppThemeBinding Light={StaticResource BlackBrush}, Dark={StaticResource BlackBrush}}"
+                                                Offset="3,4"
+                                                Radius="6"
+                                                Opacity="0.25" />
+                                    </Border.Shadow>
+
+                                    <!-- Container da capa com progresso sobreposto -->
+                                    <Grid>
+                                        <!-- Placeholder quando não há capa -->
+                                        <Grid IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}"
+                                              BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource DarkSecondaryBackground}}">
+                                            <VerticalStackLayout VerticalOptions="Center"
+                                                                 HorizontalOptions="Center"
+                                                                 Spacing="6">
+                                                <Label Text="&#xf02d;"
+                                                       FontFamily="OpenSansRegular"
+                                                       FontSize="36"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                                                       HorizontalOptions="Center" />
+                                                <Label Text="{Binding Title}"
+                                                       FontSize="10"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                                                       HorizontalTextAlignment="Center"
+                                                       MaxLines="3"
+                                                       LineBreakMode="WordWrap"
+                                                       Margin="6,0" />
+                                            </VerticalStackLayout>
+                                        </Grid>
+
+                                        <!-- Imagem da capa com path absoluto via converter -->
+                                        <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
+                                               Aspect="AspectFill"
+                                               IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+
+                                        <!-- Barra de progresso sobre a capa (parte inferior) -->
+                                        <ProgressBar VerticalOptions="End"
+                                                     Margin="0,0,0,0"
+                                                     HeightRequest="5"
+                                                     Progress="{Binding ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
+                                                     ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}"
+                                                     BackgroundColor="Transparent" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- Título -->
+                                <Label Grid.Row="1"
+                                       Text="{Binding Title}"
+                                       FontSize="11"
+                                       FontAttributes="Bold"
+                                       MaxLines="2"
+                                       LineBreakMode="TailTruncation"
+                                       HorizontalTextAlignment="Center"
+                                       Margin="2,6,2,1" />
+
+                                <!-- Autor -->
+                                <Label Grid.Row="2"
+                                       Text="{Binding Author}"
+                                       FontSize="10"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}"
+                                       MaxLines="1"
+                                       LineBreakMode="TailTruncation"
+                                       HorizontalTextAlignment="Center"
+                                       Margin="2,0,2,0" />
+                            </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
