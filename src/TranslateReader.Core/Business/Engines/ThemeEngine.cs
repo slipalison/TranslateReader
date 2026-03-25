@@ -22,7 +22,7 @@ public class ThemeEngine : IThemeEngine
         var isScroll = settings.ReadingMode == ReadingMode.Scroll;
 
         var css = "<style>" +
-               (isPaginated ? "html {overflow:hidden;height:100vh;}" : "") +
+               (isPaginated ? "html{overflow:hidden;height:100vh;margin:0;padding:0;}" : "") +
                "body {" +
                $"background-color:{c.Background} !important;" +
                $"color:{c.Text} !important;" +
@@ -32,12 +32,13 @@ public class ThemeEngine : IThemeEngine
                $"letter-spacing:{settings.LetterSpacing.ToString(inv)}px;" +
                $"word-spacing:{settings.WordSpacing.ToString(inv)}px;" +
                "padding:16px 24px;" +
-               (isPaginated ? "" : "margin:0 auto;max-width:720px;") +
-               (isPaginated ? "height:100vh;column-width:100vw;column-gap:0;overflow:visible;box-sizing:border-box;" : "") +
+               (isPaginated ? "margin:0;" : "margin:0 auto;max-width:720px;") +
+               (isPaginated ? "height:100vh;column-width:calc(100vw - 48px);column-gap:48px;overflow:visible;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word;" : "") +
                "}" +
                "img { max-width: 100%; height: auto; display: block; margin: 1em auto; }" +
                "svg { max-width: 100%; height: auto; }" +
                $"a{{color:{c.Accent} !important;}}" +
+               (isPaginated ? "img,svg,figure,table{break-inside:avoid;}img{max-height:calc(100vh - 32px) !important;object-fit:contain;}" : "") +
                (isScroll ? ".chapter-content{min-height:50vh;}" +
                            ".chapter-separator{border:none;border-top:1px solid rgba(128,128,128,0.3);margin:2em auto;width:60%;}" : "") +
                "</style>";

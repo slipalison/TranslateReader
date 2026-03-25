@@ -128,4 +128,21 @@ public class ThemeEngineTests
         Assert.Contains("chapter-separator", css);
         Assert.Contains("chapter-content", css);
     }
+
+    [Fact]
+    public void GenerateReaderCss_PaginatedMode_ContainsCorrectColumnWidth()
+    {
+        var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
+        var css = _sut.GenerateReaderCss(settings);
+        Assert.Contains("calc(100vw - 48px)", css);
+        Assert.Contains("column-gap:48px", css);
+    }
+
+    [Fact]
+    public void GenerateReaderCss_PaginatedMode_ContainsBreakInsideAvoid()
+    {
+        var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
+        var css = _sut.GenerateReaderCss(settings);
+        Assert.Contains("break-inside:avoid", css);
+    }
 }
