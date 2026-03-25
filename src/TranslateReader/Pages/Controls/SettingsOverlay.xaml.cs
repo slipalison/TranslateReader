@@ -31,6 +31,7 @@ public partial class SettingsOverlay : ContentView
 
         UpdateLabels();
         UpdateThemeButtonBorders(settings.Theme);
+        UpdateReadingModeButtonBorders(settings.ReadingMode);
 
         _suppressEvents = false;
     }
@@ -117,6 +118,26 @@ public partial class SettingsOverlay : ContentView
     {
         _settings.WordSpacing = Math.Round(e.NewValue, 1);
         WordSpacingLabel.Text = $"{_settings.WordSpacing:F1}px";
+        NotifySettingsChanged();
+    }
+
+    private void UpdateReadingModeButtonBorders(ReadingMode mode)
+    {
+        ScrollModeButton.BorderColor = mode == ReadingMode.Scroll ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        PaginatedModeButton.BorderColor = mode == ReadingMode.Paginated ? Color.FromArgb("#2563EB") : Colors.Transparent;
+    }
+
+    private void OnScrollModeClicked(object? sender, EventArgs e)
+    {
+        _settings.ReadingMode = ReadingMode.Scroll;
+        UpdateReadingModeButtonBorders(ReadingMode.Scroll);
+        NotifySettingsChanged();
+    }
+
+    private void OnPaginatedModeClicked(object? sender, EventArgs e)
+    {
+        _settings.ReadingMode = ReadingMode.Paginated;
+        UpdateReadingModeButtonBorders(ReadingMode.Paginated);
         NotifySettingsChanged();
     }
 }

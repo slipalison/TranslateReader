@@ -41,6 +41,8 @@ public partial class ReaderPageModel(
 
     public ReadingSettings CurrentSettings { get; private set; } = new();
 
+    public double SavedScrollPosition { get; set; }
+
     partial void OnBookIdChanged(int value) => _ = InitializeAsync(value);
 
     private async Task InitializeAsync(int bookId)
@@ -56,6 +58,7 @@ public partial class ReaderPageModel(
                 ? Chapters.ToList().FindIndex(c => c.HRef == progress.ChapterHRef)
                 : 0;
             if (CurrentChapterIndex < 0) CurrentChapterIndex = 0;
+            SavedScrollPosition = progress?.ScrollPosition ?? 0;
             await LoadCurrentChapterAsync();
         }
         catch (Exception ex)
@@ -74,6 +77,12 @@ public partial class ReaderPageModel(
         if (Chapters.Count == 0) return;
         try
         {
+            if (CurrentSettings.ReadingMode == ReadingMode.Scroll)
+            {
+                await LoadScrollContentAsync();
+                return;
+            }
+
             var chapter = Chapters[CurrentChapterIndex];
             var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
             var css = settingsManager.GenerateReaderCss(CurrentSettings);
@@ -90,10 +99,35 @@ public partial class ReaderPageModel(
         }
     }
 
+    private async Task LoadScrollContentAsync()
+    {
+        if (Chapters.Count == 0) return;
+        var css = settingsManager.GenerateReaderCss(CurrentSettings);
+        var chapterContents = new List<(string href, string bodyContent)>();
+        string baseDirectory = string.Empty;
+        foreach (var chapter in Chapters)
+        {
+            var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
+            baseDirectory = result.BaseDirectory;
+            var body = HtmlUtility.ExtractBodyContent(result.Html);
+            chapterContents.Add((chapter.HRef, body));
+        }
+        var fullHtml = HtmlUtility.BuildContinuousScrollHtml(chapterContents, css);
+        ChapterContent = string.Empty;
+        ChapterContent = WriteChapterHtmlFile(fullHtml, baseDirectory);
+        HasPreviousChapter = false;
+        HasNextChapter = false;
+    }
+
     public async Task ApplySettingsAsync(ReadingSettings settings)
     {
         CurrentSettings = settings;
         if (Chapters.Count == 0) return;
+        if (settings.ReadingMode == ReadingMode.Scroll)
+        {
+            await LoadScrollContentAsync();
+            return;
+        }
         var chapter = Chapters[CurrentChapterIndex];
         var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
         var css = settingsManager.GenerateReaderCss(settings);
@@ -129,13 +163,23 @@ public partial class ReaderPageModel(
         await LoadCurrentChapterAsync();
     }
 
-    public async Task SaveProgressAsync(double scrollPosition)
+    public async Task SaveScrollProgressAsync(string chapterHRef, double relativeScroll)
+    {
+        if (Chapters.Count == 0) return;
+        var chapterIndex = Chapters.ToList().FindIndex(c => c.HRef == chapterHRef);
+        if (chapterIndex < 0) chapterIndex = 0;
+        var progressPercentage = (chapterIndex + Math.Clamp(relativeScroll, 0, 1)) / Chapters.Count * 100;
+        await readingManager.SaveProgressAsync(BookId, chapterHRef, relativeScroll, progressPercentage);
+    }
+
+    public async Task SaveProgressAsync(double scrollPosition, int currentPage = 0, int totalPages = 0)
     {
         if (Chapters.Count == 0) return;
         var chapter = Chapters[CurrentChapterIndex];
-        var progressPercentage = Chapters.Count > 0
-            ? (double)(CurrentChapterIndex + 1) / Chapters.Count * 100
-            : 0;
+        var chapterFraction = totalPages > 0
+            ? (double)(currentPage + 1) / totalPages
+            : 1.0;
+        var progressPercentage = (CurrentChapterIndex + chapterFraction) / Chapters.Count * 100;
         await readingManager.SaveProgressAsync(BookId, chapter.HRef, scrollPosition, progressPercentage);
     }
 }

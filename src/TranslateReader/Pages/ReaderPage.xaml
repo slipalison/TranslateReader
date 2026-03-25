@@ -45,6 +45,12 @@
                     Text="&#8592; Anterior"
                     Clicked="OnPreviousButtonClicked"
                     IsVisible="False" />
+            <Label Grid.Column="1"
+                   x:Name="PageIndicatorLabel"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"
+                   FontSize="12"
+                   IsVisible="False" />
             <Button Grid.Column="2"
                     x:Name="NextButton"
                     Text="Próximo &#8594;"

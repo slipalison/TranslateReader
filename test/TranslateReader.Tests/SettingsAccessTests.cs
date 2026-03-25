@@ -95,4 +95,16 @@ public class SettingsAccessTests : IDisposable
 
         Assert.Equal(ThemeType.Sepia, fetched.Theme);
     }
+
+    [Fact]
+    public async Task SaveSettingsAsync_ThenFetch_ReturnsReadingMode()
+    {
+        var sut = CreateSut();
+        var saved = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
+
+        await sut.SaveSettingsAsync(saved);
+        var fetched = await sut.FetchSettingsAsync();
+
+        Assert.Equal(ReadingMode.Paginated, fetched.ReadingMode);
+    }
 }

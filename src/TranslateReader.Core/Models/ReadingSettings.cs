@@ -8,4 +8,5 @@ public class ReadingSettings
     public double LineSpacing { get; set; } = 1.6;
     public double LetterSpacing { get; set; } = 0;
     public double WordSpacing { get; set; } = 0;
+    public ReadingMode ReadingMode { get; set; } = ReadingMode.Scroll;
 }

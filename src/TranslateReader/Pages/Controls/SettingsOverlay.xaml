@@ -80,6 +80,33 @@
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
 
+                <!-- Modo de leitura -->
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Modo de leitura" FontSize="14" />
+                    <HorizontalStackLayout Spacing="12">
+                        <Button x:Name="ScrollModeButton"
+                                Text="Rolagem"
+                                Clicked="OnScrollModeClicked"
+                                BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                BorderColor="#2563EB"
+                                BorderWidth="2"
+                                CornerRadius="20"
+                                Padding="12,6"
+                                FontSize="12" />
+                        <Button x:Name="PaginatedModeButton"
+                                Text="Paginado"
+                                Clicked="OnPaginatedModeClicked"
+                                BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                BorderColor="Transparent"
+                                BorderWidth="2"
+                                CornerRadius="20"
+                                Padding="12,6"
+                                FontSize="12" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+
                 <!-- Fonte -->
                 <VerticalStackLayout Spacing="4">
                     <Label Text="Fonte" FontSize="14" />

@@ -1,9 +1,40 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TranslateReader.Utilities;
 
 public static class HtmlUtility
 {
+    public static string ExtractBodyContent(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        var bodyStart = Regex.Match(html, @"<body\b[^>]*>", RegexOptions.IgnoreCase);
+        if (!bodyStart.Success) return html;
+        var bodyEndIndex = html.IndexOf("</body>", bodyStart.Index + bodyStart.Length, StringComparison.OrdinalIgnoreCase);
+        if (bodyEndIndex < 0) return html[(bodyStart.Index + bodyStart.Length)..];
+        return html[(bodyStart.Index + bodyStart.Length)..bodyEndIndex];
+    }
+
+    public static string BuildContinuousScrollHtml(
+        IReadOnlyList<(string href, string bodyContent)> chapters,
+        string headContent)
+    {
+        var sb = new StringBuilder();
+        sb.Append("<html><head>");
+        sb.Append(headContent);
+        sb.Append("</head><body>");
+        for (var i = 0; i < chapters.Count; i++)
+        {
+            if (i > 0)
+                sb.Append("<hr class=\"chapter-separator\" />");
+            sb.Append($"<div class=\"chapter-content\" data-chapter-href=\"{chapters[i].href}\" data-chapter-index=\"{i}\">");
+            sb.Append(chapters[i].bodyContent);
+            sb.Append("</div>");
+        }
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
     public static string InjectTags(string html, string? baseTag, string? css)
     {
         if (string.IsNullOrWhiteSpace(html))

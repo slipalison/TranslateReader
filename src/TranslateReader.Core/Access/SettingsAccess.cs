@@ -49,7 +49,8 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
             FontSize = double.TryParse(values.GetValueOrDefault("FontSize"), out var fontSize) ? fontSize : 18,
             LineSpacing = double.TryParse(values.GetValueOrDefault("LineSpacing"), out var lineSpacing) ? lineSpacing : 1.6,
             LetterSpacing = double.TryParse(values.GetValueOrDefault("LetterSpacing"), out var letterSpacing) ? letterSpacing : 0,
-            WordSpacing = double.TryParse(values.GetValueOrDefault("WordSpacing"), out var wordSpacing) ? wordSpacing : 0
+            WordSpacing = double.TryParse(values.GetValueOrDefault("WordSpacing"), out var wordSpacing) ? wordSpacing : 0,
+            ReadingMode = Enum.TryParse<ReadingMode>(values.GetValueOrDefault("ReadingMode"), out var readingMode) ? readingMode : ReadingMode.Scroll
         };
     }
 
@@ -65,6 +66,7 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
         await UpsertValueAsync(connection, transaction, "LineSpacing", settings.LineSpacing.ToString());
         await UpsertValueAsync(connection, transaction, "LetterSpacing", settings.LetterSpacing.ToString());
         await UpsertValueAsync(connection, transaction, "WordSpacing", settings.WordSpacing.ToString());
+        await UpsertValueAsync(connection, transaction, "ReadingMode", settings.ReadingMode.ToString());
 
         await transaction.CommitAsync();
     }
