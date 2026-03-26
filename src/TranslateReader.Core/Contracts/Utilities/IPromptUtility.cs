@@ -1,0 +1,10 @@
+namespace TranslateReader.Contracts.Utilities;
+
+public interface IPromptUtility
+{
+    (string SystemMessage, string UserMessage) BuildTranslationMessages(
+        string text,
+        string? bookTitle,
+        string? chapterTitle,
+        string? previousParagraph);
+}

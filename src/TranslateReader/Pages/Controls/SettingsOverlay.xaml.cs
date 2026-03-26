@@ -8,9 +8,11 @@ public partial class SettingsOverlay : ContentView
 
     public event EventHandler? CloseRequested;
     public event EventHandler<ReadingSettings>? SettingsChanged;
+    public event EventHandler? DeleteModelRequested;
 
     private ReadingSettings _settings = new();
     private bool _suppressEvents;
+    private bool _isModelAvailable;
 
     public SettingsOverlay()
     {
@@ -18,9 +20,10 @@ public partial class SettingsOverlay : ContentView
         FontPicker.ItemsSource = FontOptions;
     }
 
-    public void ApplySettings(ReadingSettings settings)
+    public void ApplySettings(ReadingSettings settings, bool isModelAvailable = false)
     {
         _settings = settings;
+        _isModelAvailable = isModelAvailable;
         _suppressEvents = true;
 
         FontPicker.SelectedItem = settings.FontFamily;
@@ -32,6 +35,8 @@ public partial class SettingsOverlay : ContentView
         UpdateLabels();
         UpdateThemeButtonBorders(settings.Theme);
         UpdateReadingModeButtonBorders(settings.ReadingMode);
+        UpdateModelButtonBorders(settings.TranslationModelName);
+        UpdateModelStatus();
 
         _suppressEvents = false;
     }
@@ -140,4 +145,41 @@ public partial class SettingsOverlay : ContentView
         UpdateReadingModeButtonBorders(ReadingMode.Paginated);
         NotifySettingsChanged();
     }
+
+    private void UpdateModelButtonBorders(string modelName)
+    {
+        GemmaModelButton.BorderColor = modelName == "gemma-2-2b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        QwenModelButton.BorderColor = modelName == "qwen-2.5-3b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        PhiModelButton.BorderColor = modelName == "phi-3.5" ? Color.FromArgb("#2563EB") : Colors.Transparent;
+    }
+
+    private void UpdateModelStatus()
+    {
+        ModelStatusLabel.Text = _isModelAvailable ? "Modelo baixado" : "Modelo nao baixado";
+        DeleteModelButton.IsVisible = _isModelAvailable;
+    }
+
+    private void OnGemmaClicked(object? sender, EventArgs e)
+    {
+        _settings.TranslationModelName = "gemma-2-2b";
+        UpdateModelButtonBorders("gemma-2-2b");
+        NotifySettingsChanged();
+    }
+
+    private void OnQwenClicked(object? sender, EventArgs e)
+    {
+        _settings.TranslationModelName = "qwen-2.5-3b";
+        UpdateModelButtonBorders("qwen-2.5-3b");
+        NotifySettingsChanged();
+    }
+
+    private void OnPhiClicked(object? sender, EventArgs e)
+    {
+        _settings.TranslationModelName = "phi-3.5";
+        UpdateModelButtonBorders("phi-3.5");
+        NotifySettingsChanged();
+    }
+
+    private void OnDeleteModelClicked(object? sender, EventArgs e) =>
+        DeleteModelRequested?.Invoke(this, EventArgs.Empty);
 }

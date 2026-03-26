@@ -12,12 +12,19 @@
     </Shell.BackButtonBehavior>
 
     <Shell.TitleView>
-        <Grid ColumnDefinitions="*,Auto" HorizontalOptions="Fill">
+        <Grid ColumnDefinitions="*,Auto,Auto" HorizontalOptions="Fill">
             <Label Grid.Column="0"
                    Text="{Binding Book.Title}"
                    VerticalOptions="Center"
                    LineBreakMode="TailTruncation" />
             <Button Grid.Column="1"
+                    Text="Aa"
+                    FontSize="16"
+                    BackgroundColor="Transparent"
+                    Clicked="OnTranslateButtonClicked"
+                    WidthRequest="44"
+                    HeightRequest="44" />
+            <Button Grid.Column="2"
                     Text="⚙"
                     FontSize="18"
                     BackgroundColor="Transparent"
@@ -27,17 +34,28 @@
         </Grid>
     </Shell.TitleView>
 
-    <Grid RowDefinitions="*,Auto">
-        <ActivityIndicator Grid.RowSpan="2"
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <ActivityIndicator Grid.RowSpan="4"
                            IsRunning="{Binding IsBusy}"
                            IsVisible="{Binding IsBusy}"
                            VerticalOptions="Center"
                            HorizontalOptions="Center" />
 
-        <WebView Grid.Row="0"
+        <BoxView Grid.Row="0"
+                 HeightRequest="3"
+                 Color="#2563EB"
+                 IsVisible="{Binding IsTranslationModeActive}" />
+
+        <ProgressBar Grid.Row="1"
+                     Progress="{Binding TranslationProgress}"
+                     IsVisible="{Binding IsTranslating}"
+                     ProgressColor="#2563EB"
+                     HeightRequest="4" />
+
+        <WebView Grid.Row="2"
                  x:Name="ContentWebView" />
 
-        <Grid Grid.Row="1"
+        <Grid Grid.Row="3"
               ColumnDefinitions="Auto,*,Auto"
               Padding="8">
             <Button Grid.Column="0"
@@ -58,7 +76,83 @@
                     IsVisible="False" />
         </Grid>
 
-        <controls:SettingsOverlay Grid.RowSpan="2"
+        <!-- Overlay de download do modelo -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding IsModelDownloading}"
+              InputTransparent="False">
+            <BoxView Color="Black" Opacity="0.4" />
+            <Border VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                    Padding="24"
+                    WidthRequest="320">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="16">
+                    <Label Text="Baixando modelo de traducao..."
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           HorizontalOptions="Center" />
+                    <ProgressBar Progress="{Binding ModelDownloadProgress}"
+                                 ProgressColor="#2563EB" />
+                    <Label Text="{Binding ModelDownloadProgress, StringFormat='{0:P0}'}"
+                           HorizontalOptions="Center"
+                           FontSize="14" />
+                    <Label Text="Tamanho aproximado: ~1.6 GB"
+                           HorizontalOptions="Center"
+                           FontSize="12"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                    <Button Text="Cancelar"
+                            Clicked="OnCancelDownloadClicked"
+                            BackgroundColor="#E53E3E"
+                            TextColor="White"
+                            CornerRadius="8"
+                            HorizontalOptions="Center"
+                            MinimumHeightRequest="44"
+                            Padding="20,8" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Overlay de carregamento do modelo -->
+        <Grid Grid.RowSpan="4"
+              IsVisible="{Binding IsModelLoading}"
+              InputTransparent="False">
+            <BoxView Color="Black" Opacity="0.4" />
+            <Border VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                    Padding="24"
+                    WidthRequest="320">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="16">
+                    <Label Text="Carregando modelo..."
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           HorizontalOptions="Center" />
+                    <ActivityIndicator IsRunning="True"
+                                       Color="#2563EB"
+                                       HorizontalOptions="Center" />
+                    <Label Text="Preparando o modelo para traducao"
+                           HorizontalOptions="Center"
+                           FontSize="12"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                    <Button Text="Cancelar"
+                            Clicked="OnCancelDownloadClicked"
+                            BackgroundColor="#E53E3E"
+                            TextColor="White"
+                            CornerRadius="8"
+                            HorizontalOptions="Center"
+                            MinimumHeightRequest="44"
+                            Padding="20,8" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <controls:SettingsOverlay Grid.RowSpan="4"
                                   x:Name="SettingsOverlay"
                                   IsVisible="False"
                                   InputTransparent="True" />

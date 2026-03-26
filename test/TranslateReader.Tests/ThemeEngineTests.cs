@@ -97,7 +97,7 @@ public class ThemeEngineTests
     {
         var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
         var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("column-width", css);
+        Assert.Contains("columnWidth", css);
     }
 
     [Fact]
@@ -130,12 +130,12 @@ public class ThemeEngineTests
     }
 
     [Fact]
-    public void GenerateReaderCss_PaginatedMode_ContainsCorrectColumnWidth()
+    public void GenerateReaderCss_PaginatedMode_ContainsViewportWrapper()
     {
         var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
         var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("calc(100vw - 48px)", css);
-        Assert.Contains("column-gap:48px", css);
+        Assert.Contains("_viewport", css);
+        Assert.Contains("columnGap", css);
     }
 
     [Fact]

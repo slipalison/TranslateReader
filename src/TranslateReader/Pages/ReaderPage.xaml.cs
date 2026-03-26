@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using TranslateReader.Models;
 using TranslateReader.PageModels;
 
@@ -10,21 +11,24 @@ public partial class ReaderPage : ContentPage
     private int _currentPage;
     private int _totalPages;
     private bool _goToLastPageOnLoad;
+    private CancellationTokenSource? _pageTranslationCts;
+    private int _translationVersion;
 
     public ReaderPage(ReaderPageModel pageModel)
     {
         InitializeComponent();
         _pageModel = pageModel;
         BindingContext = pageModel;
-        _pageModel.PropertyChanged += OnPageModelPropertyChanged;
-        SettingsOverlay.SettingsChanged += OnSettingsChanged;
-        SettingsOverlay.CloseRequested += OnSettingsCloseRequested;
-        ContentWebView.Navigated += OnWebViewNavigated;
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _pageModel.PropertyChanged += OnPageModelPropertyChanged;
+        SettingsOverlay.SettingsChanged += OnSettingsChanged;
+        SettingsOverlay.CloseRequested += OnSettingsCloseRequested;
+        SettingsOverlay.DeleteModelRequested += OnDeleteModelRequested;
+        ContentWebView.Navigated += OnWebViewNavigated;
         UpdateWebViewSource(_pageModel.ChapterContent);
         SyncNavigationButtons();
         SyncSettingsOverlay();
@@ -33,6 +37,12 @@ public partial class ReaderPage : ContentPage
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
+        CancelPageTranslation();
+        _pageModel.PropertyChanged -= OnPageModelPropertyChanged;
+        SettingsOverlay.SettingsChanged -= OnSettingsChanged;
+        SettingsOverlay.CloseRequested -= OnSettingsCloseRequested;
+        SettingsOverlay.DeleteModelRequested -= OnDeleteModelRequested;
+        ContentWebView.Navigated -= OnWebViewNavigated;
         if (IsScrollMode())
         {
             await SaveScrollInfoAsync();
@@ -58,6 +68,18 @@ public partial class ReaderPage : ContentPage
             case nameof(ReaderPageModel.IsSettingsVisible):
                 Dispatcher.Dispatch(SyncSettingsOverlay);
                 break;
+            case nameof(ReaderPageModel.IsTranslationModeActive):
+                Dispatcher.Dispatch(() => OnTranslationModeChanged());
+                break;
+        }
+    }
+
+    private async void OnTranslationModeChanged()
+    {
+        if (!_pageModel.IsTranslationModeActive)
+        {
+            CancelPageTranslation();
+            await ClearTranslationsAsync();
         }
     }
 
@@ -114,6 +136,7 @@ public partial class ReaderPage : ContentPage
             if (_pageModel.HasPreviousChapter)
             {
                 _goToLastPageOnLoad = true;
+                CancelPageTranslation();
                 await _pageModel.NavigatePreviousCommand.ExecuteAsync(null);
                 return;
             }
@@ -134,6 +157,7 @@ public partial class ReaderPage : ContentPage
             }
             if (_pageModel.HasNextChapter)
             {
+                CancelPageTranslation();
                 await _pageModel.NavigateNextCommand.ExecuteAsync(null);
                 return;
             }
@@ -143,9 +167,86 @@ public partial class ReaderPage : ContentPage
             await _pageModel.NavigateNextCommand.ExecuteAsync(null);
     }
 
+    private async void OnTranslateButtonClicked(object? sender, EventArgs e)
+    {
+        if (IsScrollMode())
+        {
+            await DisplayAlert("Tradução", "A tradução funciona apenas no modo Paginado. Altere o modo de leitura nas configurações.", "OK");
+            return;
+        }
+
+        if (_pageModel.IsTranslationModeActive)
+        {
+            CancelPageTranslation();
+            _pageModel.DeactivateTranslationMode();
+            await ClearTranslationsAsync();
+            return;
+        }
+
+        if (_pageModel.IsTranslating || _pageModel.IsModelDownloading || _pageModel.IsModelLoading) return;
+
+        await _pageModel.TranslateCommand.ExecuteAsync(null);
+
+        if (_pageModel.IsTranslationModeActive)
+            await TranslateVisiblePageAsync();
+    }
+
+    private async Task TranslateVisiblePageAsync()
+    {
+        CancelPageTranslation();
+        _pageTranslationCts = new CancellationTokenSource();
+        var ct = _pageTranslationCts.Token;
+        var version = ++_translationVersion;
+
+        _pageModel.IsTranslating = true;
+        _pageModel.TranslationProgress = 0;
+
+        try
+        {
+            var json = await ContentWebView.EvaluateJavaScriptAsync("getVisibleParagraphs()");
+            var paragraphs = ParseVisibleParagraphs(json);
+            if (paragraphs.Count == 0) return;
+
+            var results = await _pageModel.TranslateVisibleParagraphsAsync(paragraphs, ct);
+            if (ct.IsCancellationRequested || results.Count == 0 || _translationVersion != version) return;
+
+            var translationsJson = SerializeTranslations(results);
+            await ContentWebView.EvaluateJavaScriptAsync($"applyTranslations({translationsJson})");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error translating page: {ex}");
+        }
+        finally
+        {
+            if (_translationVersion == version)
+                _pageModel.IsTranslating = false;
+        }
+    }
+
+    private async Task ClearTranslationsAsync()
+    {
+        try
+        {
+            await ContentWebView.EvaluateJavaScriptAsync("clearTranslations()");
+        }
+        catch { }
+    }
+
+    private void CancelPageTranslation()
+    {
+        _pageTranslationCts?.Cancel();
+        _pageTranslationCts?.Dispose();
+        _pageTranslationCts = null;
+    }
+
+    private void OnCancelDownloadClicked(object? sender, EventArgs e) =>
+        _pageModel.CancelTranslationCommand.Execute(null);
+
     private void OnSettingsButtonClicked(object? sender, EventArgs e)
     {
-        SettingsOverlay.ApplySettings(_pageModel.CurrentSettings);
+        SettingsOverlay.ApplySettings(_pageModel.CurrentSettings, _pageModel.IsModelAvailable);
         _pageModel.IsSettingsVisible = true;
     }
 
@@ -157,6 +258,9 @@ public partial class ReaderPage : ContentPage
         _pageModel.IsSettingsVisible = false;
         await _pageModel.SaveCurrentSettingsAsync();
     }
+
+    private async void OnDeleteModelRequested(object? sender, EventArgs e) =>
+        await _pageModel.DeleteModelAsync();
 
     private async void OnWebViewNavigated(object? sender, WebNavigatedEventArgs e)
     {
@@ -182,6 +286,8 @@ public partial class ReaderPage : ContentPage
         else
         {
             await UpdatePageInfoAsync();
+            if (_pageModel.IsTranslationModeActive)
+                await TranslateVisiblePageAsync();
         }
     }
 
@@ -205,6 +311,9 @@ public partial class ReaderPage : ContentPage
         ParsePageInfo(json);
         UpdatePageIndicator();
         Dispatcher.Dispatch(SyncNavigationButtons);
+
+        if (_pageModel.IsTranslationModeActive)
+            await TranslateVisiblePageAsync();
     }
 
     private void ParsePageInfo(string? json)
@@ -213,7 +322,7 @@ public partial class ReaderPage : ContentPage
         json = json.Trim('"').Replace("\\\"", "\"");
         try
         {
-            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var doc = JsonDocument.Parse(json);
             _currentPage = doc.RootElement.GetProperty("current").GetInt32();
             _totalPages = doc.RootElement.GetProperty("total").GetInt32();
         }
@@ -243,7 +352,7 @@ public partial class ReaderPage : ContentPage
             var json = await ContentWebView.EvaluateJavaScriptAsync("getScrollInfo()");
             if (string.IsNullOrEmpty(json)) return;
             json = json.Trim('"').Replace("\\\"", "\"");
-            var doc = System.Text.Json.JsonDocument.Parse(json);
+            var doc = JsonDocument.Parse(json);
             var href = doc.RootElement.GetProperty("chapterHRef").GetString() ?? string.Empty;
             var relScroll = doc.RootElement.GetProperty("relativeScroll").GetDouble();
             await _pageModel.SaveScrollProgressAsync(href, relScroll);
@@ -263,5 +372,31 @@ public partial class ReaderPage : ContentPage
             await ContentWebView.EvaluateJavaScriptAsync($"scrollToChapter('{jsHRef}',{posStr})");
         }
         _pageModel.SavedScrollPosition = 0;
+    }
+
+    private static List<VisibleParagraph> ParseVisibleParagraphs(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return [];
+        json = json.Trim('"').Replace("\\\"", "\"");
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.EnumerateArray()
+                .Select(e => new VisibleParagraph(
+                    e.GetProperty("index").GetInt32(),
+                    e.GetProperty("text").GetString() ?? string.Empty))
+                .Where(p => !string.IsNullOrWhiteSpace(p.Text))
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static string SerializeTranslations(IReadOnlyList<TranslatedParagraph> results)
+    {
+        var items = results.Select(r => new { index = r.Index, translated = r.Translated });
+        return JsonSerializer.Serialize(items);
     }
 }

@@ -9,6 +9,7 @@ namespace TranslateReader.Business.Managers;
 public class LibraryManager(
     IBooksAccess booksAccess,
     IReadingStateAccess readingStateAccess,
+    ITranslationCacheAccess translationCacheAccess,
     IParsingEngine parsingEngine,
     IFileUtility fileUtility,
     string booksDirectory) : ILibraryManager
@@ -59,6 +60,7 @@ public class LibraryManager(
     public async Task DeleteBookAsync(int bookId)
     {
         var book = await booksAccess.FetchBookAsync(bookId);
+        await translationCacheAccess.RemoveTranslationsForBookAsync(bookId);
         await readingStateAccess.RemoveStateForBookAsync(bookId);
         await booksAccess.RemoveBookAsync(bookId);
         await fileUtility.DeleteFileAsync(book.FilePath);

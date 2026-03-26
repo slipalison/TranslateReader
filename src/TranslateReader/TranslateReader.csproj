@@ -76,6 +76,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.26.0"
+            Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\TranslateReader.Core\TranslateReader.Core.csproj"/>
     </ItemGroup>
 

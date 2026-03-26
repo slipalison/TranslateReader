@@ -11,6 +11,7 @@
     <PackageReference Include="VersOne.Epub" Version="3.3.6" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.8" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
+    <PackageReference Include="LLamaSharp" Version="0.26.0" />
   </ItemGroup>
 
 </Project>

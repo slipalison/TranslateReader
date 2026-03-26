@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TranslateReader.Contracts.Managers;
 using TranslateReader.Models;
-
 using TranslateReader.Utilities;
 
 namespace TranslateReader.PageModels;
@@ -10,7 +9,8 @@ namespace TranslateReader.PageModels;
 [QueryProperty(nameof(BookId), "bookId")]
 public partial class ReaderPageModel(
     IReadingManager readingManager,
-    ISettingsManager settingsManager) : ObservableObject
+    ISettingsManager settingsManager,
+    ITranslationManager translationManager) : ObservableObject
 {
     [ObservableProperty]
     private int _bookId;
@@ -39,7 +39,29 @@ public partial class ReaderPageModel(
     [ObservableProperty]
     private bool _isSettingsVisible;
 
+    [ObservableProperty]
+    private bool _isTranslating;
+
+    [ObservableProperty]
+    private double _translationProgress;
+
+    [ObservableProperty]
+    private bool _isTranslationModeActive;
+
+    [ObservableProperty]
+    private bool _isModelDownloading;
+
+    [ObservableProperty]
+    private double _modelDownloadProgress;
+
+    [ObservableProperty]
+    private bool _isModelLoading;
+
+    private CancellationTokenSource? _translationCts;
+
     public ReadingSettings CurrentSettings { get; private set; } = new();
+
+    public bool IsModelAvailable { get; private set; }
 
     public double SavedScrollPosition { get; set; }
 
@@ -181,5 +203,109 @@ public partial class ReaderPageModel(
             : 1.0;
         var progressPercentage = (CurrentChapterIndex + chapterFraction) / Chapters.Count * 100;
         await readingManager.SaveProgressAsync(BookId, chapter.HRef, scrollPosition, progressPercentage);
+    }
+
+    [RelayCommand]
+    private async Task TranslateAsync()
+    {
+        if (Chapters.Count == 0 || CurrentSettings.ReadingMode == ReadingMode.Scroll) return;
+        if (IsTranslating || IsModelDownloading || IsModelLoading) return;
+
+        if (IsTranslationModeActive)
+        {
+            DeactivateTranslationMode();
+            return;
+        }
+
+        _translationCts?.Cancel();
+        _translationCts?.Dispose();
+        _translationCts = new CancellationTokenSource();
+        var ct = _translationCts.Token;
+
+        try
+        {
+            await EnsureModelDownloadedAsync(ct);
+            IsTranslationModeActive = true;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error preparing translation: {ex}");
+            await Shell.Current.DisplayAlert("Erro", "Não foi possível preparar a tradução.", "OK");
+        }
+    }
+
+    public async Task<IReadOnlyList<TranslatedParagraph>> TranslateVisibleParagraphsAsync(
+        IReadOnlyList<VisibleParagraph> paragraphs, CancellationToken ct)
+    {
+        if (!IsTranslationModeActive || paragraphs.Count == 0)
+            return [];
+
+        var results = new List<TranslatedParagraph>();
+        var chapter = Chapters[CurrentChapterIndex];
+
+        await Task.Run(async () =>
+        {
+            await foreach (var p in translationManager.TranslateParagraphsAsync(BookId, chapter.HRef, paragraphs, ct))
+            {
+                results.Add(p);
+                MainThread.BeginInvokeOnMainThread(() => TranslationProgress = p.Progress);
+            }
+        }, ct);
+
+        return results;
+    }
+
+    private async Task EnsureModelDownloadedAsync(CancellationToken ct)
+    {
+        try
+        {
+            IsModelDownloading = true;
+            ModelDownloadProgress = 0;
+            var progress = new Progress<double>(p => ModelDownloadProgress = p);
+            await Task.Run(() => translationManager.DownloadModelIfNeededAsync(progress, ct), ct);
+        }
+        finally
+        {
+            IsModelDownloading = false;
+        }
+
+        try
+        {
+            IsModelLoading = true;
+            await Task.Run(() => translationManager.InitializeEngineIfNeededAsync(ct), ct);
+        }
+        finally
+        {
+            IsModelLoading = false;
+        }
+
+        IsModelAvailable = true;
+    }
+
+    [RelayCommand]
+    private void CancelTranslation()
+    {
+        _translationCts?.Cancel();
+        _translationCts?.Dispose();
+        _translationCts = null;
+        DeactivateTranslationMode();
+        IsModelDownloading = false;
+        IsModelLoading = false;
+        ModelDownloadProgress = 0;
+    }
+
+    public void DeactivateTranslationMode()
+    {
+        IsTranslationModeActive = false;
+        IsTranslating = false;
+        TranslationProgress = 0;
+    }
+
+    public async Task DeleteModelAsync()
+    {
+        await translationManager.DeleteModelAsync();
+        IsModelAvailable = false;
+        DeactivateTranslationMode();
     }
 }

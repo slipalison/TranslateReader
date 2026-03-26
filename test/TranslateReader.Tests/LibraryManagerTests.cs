@@ -11,13 +11,14 @@ public class LibraryManagerTests
 {
     private readonly IBooksAccess _booksAccess = Substitute.For<IBooksAccess>();
     private readonly IReadingStateAccess _readingStateAccess = Substitute.For<IReadingStateAccess>();
+    private readonly ITranslationCacheAccess _translationCacheAccess = Substitute.For<ITranslationCacheAccess>();
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
     private readonly IFileUtility _fileUtility = Substitute.For<IFileUtility>();
     private readonly LibraryManager _sut;
 
     public LibraryManagerTests()
     {
-        _sut = new LibraryManager(_booksAccess, _readingStateAccess, _parsingEngine, _fileUtility, "/tmp/books");
+        _sut = new LibraryManager(_booksAccess, _readingStateAccess, _translationCacheAccess, _parsingEngine, _fileUtility, "/tmp/books");
     }
 
     [Fact]
@@ -169,6 +170,7 @@ public class LibraryManagerTests
 
         await _sut.DeleteBookAsync(5);
 
+        await _translationCacheAccess.Received(1).RemoveTranslationsForBookAsync(5);
         await _readingStateAccess.Received(1).RemoveStateForBookAsync(5);
         await _fileUtility.Received(1).DeleteDirectoryAsync(Arg.Is<string>(p => p.Contains("images") && p.Contains("5")));
     }

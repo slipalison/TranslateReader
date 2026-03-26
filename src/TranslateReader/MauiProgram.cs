@@ -43,16 +43,24 @@ public static class MauiProgram
         var connectionString = $"Data Source={dbPath}";
         var booksDirectory = Path.Combine(FileSystem.AppDataDirectory, "books");
 
+        var modelsDirectory = Path.Combine(FileSystem.AppDataDirectory, "models");
+
         services.AddSingleton<IBooksAccess>(_ => new BooksAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<IReadingStateAccess>(_ => new ReadingStateAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<ISettingsAccess>(_ => new SettingsAccess(connectionString, initializeOnStartup: true));
+        services.AddSingleton<ITranslationCacheAccess>(_ => new TranslationCacheAccess(connectionString, initializeOnStartup: true));
+        services.AddSingleton<IModelAccess>(_ => new ModelAccess(
+            new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, modelsDirectory));
+        services.AddSingleton<ITranslationEngine, TranslationEngine>();
         services.AddSingleton<IFileUtility, FileUtility>();
 
         services.AddTransient<IParsingEngine, ParsingEngine>();
         services.AddTransient<IThemeEngine, ThemeEngine>();
+        services.AddTransient<IPromptUtility, PromptUtility>();
         services.AddTransient<ILibraryManager>(sp => new LibraryManager(
             sp.GetRequiredService<IBooksAccess>(),
             sp.GetRequiredService<IReadingStateAccess>(),
+            sp.GetRequiredService<ITranslationCacheAccess>(),
             sp.GetRequiredService<IParsingEngine>(),
             sp.GetRequiredService<IFileUtility>(),
             booksDirectory));
@@ -62,6 +70,7 @@ public static class MauiProgram
             sp.GetRequiredService<IParsingEngine>(),
             sp.GetRequiredService<IFileUtility>(),
             booksDirectory));
+        services.AddTransient<ITranslationManager, TranslationManager>();
         services.AddTransient<ISettingsManager, SettingsManager>();
 
         services.AddTransient<LibraryPageModel>();
