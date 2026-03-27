@@ -71,7 +71,7 @@ public class ParsingEngineTests
     }
 
     [Fact]
-    public async Task Practice_ExtractChapterContentAsync_RewritesImagePathsToRelative()
+    public async Task Practice_ExtractChapterContentAsync_RewritesImagePathsToAbsoluteFileUri()
     {
         var chapters = await _sut.ExtractChaptersAsync(PracticeEpub);
         var chapterWithImage = chapters.First(c =>
@@ -79,7 +79,7 @@ public class ParsingEngineTests
 
         var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapterWithImage.HRef, ImagesDir);
 
-        Assert.DoesNotContain("file:///", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("file:///", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
     }
 

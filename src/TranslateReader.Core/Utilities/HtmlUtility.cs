@@ -16,13 +16,9 @@ public static class HtmlUtility
     }
 
     public static string BuildContinuousScrollHtml(
-        IReadOnlyList<(string href, string bodyContent)> chapters,
-        string headContent)
+        IReadOnlyList<(string href, string bodyContent)> chapters)
     {
         var sb = new StringBuilder();
-        sb.Append("<html><head>");
-        sb.Append(headContent);
-        sb.Append("</head><body>");
         for (var i = 0; i < chapters.Count; i++)
         {
             if (i > 0)
@@ -31,7 +27,6 @@ public static class HtmlUtility
             sb.Append(chapters[i].bodyContent);
             sb.Append("</div>");
         }
-        sb.Append("</body></html>");
         return sb.ToString();
     }
 

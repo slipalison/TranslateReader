@@ -109,7 +109,7 @@ public class HtmlInjectionTests
             ("ch1.html", "<p>Chapter 1</p>"),
             ("ch2.html", "<p>Chapter 2</p>")
         };
-        var result = HtmlUtility.BuildContinuousScrollHtml(chapters, "<style>body{}</style>");
+        var result = HtmlUtility.BuildContinuousScrollHtml(chapters);
 
         Assert.Contains("data-chapter-href=\"ch1.html\"", result);
         Assert.Contains("data-chapter-href=\"ch2.html\"", result);
@@ -118,7 +118,7 @@ public class HtmlInjectionTests
         Assert.Contains("<p>Chapter 1</p>", result);
         Assert.Contains("<p>Chapter 2</p>", result);
         Assert.Contains("chapter-separator", result);
-        Assert.Contains("<style>body{}</style>", result);
+        Assert.DoesNotContain("<html>", result);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class HtmlInjectionTests
         {
             ("ch1.html", "<p>Only one</p>")
         };
-        var result = HtmlUtility.BuildContinuousScrollHtml(chapters, "");
+        var result = HtmlUtility.BuildContinuousScrollHtml(chapters);
 
         Assert.Contains("<p>Only one</p>", result);
         Assert.DoesNotContain("chapter-separator", result);

@@ -28,6 +28,9 @@ public partial class ReaderPageModel(
     private string _chapterContent = string.Empty;
 
     [ObservableProperty]
+    private string _currentCss = string.Empty;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -107,10 +110,10 @@ public partial class ReaderPageModel(
 
             var chapter = Chapters[CurrentChapterIndex];
             var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
-            var css = settingsManager.GenerateReaderCss(CurrentSettings);
-            var fullHtml = HtmlUtility.InjectTags(result.Html, null, css);
+            CurrentCss = settingsManager.GenerateReaderCss(CurrentSettings);
+            var bodyHtml = HtmlUtility.ExtractBodyContent(result.Html);
             ChapterContent = string.Empty;
-            ChapterContent = WriteChapterHtmlFile(fullHtml, result.BaseDirectory);
+            ChapterContent = bodyHtml;
             HasPreviousChapter = CurrentChapterIndex > 0;
             HasNextChapter = CurrentChapterIndex < Chapters.Count - 1;
         }
@@ -124,19 +127,16 @@ public partial class ReaderPageModel(
     private async Task LoadScrollContentAsync()
     {
         if (Chapters.Count == 0) return;
-        var css = settingsManager.GenerateReaderCss(CurrentSettings);
+        CurrentCss = settingsManager.GenerateReaderCss(CurrentSettings);
         var chapterContents = new List<(string href, string bodyContent)>();
-        string baseDirectory = string.Empty;
         foreach (var chapter in Chapters)
         {
             var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
-            baseDirectory = result.BaseDirectory;
             var body = HtmlUtility.ExtractBodyContent(result.Html);
             chapterContents.Add((chapter.HRef, body));
         }
-        var fullHtml = HtmlUtility.BuildContinuousScrollHtml(chapterContents, css);
         ChapterContent = string.Empty;
-        ChapterContent = WriteChapterHtmlFile(fullHtml, baseDirectory);
+        ChapterContent = HtmlUtility.BuildContinuousScrollHtml(chapterContents);
         HasPreviousChapter = false;
         HasNextChapter = false;
     }
@@ -152,18 +152,10 @@ public partial class ReaderPageModel(
         }
         var chapter = Chapters[CurrentChapterIndex];
         var result = await readingManager.LoadChapterContentAsync(BookId, chapter.HRef);
-        var css = settingsManager.GenerateReaderCss(settings);
-        var fullHtml = HtmlUtility.InjectTags(result.Html, null, css);
+        CurrentCss = settingsManager.GenerateReaderCss(settings);
+        var bodyHtml = HtmlUtility.ExtractBodyContent(result.Html);
         ChapterContent = string.Empty;
-        ChapterContent = WriteChapterHtmlFile(fullHtml, result.BaseDirectory);
-    }
-
-    private static string WriteChapterHtmlFile(string fullHtml, string baseDirectory)
-    {
-        Directory.CreateDirectory(baseDirectory);
-        var filePath = Path.Combine(baseDirectory, "_chapter.html");
-        File.WriteAllText(filePath, fullHtml);
-        return new Uri(filePath).AbsoluteUri;
+        ChapterContent = bodyHtml;
     }
 
     public Task SaveCurrentSettingsAsync() =>

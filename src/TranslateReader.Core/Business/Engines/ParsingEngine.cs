@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Text.RegularExpressions;
 using VersOne.Epub;
 using VersOne.Epub.Options;
@@ -49,7 +51,7 @@ public class ParsingEngine : IParsingEngine
             throw new InvalidOperationException($"Chapter '{chapterHRef}' has no content.");
         var html = RewriteImagePaths(item.Content, item.FilePath, epub, imagesDirectory);
         html = InlineCssLinks(html, item.FilePath, epub);
-        return HtmlUtility.InjectTags(html, "<base href=\"./\" />", null);
+        return html;
     }
 
     public async Task<IReadOnlyDictionary<string, byte[]>> ExtractAllImagesAsync(string filePath)
@@ -182,18 +184,18 @@ public class ParsingEngine : IParsingEngine
     private static string ReplaceImageRef(Match match, int srcGroup, string chapterDir, EpubBook epub, string imagesDirectory)
     {
         var src = match.Groups[srcGroup].Value;
-        if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || src.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             return match.Value;
+            
         var resolvedPath = ResolvePath(chapterDir, src);
         var image = FindImage(epub, resolvedPath);
         if (image is null)
             return match.Value;
         
-        // No Windows, o WebView pode ter problemas se usarmos caminhos que começam com / ou se o base href não estiver claro.
-        // Já que o arquivo _chapter.html está no mesmo diretório base das imagens,
-        // o caminho relativo deve ser apenas o FilePath se ele for relativo à raiz do EPUB
-        // e se todas as imagens forem extraídas mantendo a estrutura original.
-        return $"{match.Groups[1].Value}{image.FilePath}{match.Groups[3].Value}";
+        var imagePath = Path.Combine(imagesDirectory, resolvedPath.Replace('/', Path.DirectorySeparatorChar));
+        var fileUri = new Uri(imagePath).AbsoluteUri;
+        
+        return $"{match.Groups[1].Value}{fileUri}{match.Groups[3].Value}";
     }
 
     private static EpubLocalByteContentFile? FindImage(EpubBook epub, string resolvedPath)

@@ -21,13 +21,13 @@ public class ThemeEngineTests
     }
 
     [Fact]
-    public void GenerateReaderCss_ContainsStyleTags()
+    public void GenerateReaderCss_ReturnsRawCssWithoutTags()
     {
         var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
         var css = _sut.GenerateReaderCss(settings);
 
-        Assert.StartsWith("<style>", css);
-        Assert.Contains("</style>", css);
+        Assert.DoesNotContain("<style>", css);
+        Assert.DoesNotContain("<script>", css);
     }
 
     [Fact]
@@ -93,31 +93,12 @@ public class ThemeEngineTests
     }
 
     [Fact]
-    public void GenerateReaderCss_PaginatedMode_ContainsColumnWidth()
+    public void GenerateReaderCss_PaginatedMode_ContainsOverflowHidden()
     {
         var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
         var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("columnWidth", css);
-    }
-
-    [Fact]
-    public void GenerateReaderCss_PaginatedMode_ContainsPaginationScript()
-    {
-        var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
-        var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("<script>", css);
-        Assert.Contains("getTotalPages", css);
-        Assert.Contains("goToPage", css);
-    }
-
-    [Fact]
-    public void GenerateReaderCss_ScrollMode_ContainsScrollTrackingScript()
-    {
-        var settings = new ReadingSettings { ReadingMode = ReadingMode.Scroll };
-        var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("<script>", css);
-        Assert.Contains("getScrollInfo", css);
-        Assert.Contains("scrollToChapter", css);
+        Assert.Contains("overflow:hidden", css);
+        Assert.Contains("100vh", css);
     }
 
     [Fact]
@@ -130,12 +111,11 @@ public class ThemeEngineTests
     }
 
     [Fact]
-    public void GenerateReaderCss_PaginatedMode_ContainsViewportWrapper()
+    public void GenerateReaderCss_PaginatedMode_NoScriptTags()
     {
         var settings = new ReadingSettings { ReadingMode = ReadingMode.Paginated };
         var css = _sut.GenerateReaderCss(settings);
-        Assert.Contains("_viewport", css);
-        Assert.Contains("columnGap", css);
+        Assert.DoesNotContain("<script>", css);
     }
 
     [Fact]

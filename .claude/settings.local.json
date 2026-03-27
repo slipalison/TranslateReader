@@ -35,7 +35,10 @@
       "Bash(xargs grep:*)",
       "WebSearch",
       "Bash(unzip -l \"/d/REPO/TranslateReader/test/TranslateReader.Tests/TestData/Practice Makes Perfect- English Conversation, Premium Fourth -- Jean Yates; -- \\( WeLib.org \\).epub\")",
-      "Bash(grep -r \"Source=\" /d/REPO/TranslateReader/src/TranslateReader/Pages/*.xaml)"
+      "Bash(grep -r \"Source=\" /d/REPO/TranslateReader/src/TranslateReader/Pages/*.xaml)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\REPO\\\\TranslateReader\\\\dotnet-install.ps1\" -Channel 10.0)",
+      "Bash(\"C:\\\\Users\\\\aliso\\\\AppData\\\\Local\\\\Microsoft\\\\dotnet\\\\dotnet.exe\" --list-runtimes)",
+      "Bash(\"C:\\\\Users\\\\aliso\\\\AppData\\\\Local\\\\Microsoft\\\\dotnet\\\\dotnet.exe\" --list-sdks)"
     ]
   }
 }

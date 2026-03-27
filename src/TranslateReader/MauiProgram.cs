@@ -12,6 +12,10 @@ using TranslateReader.Pages;
 using TranslateReader.Pages.Controls;
 using TranslateReader.Utilities;
 
+#if WINDOWS
+using Microsoft.Maui.Platform;
+#endif
+
 namespace TranslateReader;
 
 public static class MauiProgram
@@ -34,6 +38,17 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
+
+#if WINDOWS && DEBUG
+        Microsoft.Maui.Handlers.HybridWebViewHandler.Mapper.AppendToMapping("DevTools", (handler, view) =>
+        {
+            handler.PlatformView.CoreWebView2Initialized += (s, e) =>
+            {
+                handler.PlatformView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+                handler.PlatformView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            };
+        });
+#endif
         return builder.Build();
     }
 

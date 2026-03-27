@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using TranslateReader.Models;
 using TranslateReader.PageModels;
+using TranslateReader.Serialization;
 
 namespace TranslateReader.Pages;
 
@@ -11,6 +13,8 @@ public partial class ReaderPage : ContentPage
     private int _currentPage;
     private int _totalPages;
     private bool _goToLastPageOnLoad;
+    private bool _isWebViewReady;
+    private bool _needsInjection;
     private CancellationTokenSource? _pageTranslationCts;
     private int _translationVersion;
 
@@ -28,10 +32,20 @@ public partial class ReaderPage : ContentPage
         SettingsOverlay.SettingsChanged += OnSettingsChanged;
         SettingsOverlay.CloseRequested += OnSettingsCloseRequested;
         SettingsOverlay.DeleteModelRequested += OnDeleteModelRequested;
-        ContentWebView.Navigated += OnWebViewNavigated;
-        UpdateWebViewSource(_pageModel.ChapterContent);
         SyncNavigationButtons();
         SyncSettingsOverlay();
+        _ = EnsureWebViewReadyAsync();
+    }
+
+    private async Task EnsureWebViewReadyAsync()
+    {
+        await Task.Delay(3000);
+        if (!_isWebViewReady)
+        {
+            System.Diagnostics.Debug.WriteLine("[DEBUG_LOG] Fallback: ready message not received after 3s, forcing injection");
+            _isWebViewReady = true;
+            await InjectChapterAsync();
+        }
     }
 
     protected override async void OnDisappearing()
@@ -42,7 +56,6 @@ public partial class ReaderPage : ContentPage
         SettingsOverlay.SettingsChanged -= OnSettingsChanged;
         SettingsOverlay.CloseRequested -= OnSettingsCloseRequested;
         SettingsOverlay.DeleteModelRequested -= OnDeleteModelRequested;
-        ContentWebView.Navigated -= OnWebViewNavigated;
         if (IsScrollMode())
         {
             await SaveScrollInfoAsync();
@@ -54,12 +67,22 @@ public partial class ReaderPage : ContentPage
             await _pageModel.SaveProgressAsync(scrollPosition: 0);
     }
 
+    private async void OnHybridMessageReceived(object? sender, HybridWebViewRawMessageReceivedEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Hybrid Message Received: {e.Message}");
+        if (e.Message == "ready")
+        {
+            _isWebViewReady = true;
+            await InjectChapterAsync();
+        }
+    }
+
     private void OnPageModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
             case nameof(ReaderPageModel.ChapterContent):
-                UpdateWebViewSource(_pageModel.ChapterContent);
+                Dispatcher.Dispatch(() => _ = InjectChapterAsync());
                 break;
             case nameof(ReaderPageModel.HasPreviousChapter):
             case nameof(ReaderPageModel.HasNextChapter):
@@ -71,6 +94,85 @@ public partial class ReaderPage : ContentPage
             case nameof(ReaderPageModel.IsTranslationModeActive):
                 Dispatcher.Dispatch(() => OnTranslationModeChanged());
                 break;
+        }
+    }
+
+    private async Task InjectChapterAsync()
+    {
+        if (!_isWebViewReady)
+        {
+            _needsInjection = true;
+            System.Diagnostics.Debug.WriteLine("[DEBUG_LOG] WebView not ready, deferring injection");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_pageModel.ChapterContent))
+        {
+            System.Diagnostics.Debug.WriteLine("[DEBUG_LOG] Chapter content empty, skipping injection");
+            return;
+        }
+
+        _needsInjection = false;
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Injecting chapter content (length: {_pageModel.ChapterContent.Length})");
+            var mode = IsScrollMode() ? "scroll" : "paginated";
+
+            await ContentWebView.EvaluateJavaScriptAsync($"setMode({JsStr(mode)})");
+            await ContentWebView.EvaluateJavaScriptAsync($"applyCss({JsStr(_pageModel.CurrentCss)})");
+            
+            // Give CSS and Mode a tiny bit of time to settle if needed
+            await Task.Delay(50);
+
+            if (IsScrollMode())
+                await SafeInjectHtmlAsync("loadScrollContent", _pageModel.ChapterContent);
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Calling SafeInjectHtmlAsync with loadChapter");
+                await SafeInjectHtmlAsync("loadChapter", _pageModel.ChapterContent);
+            }
+
+            System.Diagnostics.Debug.WriteLine("[DEBUG_LOG] Injection successful");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error injecting chapter: {ex.Message}");
+            return;
+        }
+
+        await Task.Delay(300);
+
+        try
+        {
+            if (IsScrollMode())
+            {
+                await RestoreScrollPositionAsync();
+                return;
+            }
+
+            if (!IsPaginatedMode()) return;
+
+            if (_goToLastPageOnLoad)
+            {
+                _goToLastPageOnLoad = false;
+                await GoToLastPageAsync();
+            }
+            else if (_pageModel.SavedScrollPosition > 0)
+            {
+                var page = (int)_pageModel.SavedScrollPosition;
+                _pageModel.SavedScrollPosition = 0;
+                await GoToPageAsync(page);
+            }
+            else
+            {
+                await UpdatePageInfoAsync();
+                if (_pageModel.IsTranslationModeActive)
+                    await TranslateVisiblePageAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error restoring position: {ex}");
         }
     }
 
@@ -111,26 +213,13 @@ public partial class ReaderPage : ContentPage
         SettingsOverlay.InputTransparent = !_pageModel.IsSettingsVisible;
     }
 
-    private void UpdateWebViewSource(string content)
-    {
-        if (string.IsNullOrEmpty(content)) return;
-
-        Dispatcher.Dispatch(() =>
-        {
-            if (content.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-                ContentWebView.Source = new UrlWebViewSource { Url = content };
-            else
-                ContentWebView.Source = new HtmlWebViewSource { Html = content };
-        });
-    }
-
     private async void OnPreviousButtonClicked(object? sender, EventArgs e)
     {
         if (IsPaginatedMode())
         {
             if (_currentPage > 0)
             {
-                await EvaluatePageActionAsync("prevPage()");
+                await PrevPageAsync();
                 return;
             }
             if (_pageModel.HasPreviousChapter)
@@ -152,7 +241,7 @@ public partial class ReaderPage : ContentPage
         {
             if (_currentPage < _totalPages - 1)
             {
-                await EvaluatePageActionAsync("nextPage()");
+                await NextPageAsync();
                 return;
             }
             if (_pageModel.HasNextChapter)
@@ -171,7 +260,7 @@ public partial class ReaderPage : ContentPage
     {
         if (IsScrollMode())
         {
-            await DisplayAlert("Tradução", "A tradução funciona apenas no modo Paginado. Altere o modo de leitura nas configurações.", "OK");
+            await DisplayAlert("Traducao", "A traducao funciona apenas no modo Paginado. Altere o modo de leitura nas configuracoes.", "OK");
             return;
         }
 
@@ -203,15 +292,18 @@ public partial class ReaderPage : ContentPage
 
         try
         {
-            var json = await ContentWebView.EvaluateJavaScriptAsync("getVisibleParagraphs()");
-            var paragraphs = ParseVisibleParagraphs(json);
+            var paragraphs = await EvalJsAsync("getVisibleParagraphs()", ReaderJsonContext.Default.ListVisibleParagraph);
+            if (paragraphs is null || paragraphs.Count == 0) return;
+
+            paragraphs = paragraphs.Where(p => !string.IsNullOrWhiteSpace(p.Text)).ToList();
             if (paragraphs.Count == 0) return;
 
             var results = await _pageModel.TranslateVisibleParagraphsAsync(paragraphs, ct);
             if (ct.IsCancellationRequested || results.Count == 0 || _translationVersion != version) return;
 
-            var translationsJson = SerializeTranslations(results);
-            await ContentWebView.EvaluateJavaScriptAsync($"applyTranslations({translationsJson})");
+            var items = results.Select(r => new { index = r.Index, translated = r.Translated });
+            var itemsJson = JsonSerializer.Serialize(items, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            await ContentWebView.EvaluateJavaScriptAsync($"applyTranslations({itemsJson})");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -262,35 +354,6 @@ public partial class ReaderPage : ContentPage
     private async void OnDeleteModelRequested(object? sender, EventArgs e) =>
         await _pageModel.DeleteModelAsync();
 
-    private async void OnWebViewNavigated(object? sender, WebNavigatedEventArgs e)
-    {
-        if (IsScrollMode())
-        {
-            await Task.Delay(300);
-            await RestoreScrollPositionAsync();
-            return;
-        }
-        if (!IsPaginatedMode()) return;
-        await Task.Delay(200);
-        if (_goToLastPageOnLoad)
-        {
-            _goToLastPageOnLoad = false;
-            await EvaluatePageActionAsync("goToLastPage()");
-        }
-        else if (_pageModel.SavedScrollPosition > 0)
-        {
-            var page = (int)_pageModel.SavedScrollPosition;
-            _pageModel.SavedScrollPosition = 0;
-            await EvaluatePageActionAsync($"goToPage({page})");
-        }
-        else
-        {
-            await UpdatePageInfoAsync();
-            if (_pageModel.IsTranslationModeActive)
-                await TranslateVisiblePageAsync();
-        }
-    }
-
     private bool IsScrollMode() =>
         _pageModel.CurrentSettings.ReadingMode == ReadingMode.Scroll;
 
@@ -299,34 +362,49 @@ public partial class ReaderPage : ContentPage
 
     private async Task UpdatePageInfoAsync()
     {
-        var json = await ContentWebView.EvaluateJavaScriptAsync("getPageInfo()");
-        ParsePageInfo(json);
-        UpdatePageIndicator();
-        Dispatcher.Dispatch(SyncNavigationButtons);
+        var info = await EvalJsAsync("getPageInfo()", ReaderJsonContext.Default.PageInfo);
+        ApplyPageInfo(info);
     }
 
-    private async Task EvaluatePageActionAsync(string jsCall)
+    private async Task GoToPageAsync(int page)
     {
-        var json = await ContentWebView.EvaluateJavaScriptAsync(jsCall);
-        ParsePageInfo(json);
-        UpdatePageIndicator();
-        Dispatcher.Dispatch(SyncNavigationButtons);
-
+        var info = await EvalJsAsync($"goToPage({page})", ReaderJsonContext.Default.PageInfo);
+        ApplyPageInfo(info);
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
 
-    private void ParsePageInfo(string? json)
+    private async Task GoToLastPageAsync()
     {
-        if (string.IsNullOrEmpty(json)) return;
-        json = json.Trim('"').Replace("\\\"", "\"");
-        try
-        {
-            var doc = JsonDocument.Parse(json);
-            _currentPage = doc.RootElement.GetProperty("current").GetInt32();
-            _totalPages = doc.RootElement.GetProperty("total").GetInt32();
-        }
-        catch { }
+        var info = await EvalJsAsync("goToLastPage()", ReaderJsonContext.Default.PageInfo);
+        ApplyPageInfo(info);
+        if (_pageModel.IsTranslationModeActive)
+            await TranslateVisiblePageAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        var info = await EvalJsAsync("nextPage()", ReaderJsonContext.Default.PageInfo);
+        ApplyPageInfo(info);
+        if (_pageModel.IsTranslationModeActive)
+            await TranslateVisiblePageAsync();
+    }
+
+    private async Task PrevPageAsync()
+    {
+        var info = await EvalJsAsync("prevPage()", ReaderJsonContext.Default.PageInfo);
+        ApplyPageInfo(info);
+        if (_pageModel.IsTranslationModeActive)
+            await TranslateVisiblePageAsync();
+    }
+
+    private void ApplyPageInfo(PageInfo? info)
+    {
+        if (info is null) return;
+        _currentPage = info.Current;
+        _totalPages = info.Total;
+        UpdatePageIndicator();
+        Dispatcher.Dispatch(SyncNavigationButtons);
     }
 
     private void UpdatePageIndicator()
@@ -349,13 +427,9 @@ public partial class ReaderPage : ContentPage
     {
         try
         {
-            var json = await ContentWebView.EvaluateJavaScriptAsync("getScrollInfo()");
-            if (string.IsNullOrEmpty(json)) return;
-            json = json.Trim('"').Replace("\\\"", "\"");
-            var doc = JsonDocument.Parse(json);
-            var href = doc.RootElement.GetProperty("chapterHRef").GetString() ?? string.Empty;
-            var relScroll = doc.RootElement.GetProperty("relativeScroll").GetDouble();
-            await _pageModel.SaveScrollProgressAsync(href, relScroll);
+            var info = await EvalJsAsync("getScrollInfo()", ReaderJsonContext.Default.ScrollInfo);
+            if (info is null) return;
+            await _pageModel.SaveScrollProgressAsync(info.ChapterHRef, info.RelativeScroll);
         }
         catch { }
     }
@@ -367,36 +441,48 @@ public partial class ReaderPage : ContentPage
         var savedPos = _pageModel.SavedScrollPosition;
         if (savedPos > 0 || _pageModel.CurrentChapterIndex > 0)
         {
-            var jsHRef = savedHRef.Replace("'", "\\'");
-            var posStr = savedPos.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            await ContentWebView.EvaluateJavaScriptAsync($"scrollToChapter('{jsHRef}',{posStr})");
+            await ContentWebView.EvaluateJavaScriptAsync(
+                $"scrollToChapter({JsStr(savedHRef)}, {savedPos})");
         }
         _pageModel.SavedScrollPosition = 0;
     }
 
-    private static List<VisibleParagraph> ParseVisibleParagraphs(string? json)
+    private async Task SafeInjectHtmlAsync(string functionName, string html)
     {
-        if (string.IsNullOrEmpty(json)) return [];
-        json = json.Trim('"').Replace("\\\"", "\"");
-        try
+        const int chunkSize = 150000; // ~150KB per chunk
+        System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] SafeInjectHtmlAsync for {functionName}, total length: {html.Length}");
+        if (html.Length <= chunkSize)
         {
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.EnumerateArray()
-                .Select(e => new VisibleParagraph(
-                    e.GetProperty("index").GetInt32(),
-                    e.GetProperty("text").GetString() ?? string.Empty))
-                .Where(p => !string.IsNullOrWhiteSpace(p.Text))
-                .ToList();
+            var res = await ContentWebView.EvaluateJavaScriptAsync($"{functionName}({JsStr(html)})");
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] SafeInjectHtmlAsync direct call result: {res}");
+            return;
         }
-        catch
+
+        await ContentWebView.EvaluateJavaScriptAsync("window.__injectionBuffer = ''");
+        int chunks = (int)Math.Ceiling((double)html.Length / chunkSize);
+        for (int i = 0; i < html.Length; i += chunkSize)
         {
-            return [];
+            var chunk = html.Substring(i, Math.Min(chunkSize, html.Length - i));
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Sending chunk {i / chunkSize + 1} of {chunks}");
+            var resChunk = await ContentWebView.EvaluateJavaScriptAsync($"appendChunk({JsStr(chunk)})");
+            if (resChunk is null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] FAILED to send chunk {i / chunkSize + 1}");
+            }
         }
+        System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Flushing all chunks for {functionName}");
+        var resFlush = await ContentWebView.EvaluateJavaScriptAsync($"flushChunk('{functionName}')");
+        System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] SafeInjectHtmlAsync flush result: {resFlush}");
     }
 
-    private static string SerializeTranslations(IReadOnlyList<TranslatedParagraph> results)
+    private async Task<T?> EvalJsAsync<T>(string expression, JsonTypeInfo<T> typeInfo)
     {
-        var items = results.Select(r => new { index = r.Index, translated = r.Translated });
-        return JsonSerializer.Serialize(items);
+        var json = await ContentWebView.EvaluateJavaScriptAsync(expression);
+        if (string.IsNullOrEmpty(json) || json is "null" or "undefined")
+            return default;
+        return JsonSerializer.Deserialize(json, typeInfo);
     }
+
+    private static string JsStr(string? value) =>
+        JsonSerializer.Serialize(value ?? string.Empty);
 }

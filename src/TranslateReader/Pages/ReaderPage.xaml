@@ -52,8 +52,11 @@
                      ProgressColor="#2563EB"
                      HeightRequest="4" />
 
-        <WebView Grid.Row="2"
-                 x:Name="ContentWebView" />
+        <HybridWebView Grid.Row="2" 
+                       x:Name="ContentWebView"
+                       
+                       DefaultFile="index.html"
+                       RawMessageReceived="OnHybridMessageReceived" />
 
         <Grid Grid.Row="3"
               ColumnDefinitions="Auto,*,Auto"
