@@ -71,7 +71,7 @@ public class ParsingEngineTests
     }
 
     [Fact]
-    public async Task Practice_ExtractChapterContentAsync_RewritesImagePathsToAbsoluteFileUri()
+    public async Task Practice_ExtractChapterContentAsync_RewritesImagePathsToVirtualHostUrl()
     {
         var chapters = await _sut.ExtractChaptersAsync(PracticeEpub);
         var chapterWithImage = chapters.First(c =>
@@ -79,7 +79,7 @@ public class ParsingEngineTests
 
         var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapterWithImage.HRef, ImagesDir);
 
-        Assert.Contains("file:///", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("https://epub-images/", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -203,7 +203,7 @@ public class ParsingEngineTests
     }
 
     [Fact]
-    public async Task WardleyMaps_SvgCoverChapter_ContemFileUriPath()
+    public async Task WardleyMaps_SvgCoverChapter_ContemVirtualHostUrl()
     {
         var chapters = await _sut.ExtractChaptersAsync(WardleyEpub);
         var titlePage = chapters.FirstOrDefault(c =>
@@ -211,13 +211,15 @@ public class ParsingEngineTests
             || c.HRef.Contains("cover", StringComparison.OrdinalIgnoreCase));
 
         if (titlePage is null)
-            return; // sem titlepage, skip
+            return;
 
         var html = await _sut.ExtractChapterContentAsync(WardleyEpub, titlePage.HRef, ImagesDir);
 
-        // Se houver SVG <image xlink:href>, deve ter sido reescrito para caminho relativo (sem ../)
         if (html.Contains("<image", StringComparison.OrdinalIgnoreCase))
+        {
             Assert.DoesNotContain("href=\"../", html, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("https://epub-images/", html, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]

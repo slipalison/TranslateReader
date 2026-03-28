@@ -186,16 +186,16 @@ public class ParsingEngine : IParsingEngine
         var src = match.Groups[srcGroup].Value;
         if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || src.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             return match.Value;
-            
+
         var resolvedPath = ResolvePath(chapterDir, src);
         var image = FindImage(epub, resolvedPath);
         if (image is null)
             return match.Value;
-        
-        var imagePath = Path.Combine(imagesDirectory, resolvedPath.Replace('/', Path.DirectorySeparatorChar));
-        var fileUri = new Uri(imagePath).AbsoluteUri;
-        
-        return $"{match.Groups[1].Value}{fileUri}{match.Groups[3].Value}";
+
+        var bookDir = Path.GetFileName(imagesDirectory);
+        var imageUrl = $"https://epub-images/{bookDir}/{resolvedPath}";
+
+        return $"{match.Groups[1].Value}{imageUrl}{match.Groups[3].Value}";
     }
 
     private static EpubLocalByteContentFile? FindImage(EpubBook epub, string resolvedPath)

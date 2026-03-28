@@ -39,13 +39,19 @@ public static class MauiProgram
 #endif
 
 
-#if WINDOWS && DEBUG
-        Microsoft.Maui.Handlers.HybridWebViewHandler.Mapper.AppendToMapping("DevTools", (handler, view) =>
+#if WINDOWS
+        var imagesRoot = Path.Combine(FileSystem.AppDataDirectory, "books", "images");
+        Microsoft.Maui.Handlers.HybridWebViewHandler.Mapper.AppendToMapping("EpubImages", (handler, view) =>
         {
             handler.PlatformView.CoreWebView2Initialized += (s, e) =>
             {
+                handler.PlatformView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "epub-images", imagesRoot,
+                    Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+#if DEBUG
                 handler.PlatformView.CoreWebView2.Settings.AreDevToolsEnabled = true;
                 handler.PlatformView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+#endif
             };
         });
 #endif
