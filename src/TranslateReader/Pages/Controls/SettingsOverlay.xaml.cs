@@ -6,6 +6,20 @@ public partial class SettingsOverlay : ContentView
 {
     private static readonly string[] FontOptions = ["Georgia", "serif", "sans-serif", "monospace", "OpenDyslexic"];
 
+    private static readonly string[] LanguageOptions =
+    [
+        "English",
+        "Brazilian Portuguese (PT-BR)",
+        "Spanish",
+        "French",
+        "German",
+        "Italian",
+        "Japanese",
+        "Korean",
+        "Chinese (Simplified)",
+        "Russian"
+    ];
+
     public event EventHandler? CloseRequested;
     public event EventHandler<ReadingSettings>? SettingsChanged;
     public event EventHandler? DeleteModelRequested;
@@ -18,6 +32,8 @@ public partial class SettingsOverlay : ContentView
     {
         InitializeComponent();
         FontPicker.ItemsSource = FontOptions;
+        SourceLanguagePicker.ItemsSource = LanguageOptions;
+        TargetLanguagePicker.ItemsSource = LanguageOptions;
     }
 
     public void ApplySettings(ReadingSettings settings, bool isModelAvailable = false)
@@ -27,6 +43,8 @@ public partial class SettingsOverlay : ContentView
         _suppressEvents = true;
 
         FontPicker.SelectedItem = settings.FontFamily;
+        SourceLanguagePicker.SelectedItem = settings.SourceLanguage;
+        TargetLanguagePicker.SelectedItem = settings.TargetLanguage;
         FontSizeSlider.Value = settings.FontSize;
         LineSpacingSlider.Value = settings.LineSpacing;
         LetterSpacingSlider.Value = settings.LetterSpacing;
@@ -178,6 +196,24 @@ public partial class SettingsOverlay : ContentView
         _settings.TranslationModelName = "phi-3.5";
         UpdateModelButtonBorders("phi-3.5");
         NotifySettingsChanged();
+    }
+
+    private void OnSourceLanguageChanged(object? sender, EventArgs e)
+    {
+        if (SourceLanguagePicker.SelectedItem is string lang)
+        {
+            _settings.SourceLanguage = lang;
+            NotifySettingsChanged();
+        }
+    }
+
+    private void OnTargetLanguageChanged(object? sender, EventArgs e)
+    {
+        if (TargetLanguagePicker.SelectedItem is string lang)
+        {
+            _settings.TargetLanguage = lang;
+            NotifySettingsChanged();
+        }
     }
 
     private void OnDeleteModelClicked(object? sender, EventArgs e) =>

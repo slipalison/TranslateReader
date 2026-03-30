@@ -171,6 +171,22 @@
                        FontSize="16"
                        FontAttributes="Bold" />
 
+                <!-- Idioma de origem -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Idioma de origem" FontSize="14" />
+                    <Picker x:Name="SourceLanguagePicker"
+                            SelectedIndexChanged="OnSourceLanguageChanged"
+                            FontSize="14" />
+                </VerticalStackLayout>
+
+                <!-- Idioma de destino -->
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Idioma de destino" FontSize="14" />
+                    <Picker x:Name="TargetLanguagePicker"
+                            SelectedIndexChanged="OnTargetLanguageChanged"
+                            FontSize="14" />
+                </VerticalStackLayout>
+
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Modelo" FontSize="14" />
                     <HorizontalStackLayout Spacing="12">

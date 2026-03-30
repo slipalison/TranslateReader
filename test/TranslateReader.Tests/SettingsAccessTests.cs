@@ -107,4 +107,30 @@ public class SettingsAccessTests : IDisposable
 
         Assert.Equal(ReadingMode.Paginated, fetched.ReadingMode);
     }
+
+    [Fact]
+    public async Task FetchSettingsAsync_ReturnsDefaultLanguages_WhenNothingSaved()
+    {
+        var settings = await CreateSut().FetchSettingsAsync();
+
+        Assert.Equal("English", settings.SourceLanguage);
+        Assert.Equal("Brazilian Portuguese (PT-BR)", settings.TargetLanguage);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_ThenFetch_ReturnsLanguageSettings()
+    {
+        var sut = CreateSut();
+        var saved = new ReadingSettings
+        {
+            SourceLanguage = "Spanish",
+            TargetLanguage = "French"
+        };
+
+        await sut.SaveSettingsAsync(saved);
+        var fetched = await sut.FetchSettingsAsync();
+
+        Assert.Equal("Spanish", fetched.SourceLanguage);
+        Assert.Equal("French", fetched.TargetLanguage);
+    }
 }

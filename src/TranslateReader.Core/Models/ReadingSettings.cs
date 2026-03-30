@@ -11,4 +11,6 @@ public class ReadingSettings
     public ReadingMode ReadingMode { get; set; } = ReadingMode.Paginated;
     public string TranslationModelName { get; set; } = "gemma-2-2b";
     public double TranslationTemperature { get; set; } = 0.1;
+    public string SourceLanguage { get; set; } = "English";
+    public string TargetLanguage { get; set; } = "Brazilian Portuguese (PT-BR)";
 }

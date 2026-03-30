@@ -43,6 +43,8 @@ public partial class TranslationManager(
     public async IAsyncEnumerable<TranslatedParagraph> TranslateChapterAsync(
         int bookId,
         string chapterHRef,
+        string sourceLanguage,
+        string targetLanguage,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var book = await booksAccess.FetchBookAsync(bookId);
@@ -59,7 +61,7 @@ public partial class TranslationManager(
             ct.ThrowIfCancellationRequested();
 
             var original = paragraphs[i];
-            var hash = ComputeHash(original);
+            var hash = ComputeHash(original, sourceLanguage, targetLanguage);
 
             var cached = await translationCacheAccess.FetchTranslationAsync(bookId, chapterHRef, hash);
             if (cached is not null)
@@ -71,6 +73,8 @@ public partial class TranslationManager(
 
             var (systemMessage, userMessage) = promptUtility.BuildTranslationMessages(
                 original,
+                sourceLanguage,
+                targetLanguage,
                 book.Title,
                 chapter?.Title,
                 previousParagraph);
@@ -89,6 +93,8 @@ public partial class TranslationManager(
     public async IAsyncEnumerable<TranslatedParagraph> TranslateParagraphsAsync(
         int bookId,
         string chapterHRef,
+        string sourceLanguage,
+        string targetLanguage,
         IReadOnlyList<VisibleParagraph> paragraphs,
         [EnumeratorCancellation] CancellationToken ct)
     {
@@ -103,7 +109,7 @@ public partial class TranslationManager(
             ct.ThrowIfCancellationRequested();
 
             var original = paragraphs[i].Text;
-            var hash = ComputeHash(original);
+            var hash = ComputeHash(original, sourceLanguage, targetLanguage);
 
             var cached = await translationCacheAccess.FetchTranslationAsync(bookId, chapterHRef, hash);
             if (cached is not null)
@@ -114,7 +120,7 @@ public partial class TranslationManager(
             }
 
             var (systemMessage, userMessage) = promptUtility.BuildTranslationMessages(
-                original, book.Title, chapter?.Title, previousTranslation);
+                original, sourceLanguage, targetLanguage, book.Title, chapter?.Title, previousTranslation);
 
             var maxTokens = original.Length * MaxTokenMultiplier;
             var translated = await translationEngine.GenerateAsync(systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
@@ -142,9 +148,10 @@ public partial class TranslationManager(
     private static string StripHtmlTags(string html) =>
         HtmlTagRegex().Replace(html, string.Empty);
 
-    private static string ComputeHash(string text)
+    private static string ComputeHash(string text, string sourceLanguage, string targetLanguage)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(text));
+        var input = $"{sourceLanguage}|{targetLanguage}|{text}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes)[..16];
     }
 

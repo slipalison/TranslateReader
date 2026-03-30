@@ -52,7 +52,9 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
             WordSpacing = double.TryParse(values.GetValueOrDefault("WordSpacing"), out var wordSpacing) ? wordSpacing : 0,
             ReadingMode = Enum.TryParse<ReadingMode>(values.GetValueOrDefault("ReadingMode"), out var readingMode) ? readingMode : ReadingMode.Scroll,
             TranslationModelName = values.GetValueOrDefault("TranslationModelName") ?? "gemma-2-2b",
-            TranslationTemperature = double.TryParse(values.GetValueOrDefault("TranslationTemperature"), out var translationTemp) ? translationTemp : 0.1
+            TranslationTemperature = double.TryParse(values.GetValueOrDefault("TranslationTemperature"), out var translationTemp) ? translationTemp : 0.1,
+            SourceLanguage = values.GetValueOrDefault("SourceLanguage") ?? "English",
+            TargetLanguage = values.GetValueOrDefault("TargetLanguage") ?? "Brazilian Portuguese (PT-BR)"
         };
     }
 
@@ -71,6 +73,8 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
         await UpsertValueAsync(connection, transaction, "ReadingMode", settings.ReadingMode.ToString());
         await UpsertValueAsync(connection, transaction, "TranslationModelName", settings.TranslationModelName);
         await UpsertValueAsync(connection, transaction, "TranslationTemperature", settings.TranslationTemperature.ToString());
+        await UpsertValueAsync(connection, transaction, "SourceLanguage", settings.SourceLanguage);
+        await UpsertValueAsync(connection, transaction, "TargetLanguage", settings.TargetLanguage);
 
         await transaction.CommitAsync();
     }

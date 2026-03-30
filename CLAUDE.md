@@ -30,10 +30,19 @@ Utilities                        -> Nenhuma dependencia interna
 |---|---|---|
 | `ReadingManager` | Manager | Orquestra leitura: abrir livro, salvar/carregar progresso, navegar |
 | `LibraryManager` | Manager | Orquestra biblioteca: importar, listar, deletar, buscar |
-| `ParsingEngine` | Engine | Parseia EPUB (2/3), extrai metadados, capitulos, conteudo HTML |
+| `TranslationManager` | Manager | Orquestra traducao: download de modelo, traduzir capitulos/paragrafos, cache |
+| `SettingsManager` | Manager | Orquestra configuracoes: carregar/salvar settings, gerar CSS de tema |
+| `ParsingEngine` | Engine | Parseia EPUB (2/3), extrai metadados, capitulos, conteudo HTML, imagens |
+| `TranslationEngine` | Engine | Inferencia local com LLamaSharp: inicializar modelo, gerar texto (streaming/batch) |
+| `ThemeEngine` | Engine | Gera CSS de temas de leitura (Light, Dark, Sepia) |
 | `BooksAccess` | ResourceAccess | CRUD de Book e Chapter no SQLite |
 | `ReadingStateAccess` | ResourceAccess | CRUD de ReadingProgress e Bookmark no SQLite |
+| `SettingsAccess` | ResourceAccess | CRUD de Settings (key-value) no SQLite |
+| `TranslationCacheAccess` | ResourceAccess | Cache de traducoes por hash no SQLite |
+| `ModelAccess` | ResourceAccess | Download e gerenciamento de arquivos GGUF de modelo |
 | `FileUtility` | Utility | Operacoes de arquivo (copiar, deletar, verificar existencia) |
+| `PromptUtility` | Utility | Constroi prompts de traducao com contexto para o LLM |
+| `HtmlUtility` | Utility | Parsing e manipulacao de HTML para o reader (estatico) |
 
 ### Naming Conventions
 
@@ -64,6 +73,7 @@ dotnet build -f net10.0-ios                    # iOS
 
 - `VersOne.Epub` — parsing de EPUB
 - `Microsoft.Data.Sqlite.Core` — SQLite
+- `LLamaSharp` — inferencia local de LLM (traducao offline)
 - `CommunityToolkit.Mvvm` — MVVM (ObservableObject, RelayCommand)
 - `CommunityToolkit.Maui` — componentes MAUI extras
 
@@ -81,7 +91,15 @@ dotnet build -f net10.0-ios                    # iOS
 
 ```
 /                                  Raiz da solucao (.slnx)
-  src/TranslateReader/             Projeto MAUI principal
+  src/TranslateReader/             Projeto MAUI (Client Layer + UI)
+    Pages/                         XAML views (Client Layer)
+    Pages/Controls/                Controles customizados
+    PageModels/                    ViewModels (Client Layer)
+    Serialization/                 JSON contexts e converters
+    Utilities/                     Converters XAML (FilePathToImageSource, etc.)
+    Resources/                     Fonts, styles, assets
+    Platforms/                     Codigo platform-specific
+  src/TranslateReader.Core/        Biblioteca de logica (Business + Data)
     Contracts/Managers/            Interfaces de Managers
     Contracts/Engines/             Interfaces de Engines
     Contracts/Access/              Interfaces de ResourceAccess
@@ -90,13 +108,8 @@ dotnet build -f net10.0-ios                    # iOS
     Business/Engines/              Implementacoes de Engines
     Access/                        Implementacoes de ResourceAccess
     Utilities/                     Implementacoes de Utilities
-    Models/                        Entidades de dominio (POCOs)
-    Pages/                         XAML views (Client Layer)
-    Pages/Controls/                Controles customizados
-    PageModels/                    ViewModels (Client Layer)
-    Resources/                     Fonts, styles, assets
-    Platforms/                     Codigo platform-specific
-  test/                            Projetos de teste
+    Models/                        Entidades de dominio (POCOs, records, enums)
+  test/TranslateReader.Tests/      Projetos de teste (xUnit + NSubstitute)
 ```
 
 ## Modelos de Dados (SQLite)
@@ -106,6 +119,8 @@ Book:             ID, Title, Author, Publisher, Language, CoverImagePath, FilePa
 Chapter:          ID, BookId, Title, OrderIndex, HRef
 ReadingProgress:  ID, BookId, ChapterHRef, ScrollPosition, ProgressPercentage, UpdatedAt
 Bookmark:         ID, BookId, ChapterHRef, Position, Label, CreatedAt
+Settings:         Key (PK), Value
+TranslationCache: ID, BookId, ChapterHRef, OriginalHash, TranslatedText, CreatedAt (UNIQUE: BookId+ChapterHRef+OriginalHash)
 ```
 
 ## Regras Importantes

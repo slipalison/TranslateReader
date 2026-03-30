@@ -238,7 +238,7 @@ public partial class ReaderPageModel(
 
         await Task.Run(async () =>
         {
-            await foreach (var p in translationManager.TranslateParagraphsAsync(BookId, chapter.HRef, paragraphs, ct))
+            await foreach (var p in translationManager.TranslateParagraphsAsync(BookId, chapter.HRef, CurrentSettings.SourceLanguage, CurrentSettings.TargetLanguage, paragraphs, ct))
             {
                 results.Add(p);
                 MainThread.BeginInvokeOnMainThread(() => TranslationProgress = p.Progress);

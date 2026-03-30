@@ -80,7 +80,7 @@ public class TranslationManagerTests
             .Returns("Ola mundo");
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", CancellationToken.None))
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
             results.Add(p);
 
         Assert.Single(results);
@@ -96,14 +96,14 @@ public class TranslationManagerTests
         _cacheAccess.FetchTranslationAsync(1, "ch1.html", Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
         _translationEngine.GenerateAsync("system", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Ola mundo");
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", CancellationToken.None))
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
             results.Add(p);
 
         Assert.Single(results);
@@ -121,18 +121,18 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Primeiro paragrafo", "Segundo paragrafo");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", CancellationToken.None))
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
             results.Add(p);
 
         Assert.Equal(2, results.Count);
         _promptUtility.Received(1).BuildTranslationMessages(
-            "Second paragraph", Arg.Any<string?>(),
-            Arg.Any<string?>(), "Primeiro paragrafo");
+            "Second paragraph", Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), "Primeiro paragrafo");
     }
 
     [Fact]
@@ -144,12 +144,12 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Um", "Dois");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", CancellationToken.None))
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
             results.Add(p);
 
         Assert.Equal(0.5, results[0].Progress);
@@ -174,12 +174,12 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Ola", "Mundo");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", CancellationToken.None))
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
             results.Add(p);
 
         Assert.Equal(2, results.Count);
@@ -194,7 +194,7 @@ public class TranslationManagerTests
             .Returns("Ola mundo");
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", paragraphs, CancellationToken.None))
+        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, CancellationToken.None))
             results.Add(p);
 
         Assert.Single(results);
@@ -212,14 +212,14 @@ public class TranslationManagerTests
         _cacheAccess.FetchTranslationAsync(1, "ch1.html", Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
         _translationEngine.GenerateAsync("system", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Ola mundo");
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", paragraphs, CancellationToken.None))
+        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, CancellationToken.None))
             results.Add(p);
 
         Assert.Single(results);
@@ -239,12 +239,12 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Primeiro", "Segundo");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", paragraphs, CancellationToken.None))
+        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, CancellationToken.None))
             results.Add(p);
 
         Assert.Equal(2, results.Count);
@@ -262,12 +262,12 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Um", "Dois");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", paragraphs, CancellationToken.None))
+        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, CancellationToken.None))
             results.Add(p);
 
         Assert.Equal(0.5, results[0].Progress);
@@ -284,17 +284,17 @@ public class TranslationManagerTests
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Primeiro paragrafo", "Segundo paragrafo");
         _promptUtility.BuildTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string?>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
 
         var results = new List<TranslatedParagraph>();
-        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", paragraphs, CancellationToken.None))
+        await foreach (var p in _sut.TranslateParagraphsAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, CancellationToken.None))
             results.Add(p);
 
         _promptUtility.Received(1).BuildTranslationMessages(
-            "Second paragraph", Arg.Any<string?>(),
-            Arg.Any<string?>(), "Primeiro paragrafo");
+            "Second paragraph", Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), "Primeiro paragrafo");
     }
 
     private void SetupBook()
