@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.IO.Compression;
+using System.Text;
 using System.Text.RegularExpressions;
 using VersOne.Epub;
 using VersOne.Epub.Options;
@@ -74,6 +76,63 @@ public class ParsingEngine : IParsingEngine
             return coverContent;
 
         return FindCoverInManifest(epub);
+    }
+
+    public async Task<string> CreateTranslatedEpubAsync(
+        string originalFilePath,
+        string translatedTitle,
+        IReadOnlyDictionary<string, string> translatedChapterHtml,
+        string destinationDirectory)
+    {
+        Directory.CreateDirectory(destinationDirectory);
+        var shortGuid = Guid.NewGuid().ToString("N")[..8];
+        var fileName = $"{Path.GetFileNameWithoutExtension(originalFilePath)}_translated_{shortGuid}.epub";
+        var destPath = Path.Combine(destinationDirectory, fileName);
+        File.Copy(originalFilePath, destPath, overwrite: true);
+
+        using (var archive = ZipFile.Open(destPath, ZipArchiveMode.Update))
+        {
+            foreach (var (href, html) in translatedChapterHtml)
+            {
+                var normalizedHref = href.Replace('\\', '/');
+                var entry = archive.Entries.FirstOrDefault(e =>
+                    string.Equals(e.FullName.Replace('\\', '/'), normalizedHref, StringComparison.OrdinalIgnoreCase) ||
+                    e.FullName.Replace('\\', '/').EndsWith("/" + normalizedHref, StringComparison.OrdinalIgnoreCase));
+                if (entry is null) continue;
+
+                using var stream = entry.Open();
+                stream.SetLength(0);
+                await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+                await writer.WriteAsync(html);
+            }
+
+            await UpdateOpfTitleAsync(archive, translatedTitle);
+        }
+
+        return destPath;
+    }
+
+    private static async Task UpdateOpfTitleAsync(ZipArchive archive, string newTitle)
+    {
+        var opfEntry = archive.Entries.FirstOrDefault(e =>
+            e.FullName.EndsWith(".opf", StringComparison.OrdinalIgnoreCase));
+        if (opfEntry is null) return;
+
+        string content;
+        using (var reader = new StreamReader(opfEntry.Open()))
+            content = await reader.ReadToEndAsync();
+
+        var escapedTitle = System.Net.WebUtility.HtmlEncode(newTitle);
+        content = Regex.Replace(content,
+            @"(<dc:title[^>]*>)(.*?)(</dc:title>)",
+            $"$1{escapedTitle}$3",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        using var stream = opfEntry.Open();
+        stream.SetLength(0);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+        await writer.WriteAsync(content);
+        await writer.FlushAsync();
     }
 
     private static async Task<EpubBook> ReadEpubSafeAsync(string filePath)

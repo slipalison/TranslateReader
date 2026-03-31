@@ -9,4 +9,9 @@ public interface IParsingEngine
     Task<string> ExtractChapterContentAsync(string filePath, string chapterHRef, string imagesDirectory);
     Task<IReadOnlyDictionary<string, byte[]>> ExtractAllImagesAsync(string filePath);
     Task<byte[]?> ExtractCoverImageAsync(string filePath);
+    Task<string> CreateTranslatedEpubAsync(
+        string originalFilePath,
+        string translatedTitle,
+        IReadOnlyDictionary<string, string> translatedChapterHtml,
+        string destinationDirectory);
 }

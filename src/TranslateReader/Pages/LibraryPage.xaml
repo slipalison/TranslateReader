@@ -37,6 +37,9 @@
                           HorizontalOptions="Center">
                         <FlyoutBase.ContextFlyout>
                             <MenuFlyout>
+                                <MenuFlyoutItem Text="Traduzir livro"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
+                                                CommandParameter="{Binding}" />
                                 <MenuFlyoutItem Text="Excluir"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
                                                 CommandParameter="{Binding}" />
@@ -129,5 +132,68 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+
+        <!-- Translation progress bar -->
+        <Border VerticalOptions="End"
+                HorizontalOptions="Fill"
+                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                Padding="16,12"
+                IsVisible="{Binding IsTranslatingBook}"
+                ZIndex="2">
+            <Border.Shadow>
+                <Shadow Brush="Black" Offset="0,-2" Radius="6" Opacity="0.15" />
+            </Border.Shadow>
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+                <Label Grid.Row="0" Grid.Column="0"
+                       FontSize="13" FontAttributes="Bold">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="Traduzindo: " />
+                            <Span Text="{Binding TranslatingBookTitle}" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+                <Button Grid.Row="0" Grid.Column="1"
+                        Text="Pausar"
+                        Command="{Binding PauseBookTranslationCommand}"
+                        BackgroundColor="#E53E3E"
+                        TextColor="White"
+                        CornerRadius="6"
+                        Padding="10,4"
+                        FontSize="11"
+                        MinimumHeightRequest="32" />
+                <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                             Progress="{Binding BookTranslationProgress}"
+                             ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+            </Grid>
+        </Border>
+
+        <!-- Model download/loading overlay -->
+        <Border VerticalOptions="End"
+                HorizontalOptions="Fill"
+                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                Padding="16,12"
+                IsVisible="{Binding IsModelDownloading}"
+                ZIndex="2">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                <Label Grid.Row="0" Text="Baixando modelo de tradução..."
+                       FontSize="13" />
+                <ProgressBar Grid.Row="1"
+                             Progress="{Binding ModelDownloadProgress}"
+                             ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+            </Grid>
+        </Border>
+
+        <Border VerticalOptions="End"
+                HorizontalOptions="Fill"
+                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                Padding="16,12"
+                IsVisible="{Binding IsModelLoading}"
+                ZIndex="2">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Carregando modelo..." FontSize="13" />
+                <ActivityIndicator IsRunning="True" HeightRequest="20" />
+            </VerticalStackLayout>
+        </Border>
     </Grid>
 </ContentPage>

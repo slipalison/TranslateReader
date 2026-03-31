@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using LLama;
 using LLama.Common;
+using LLama.Native;
 using LLama.Sampling;
 using TranslateReader.Contracts.Engines;
 
@@ -12,6 +13,7 @@ public class TranslationEngine : ITranslationEngine
     private LLamaWeights? _weights;
     private ModelParams? _modelParams;
     private bool _disposed;
+    private static bool _nativeLibraryConfigured;
 
     public bool IsReady => _weights is not null && !_disposed;
 
@@ -22,10 +24,31 @@ public class TranslationEngine : ITranslationEngine
         if (IsReady)
             return Task.CompletedTask;
 
+        ConfigureNativeLibrary();
         _modelParams = CreateModelParams(modelPath);
         _weights = LLamaWeights.LoadFromFile(_modelParams);
 
         return Task.CompletedTask;
+    }
+
+    private static void ConfigureNativeLibrary()
+    {
+        if (_nativeLibraryConfigured)
+            return;
+
+        _nativeLibraryConfigured = true;
+
+        var cudaSearchDir = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "runtimes", "win-x64", "native", "cuda12");
+
+        NativeLibraryConfig.All
+            .WithCuda(true)
+            .WithVulkan(false)
+            .WithAutoFallback(false)
+            .WithSearchDirectory(cudaSearchDir)
+            .WithLogCallback((level, message) =>
+                System.Diagnostics.Debug.WriteLine($"[LLamaSharp] {level}: {message}"));
     }
 
     public async IAsyncEnumerable<string> GenerateStreamingAsync(
@@ -88,7 +111,7 @@ public class TranslationEngine : ITranslationEngine
         return new ModelParams(modelPath)
         {
             ContextSize = 2048,
-            GpuLayerCount = 0,
+            GpuLayerCount = -1,
             UseMemorymap = true,
             BatchSize = 512,
             Threads = CalculateThreadCount()

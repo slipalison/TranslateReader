@@ -9,4 +9,13 @@ public interface ITranslationManager
     IAsyncEnumerable<TranslatedParagraph> TranslateChapterAsync(int bookId, string chapterHRef, string sourceLanguage, string targetLanguage, CancellationToken ct);
     IAsyncEnumerable<TranslatedParagraph> TranslateParagraphsAsync(int bookId, string chapterHRef, string sourceLanguage, string targetLanguage, IReadOnlyList<VisibleParagraph> paragraphs, CancellationToken ct);
     Task DeleteModelAsync();
+    Task<string> TranslateBookAsync(
+        int bookId,
+        string sourceLanguage,
+        string targetLanguage,
+        string destinationDirectory,
+        IProgress<BookTranslationProgress>? progress,
+        CancellationToken ct);
+    Task<BookTranslationJob?> GetActiveTranslationJobAsync(int bookId);
+    Task PauseTranslationAsync(int bookId);
 }

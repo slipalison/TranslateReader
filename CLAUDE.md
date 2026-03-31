@@ -30,9 +30,9 @@ Utilities                        -> Nenhuma dependencia interna
 |---|---|---|
 | `ReadingManager` | Manager | Orquestra leitura: abrir livro, salvar/carregar progresso, navegar |
 | `LibraryManager` | Manager | Orquestra biblioteca: importar, listar, deletar, buscar |
-| `TranslationManager` | Manager | Orquestra traducao: download de modelo, traduzir capitulos/paragrafos, cache |
+| `TranslationManager` | Manager | Orquestra traducao: download de modelo, traduzir capitulos/paragrafos/livro completo, cache |
 | `SettingsManager` | Manager | Orquestra configuracoes: carregar/salvar settings, gerar CSS de tema |
-| `ParsingEngine` | Engine | Parseia EPUB (2/3), extrai metadados, capitulos, conteudo HTML, imagens |
+| `ParsingEngine` | Engine | Parseia EPUB (2/3), extrai metadados, capitulos, conteudo HTML, imagens; cria EPUB traduzido |
 | `TranslationEngine` | Engine | Inferencia local com LLamaSharp: inicializar modelo, gerar texto (streaming/batch) |
 | `ThemeEngine` | Engine | Gera CSS de temas de leitura (Light, Dark, Sepia) |
 | `BooksAccess` | ResourceAccess | CRUD de Book e Chapter no SQLite |
