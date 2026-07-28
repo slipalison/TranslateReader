@@ -33,7 +33,8 @@ jobs:
           persist-credentials: false
 
       - name: Install Semgrep
-        run: pip install semgrep==1.159.0
+        # --only-binary :all: blocks sdist setup-script execution at install time (Sonar S8541)
+        run: pip install --only-binary ':all:' semgrep==1.159.0
 
       # Informational: registry rules (auto) + custom rules, full SARIF for code scanning.
       # Registry findings are triaged in PR review; only the custom ERROR rules gate.
