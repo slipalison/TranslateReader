@@ -32,6 +32,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** busca-no-livro
 - **Goal:** busca full-text no conteudo dos capitulos do livro aberto
 
+### Phase 6: LLM em Android/iOS
+- **Slug:** llm-mobile
+- **Goal:** backends nativos LLamaSharp em Android/iOS — traducao offline roda em mobile (Fase 7 do translation-feature-plan)
+
 ## Candidatos detectados (NAO aprovados)
 
 Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
