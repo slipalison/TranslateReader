@@ -40,6 +40,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** ci-seguranca
 - **Goal:** corrigir TranslateReader.slnx (referencias a .idea/ gitignored) + GitHub Actions rigoroso: CodeQL, dependency review, secret scanning, OSSF Scorecard, build + testes, SonarQube e release automatizado
 
+### Phase 8: Suplemento SAST/SCA/SBOM (paridade simulator-ccb)
+- **Slug:** sast-sca-sbom
+- **Goal:** Semgrep SAST com regras custom (zip-slip/XXE/WebView), gate SCA nativo dotnet (bloqueia CVE HIGH/CRITICAL), bump SQLitePCLRaw (GHSA-2m69-gcr7-jv3q), TruffleHog verified, SBOM Syft e SECURITY.md
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

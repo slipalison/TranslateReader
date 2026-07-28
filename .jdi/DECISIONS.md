@@ -37,6 +37,28 @@ e SonarQube, com rigor. Overlap consciente com a phase `cobertura-e-ci`: o workf
 nasce aqui; `cobertura-e-ci` mantem apenas o threshold do coverlet (90%, D-6) e o gate de
 cobertura no pipeline.
 
+D-2026-07-28-sast-sca-sbom-1: Phase 'Suplemento SAST/SCA/SBOM (paridade simulator-ccb)'
+(slug: sast-sca-sbom) adicionada. Reason: usuario pediu comparacao com os mecanismos de
+seguranca de github.com/slipalison/simulator-ccb e inclusao do que for relevante. Analise
+comparativa (ci.yml de 1296 linhas, 12 jobs de seguranca) definiu o escopo:
+APLICAVEIS (entram na phase): Semgrep SAST (2a camada rapida + regras custom para os riscos
+reais deste repo: zip-slip na extracao de EPUB, XXE, injection no bridge JS do WebView,
+BinaryFormatter); gate SCA continuo via `dotnet list package --vulnerable
+--include-transitive` com falha em HIGH/CRITICAL; bump de SQLitePCLRaw.bundle_green 2.1.11
+(CVE GHSA-2m69-gcr7-jv3q HIGH, transitiva via lib.e_sqlite3 — mudanca pontual de seguranca
+permitida sobre legado, prioridade 1, nao e refactor em massa; supersede o roteamento
+"so Dependabot" de W-1); TruffleHog --only-verified (verificacao ativa de credencial,
+complementa gitleaks); SBOM Syft SPDX + dependency-snapshot (supply-chain/compliance,
+informacional); SECURITY.md (politica de report — tambem vira PASS no check Security-Policy
+do Scorecard).
+NAO-APLICAVEIS (decisao auditada, nao re-levantar): DAST/OWASP ZAP — TranslateReader e app
+cliente MAUI sem superficie HTTP; nao ha alvo pra scan dinamico, ZAP sem endpoint e teatro
+de seguranca. Trivy Image + Dockle — nao ha Docker/imagem/registry. Checkov — nao ha IaC
+(compose/terraform/k8s). Trivy FS — cego para NuGet sem packages.lock.json (projeto nao usa
+lock files); substituido pelo gate SCA nativo dotnet, que enxerga transitivas (provado: NU1903
+detectado no probe). Coverage gate no CI segue fora (pertence a phase cobertura-e-ci, D-2026-
+07-28-ci-seguranca-5).
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
