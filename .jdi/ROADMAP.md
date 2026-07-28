@@ -36,19 +36,19 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** llm-mobile
 - **Goal:** backends nativos LLamaSharp em Android/iOS — traducao offline roda em mobile (Fase 7 do translation-feature-plan)
 
-## Candidatos detectados (NAO aprovados)
+## Evidencias de origem das phases
 
-Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
-partida para a conversa — nenhuma foi escolhida pelo usuario e nenhuma e uma phase.
+Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram
+aprovadas pelo usuario em 2026-07-28 (ver D-5 em DECISIONS.md):
 
-| Candidato | Evidencia no repo |
+| Phase (slug) | Evidencia no repo |
 |---|---|
-| Bookmarks ponta a ponta | `Bookmark` + 3 operacoes em `IReadingStateAccess` existem, mas `IReadingManager` nao expoe nenhuma e nao ha UI; README anuncia a feature |
-| Backend nativo LLM em Android/iOS | `LLamaSharp.Backend.*` so referenciado sob `Condition ... == 'windows'`; Fase 7 de `docs/translation-feature-plan.md` nao implementada |
-| Tela de detalhe do livro | README documenta `BookDetailPage` + `BookDetailPageModel`; arquivos nao existem no repo |
-| Gate de cobertura + CI | `coverlet.collector` referenciado mas sem threshold; nenhum workflow de CI no repo |
-| Busca dentro do livro | `ILibraryManager.SearchBooksAsync` busca so na biblioteca; nao ha full-text no conteudo do capitulo |
-| Baseline de estilo | sem `.editorconfig`, sem `.gitattributes`, sem analyzers configurados |
+| `bookmarks` | `Bookmark` + 3 operacoes em `IReadingStateAccess` existem, mas `IReadingManager` nao expoe nenhuma e nao ha UI; README anuncia a feature |
+| `llm-mobile` | `LLamaSharp.Backend.*` so referenciado sob `Condition ... == 'windows'`; Fase 7 de `docs/translation-feature-plan.md` nao implementada |
+| `detalhe-livro` | README documenta `BookDetailPage` + `BookDetailPageModel`; arquivos nao existem no repo |
+| `cobertura-e-ci` | `coverlet.collector` referenciado mas sem threshold; nenhum workflow de CI no repo |
+| `busca-no-livro` | `ILibraryManager.SearchBooksAsync` busca so na biblioteca; nao ha full-text no conteudo do capitulo |
+| `baseline-de-estilo` | sem `.editorconfig`, sem `.gitattributes`, sem analyzers configurados |
 
 ## Convencoes de phase
 
