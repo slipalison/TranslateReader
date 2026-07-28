@@ -4,8 +4,14 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # 7-day cooldown: newly published packages can be malicious or unstable
+    # (typosquatting, account hijack). Wait before proposing them.
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
