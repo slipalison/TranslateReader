@@ -1,0 +1,71 @@
+name: SonarQube
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonar:
+    name: SonarQube Cloud scan
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Java
+        if: env.SONAR_TOKEN != ''
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup .NET
+        if: env.SONAR_TOKEN != ''
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install dotnet-sonarscanner
+        if: env.SONAR_TOKEN != ''
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Begin SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        run: >-
+          dotnet-sonarscanner begin
+          /k:"slipalison_TranslateReader"
+          /o:"slipalison"
+          /d:sonar.host.url=https://sonarcloud.io
+          /d:sonar.token="$SONAR_TOKEN"
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      - name: Build Core
+        if: env.SONAR_TOKEN != ''
+        run: dotnet build src/TranslateReader.Core/TranslateReader.Core.csproj -c Release
+
+      - name: Test with OpenCover coverage
+        if: env.SONAR_TOKEN != ''
+        run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+
+      - name: End SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
