@@ -82,6 +82,16 @@
         <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.26.0" />
     </ItemGroup>
 
+    <!-- GHSA-2m69-gcr7-jv3q: bundle_green 2.1.11 pulls the vulnerable 2.1.11 native libs on
+         mobile TFMs. Same nearest-wins override as the Core csproj, per-platform twins.
+         Drop when a fixed bundle_green ships. -->
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+        <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3.android" Version="2.1.12" />
+    </ItemGroup>
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+        <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3.ios" Version="2.1.12" />
+    </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\TranslateReader.Core\TranslateReader.Core.csproj"/>
     </ItemGroup>

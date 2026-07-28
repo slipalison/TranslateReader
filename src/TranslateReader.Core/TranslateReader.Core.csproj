@@ -12,9 +12,10 @@
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.5" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
     <!-- GHSA-2m69-gcr7-jv3q: bundle_green 2.1.11 (latest) pulls lib.e_sqlite3 2.1.11 (vulnerable
-         <= 2.1.11). No fixed bundle exists; nearest-wins override to the patched 3.x native lib
-         (vendor-blessed: 3.x lib versions track SQLite and stay compatible with 2.1.x core). -->
-    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+         <= 2.1.11). No fixed bundle exists; nearest-wins override to 2.1.12, the in-band vendor
+         patch of the same series. Mobile TFM twins (.android/.ios) are overridden in the app
+         csproj. Drop all overrides when a fixed bundle_green ships. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageReference Include="LLamaSharp" Version="0.26.0" />
   </ItemGroup>
 
