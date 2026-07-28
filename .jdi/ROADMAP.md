@@ -12,14 +12,9 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 
 ## Phases
 
-_Nenhuma phase confirmada ainda._
-
-A adocao nao capturou a lista de features novas (o subagent de adocao rodou sem canal
-de pergunta interativa, entao nada foi inventado). Registrar cada feature desejada com:
-
-```
-/jdi-add-phase "<nome>" --goal "<objetivo em 1 linha>"
-```
+### Phase 1: Baseline de estilo
+- **Slug:** baseline-de-estilo
+- **Goal:** editorconfig, gitattributes e analyzers configurados na raiz
 
 ## Candidatos detectados (NAO aprovados)
 
