@@ -118,3 +118,13 @@ lista **nenhuma** linha `SQLitePCLRaw`. Linha nao reformatada para nao mascarar 
 - Total: 171 | Passing: **169** | Failed: 0 | Skipped: 2 (LLamaSharp model-dependent, pre-existentes)
 - Phase infra-only: nenhum `.cs` novo/alterado — gate de cobertura 90% (D-6) **SKIPPED**.
 - Baseline D-2 preservada; T-1 (bump nativo SQLite) nao regrediu nada.
+
+## Fix round 2 (pos-ship, feedback do CI real + SonarQube)
+
+Primeira rodada dos workflows no GitHub + scan SonarQube Cloud do PR #1 trouxe 3 problemas:
+
+| Origem | Problema | Fix | Commit |
+|---|---|---|---|
+| SCA gate (funcionou!) | restore ubuntu resolve TFM `net10.0-android` e puxa `lib.e_sqlite3.android` 2.1.11 vulneravel — override desktop 3.53.3 nao cobria os twins mobile | override movido para **2.1.12** (patch in-band da mesma serie, existe para os 3 twins) no Core + twins condicionais `.android`/`.ios` no app csproj; 169 testes verdes | `0115574` |
+| SonarQube Quality Gate (Security Rating C) | `githubactions:S8541` — `pip install` sem `--only-binary :all:` em semgrep.yml permite execucao de setup script de sdist | `pip install --only-binary ':all:' semgrep==1.159.0` | `c280bf4` |
+| dependency-review-action | "Dependency graph is not enabled" — toggle de Settings desligado | habilitado via API (`PUT /vulnerability-alerts`), junto com secret scanning + push protection + automated security fixes — 3 itens do checklist deferred do PR resolvidos | n/a (Settings) |
