@@ -24,6 +24,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** bookmarks
 - **Goal:** completar o vertical morto — expor bookmarks em IReadingManager e entregar UI de criar/listar/remover
 
+### Phase 4: Tela de detalhe do livro
+- **Slug:** detalhe-livro
+- **Goal:** BookDetailPage + BookDetailPageModel documentados no README passam a existir
+
 ## Candidatos detectados (NAO aprovados)
 
 Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
