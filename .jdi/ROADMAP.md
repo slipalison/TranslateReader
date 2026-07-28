@@ -16,6 +16,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** baseline-de-estilo
 - **Goal:** editorconfig, gitattributes e analyzers configurados na raiz
 
+### Phase 2: Cobertura e CI
+- **Slug:** cobertura-e-ci
+- **Goal:** threshold de cobertura no coverlet (80% pos-boundary D-2) + workflow de CI com build e testes
+
 ## Candidatos detectados (NAO aprovados)
 
 Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
