@@ -16,11 +16,6 @@
       </Folder>
     </Folder>
   </Folder>
-  <Folder Name="/.idea/">
-    <File Path=".idea/.idea.TranslateReader/.idea/encodings.xml" />
-    <File Path=".idea/.idea.TranslateReader/.idea/indexLayout.xml" />
-    <File Path=".idea/.idea.TranslateReader/.idea/vcs.xml" />
-  </Folder>
   <Folder Name="/src/">
     <Project Path="src/TranslateReader.Core/TranslateReader.Core.csproj" />
     <Project Path="src/TranslateReader/TranslateReader.csproj" />

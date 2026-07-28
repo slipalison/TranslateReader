@@ -1,0 +1,53 @@
+name: Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "45 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Semgrep
+        # --only-binary :all: blocks sdist setup-script execution at install time (Sonar S8541)
+        run: pip install --only-binary ':all:' semgrep==1.159.0
+
+      # Informational: registry rules (auto) + custom rules, full SARIF for code scanning.
+      # Registry findings are triaged in PR review; only the custom ERROR rules gate.
+      - name: Semgrep scan (SARIF report)
+        run: semgrep scan --config auto --config .semgrep/ --sarif --output semgrep.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Gate on custom ERROR rules
+        run: semgrep scan --config .semgrep/ --severity ERROR --error --metrics=off .

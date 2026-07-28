@@ -1,0 +1,133 @@
+name: SCA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "50 5 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sca:
+    name: Dependency vulnerability gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # On Linux the app csproj resolves only to net10.0-android, a TFM
+      # that cannot restore without the MAUI Android workload.
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      # Scans the three csprojs explicitly (never the solution: NETSDK1005).
+      # dotnet list exits 0 even with findings — the parser is the gate.
+      # Severities come from the JSON report, so parsing is locale-independent.
+      # Run locally with report-file arguments to prove the parser red/green.
+      - name: SCA gate (fail on High/Critical)
+        shell: python
+        run: |
+          import json
+          import subprocess
+          import sys
+
+          PROJECTS = [
+              "src/TranslateReader.Core/TranslateReader.Core.csproj",
+              "src/TranslateReader/TranslateReader.csproj",
+              "test/TranslateReader.Tests/TranslateReader.Tests.csproj",
+          ]
+          BLOCKED_SEVERITIES = {"High", "Critical"}
+
+
+          def rows(report):
+              for project in report.get("projects", []):
+                  for framework in project.get("frameworks") or []:
+                      packages = (framework.get("topLevelPackages") or []) + (
+                          framework.get("transitivePackages") or []
+                      )
+                      for package in packages:
+                          for vuln in package.get("vulnerabilities") or []:
+                              yield package, framework, vuln
+
+
+          def scan(report):
+              hits = 0
+              for package, framework, vuln in rows(report):
+                  severity = vuln.get("severity", "?")
+                  flag = "BLOCKED" if severity in BLOCKED_SEVERITIES else "info"
+                  print(
+                      "  [%s] %s %s severity=%s tfm=%s %s"
+                      % (
+                          flag,
+                          package.get("id", "?"),
+                          package.get("resolvedVersion", "?"),
+                          severity,
+                          framework.get("framework", "?"),
+                          vuln.get("advisoryurl", ""),
+                      )
+                  )
+                  if severity in BLOCKED_SEVERITIES:
+                      hits += 1
+              return hits
+
+
+          def report_for(csproj):
+              subprocess.run(["dotnet", "restore", csproj], check=True)
+              listing = subprocess.run(
+                  [
+                      "dotnet",
+                      "list",
+                      csproj,
+                      "package",
+                      "--vulnerable",
+                      "--include-transitive",
+                      "--format",
+                      "json",
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              return json.loads(listing.stdout)
+
+
+          blocked = 0
+          if len(sys.argv) > 1:
+              for path in sys.argv[1:]:
+                  print("==> %s" % path)
+                  with open(path, encoding="utf-8-sig") as fh:
+                      blocked += scan(json.load(fh))
+          else:
+              for csproj in PROJECTS:
+                  print("==> %s" % csproj)
+                  blocked += scan(report_for(csproj))
+
+          if blocked:
+              print(
+                  "SCA gate: %d High/Critical vulnerable package reference(s) found - failing."
+                  % blocked
+              )
+              sys.exit(1)
+          print("SCA gate: no High/Critical vulnerable package references.")
