@@ -36,7 +36,9 @@ jobs:
 
       - name: Zip published output
         shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath "TranslateReader-win-x64-${{ github.ref_name }}.zip"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: Compress-Archive -Path publish/* -DestinationPath "TranslateReader-win-x64-${env:RELEASE_TAG}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
