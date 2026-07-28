@@ -41,7 +41,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
   - `sls '\.idea' TranslateReader.slnx` sem match (bloco `<Folder Name="/.idea/">` removido inteiro)
   - 3 `<Project Path=` preservados e bloco `/.claude/` intocado (`git diff` toca so as linhas 19-23)
   - `dotnet restore TranslateReader.slnx` conclui com sucesso
-- **Deps:** none | **Test:** `dotnet restore` + greps | **DoD:** 1 | **Status:** pending
+- **Deps:** none | **Test:** `dotnet restore` + greps | **DoD:** 1 | **Status:** completed
 
 #### T-2: Workflow de CI (test Linux + build Windows)
 - **Files:** `.github/workflows/ci.yml`
@@ -54,7 +54,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
   - `sls 'ubuntu-latest|windows-latest|XPlat Code Coverage|net10\.0-windows10\.0\.19041\.0' <file>` casa os 4
   - sem `dotnet workload` no job `test`; **nenhum** threshold/gate de cobertura (D-...-1)
   - YAML valida + convencoes 1-6 aplicadas
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 2 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 2 | **Status:** completed
 
 #### T-3: Workflow CodeQL (csharp, security-extended)
 - **Files:** `.github/workflows/codeql.yml`
@@ -65,7 +65,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
 - **Acceptance:**
   - `sls 'github/codeql-action|security-extended|csharp|build-mode: none' <file>` casa os 4
   - permissions do job least-privilege (sem `write-all`); harden-runner presente; YAML valida
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 3 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 3 | **Status:** completed
 
 #### T-4: Dependabot + dependency-review em PRs
 - **Files:** `.github/dependabot.yml`, `.github/workflows/dependency-review.yml`
@@ -77,7 +77,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
   - `.github/dependabot.yml` existe e `sls 'nuget|github-actions' <file>` casa os 2
   - `sls 'actions/dependency-review-action|pull_request' <workflow>` casa os 2
   - YAML valida nos 2 arquivos
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 4, 5 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 4, 5 | **Status:** completed
 
 #### T-5: OSSF Scorecard agendado + secret scan + badge no README
 - **Files:** `.github/workflows/scorecard.yml`, `.github/workflows/secret-scan.yml`, `README.md`
@@ -92,7 +92,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
   - `sls 'ossf/scorecard-action' <scorecard>` e `sls 'schedule:' <scorecard>` casam
   - `sls 'gitleaks|trufflehog' .github/workflows/*.yml` casa (case-insensitive)
   - `sls 'scorecard' README.md` casa; YAML valida nos 2 workflows
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 6, 7 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 6, 7 | **Status:** completed
 
 #### T-6: Workflow de release por tag `v*`
 - **Files:** `.github/workflows/release.yml`
@@ -104,7 +104,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
 - **Acceptance:**
   - `sls 'v\*' <file>` e `sls 'softprops/action-gh-release' <file>` casam
   - `contents: write` aparece **apenas** no bloco do job de release; YAML valida
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 9 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 9 | **Status:** completed
 
 #### T-7: Workflow SonarQube Cloud (dotnet-sonarscanner)
 - **Files:** `.github/workflows/sonarqube.yml`
@@ -120,7 +120,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
 - **Acceptance:**
   - `sls 'sonarscanner|SONAR_TOKEN' <file>` casa os 2 (case-insensitive)
   - `sls 'sonarcloud-github-action' <file>` **sem** match (deprecada); YAML valida
-- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 10 | **Status:** pending
+- **Deps:** none | **Test:** actionlint/parser YAML + greps | **DoD:** 10 | **Status:** completed
 
 ### Wave 2
 
@@ -133,7 +133,7 @@ Greps de aceite em pwsh: `sls '<regex>' <path>` (equivalente a `grep -E`).
   - os 10 `Verify:` do CONTEXT.md executados e PASS (colar saida no SUMMARY.md)
   - actionlint (ou parser YAML) OK em todos os arquivos; comando usado registrado no SUMMARY.md
 - **Deps:** T-2, T-3, T-4, T-5, T-6, T-7 | **Test:** bateria de greps do DoD + validacao YAML
-- **DoD:** 8 (+ re-check de 2..10) | **Status:** pending
+- **DoD:** 8 (+ re-check de 2..10) | **Status:** completed
 - **Nota:** se nada precisar de ajuste, nao ha commit — registrar a evidencia no SUMMARY.md.
 
 ## Execution
