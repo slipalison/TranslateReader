@@ -117,3 +117,29 @@ DoD-10 sonarscanner + SONAR_TOKEN ....................... PASS
    (D-2026-07-28-ci-seguranca-6) — ajustavel quando a org for criada.
 5. **T-8 sem commit**: auditoria nao encontrou nada pra corrigir (conforme nota do PLAN,
    evidencia registrada aqui).
+
+## Fix round 1
+
+Round autonomo de correcao dos warnings fixaveis do REVIEW.md (iter 1) + finding do critic.
+Fora de escopo, intencionalmente NAO tocados: W-1 (bump SQLitePCLRaw fica pro Dependabot),
+W-4/W-6 (legado, isento por D-2), harden-runner audit->block (tuning futuro).
+
+| Warning | Fix | Commit | Evidencia |
+|---|---|---|---|
+| W-2 (sonarqube.yml — cobertura nunca gerada: props do coverlet.msbuild com so coverlet.collector referenciado) | Step de teste trocado pra `--collect:"XPlat Code Coverage;Format=opencover"` + `--results-directory TestResults`; `sonar.cs.opencover.reportsPaths` apontado pra `**/TestResults/**/coverage.opencover.xml` | `4e04407` | Comando exato rodado local: 169 aprovados / 2 ignorados / 0 falhas; `TestResults/<guid>/coverage.opencover.xml` gerado com root `<CoverageSession>` (OpenCover valido), casando com o glob. TestResults local removido apos validacao |
+| W-3 (release.yml:39 — `${{ github.ref_name }}` interpolado cru no `run:` pwsh) | Indirecao via `env: RELEASE_TAG` + `${env:RELEASE_TAG}` no script | `d5035a5` | Grep pos-fix: 0 `${{ }}` dentro de `run:` em TODOS os 7 workflows (antes: 1). Restantes sao `concurrency.group`, `env:` e `with:` (contextos seguros) |
+| W-5 (docs do Gate 1 — `dotnet build -f <win-tfm>` a nivel de solution falha NETSDK1005) | Comando atualizado pra `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` em `jdi-reviewer-translatereader.md` (prosa + blocos bash/pwsh) e `reviewers.md`; `registry.md` recebeu nota datada (convencao append-only, mesmo padrao da nota D-6) | `e679a21` | Comando documentado executado local: exit 0, 0 erros (42 warnings legados pre-existentes) |
+| Critic (secret-scan.yml — `on: push` sem filtro dispara em todo branch+tag, double-scan de branches de PR) | `push` escopado pra `branches: [main]`; `pull_request` e cron semanal mantidos | `9326e0d` | `fetch-depth: 0` preservado — gitleaks segue vendo o historico completo |
+
+### Validacao pos-fix (sem regressao)
+
+```
+YAML (python yaml.safe_load) ........ OK sonarqube.yml, release.yml, secret-scan.yml
+uses: total ......................... 28 (nenhuma linha uses adicionada/removida)
+uses: pinados por SHA-40 ............ 28 (100%, inalterado)
+refs @vN restantes .................. 0
+permissions: top-level .............. 7/7
+concurrency: ........................ 7/7
+${{ }} dentro de run: ............... 0/7 workflows (era 1 — melhoria)
+Guard SONAR_TOKEN ................... intacto (if: env.SONAR_TOKEN != '' nos 7 steps)
+```
