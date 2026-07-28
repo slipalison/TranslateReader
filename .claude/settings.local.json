@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "*",
       "Bash(cd /d D:REPOTranslateReader)",
       "Bash(find . -not -path */bin/* -not -path */obj/* -type f -o -type d)",
       "Bash(find D:REPOTranslateReader/TranslateReader -type f -name *.cs -o -name *.xaml -o -name *.csproj -o -name *.json -o -name *.xml -o -name *.plist)",
