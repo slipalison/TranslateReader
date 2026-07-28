@@ -1,0 +1,19 @@
+# Padroes relativos a .jdi/. Mantido aqui (e nao no .gitattributes da raiz)
+# para nao mexer em arquivos fora de .jdi/ nesta adocao.
+#
+# merge=union nos arquivos append-only: dois devs adicionando em branches
+# paralelas fazem merge automatico em vez de conflitar.
+DECISIONS.md merge=union
+todos.md merge=union
+registry.md merge=union
+specialists.md merge=union
+reviewers.md merge=union
+skills-registry.md merge=union
+archive/index.md merge=union
+
+# ROADMAP.md tambem e append por phase. Trade-off conhecido: remocao concorrente
+# de phase pode ressuscitar um bloco — visivel no /jdi-status e resolvido
+# re-rodando o remove.
+ROADMAP.md merge=union
+
+# PROJECT.md fica de fora de proposito: conflito ali precisa ser visivel.
