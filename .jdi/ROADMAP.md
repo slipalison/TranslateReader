@@ -36,6 +36,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** llm-mobile
 - **Goal:** backends nativos LLamaSharp em Android/iOS — traducao offline roda em mobile (Fase 7 do translation-feature-plan)
 
+### Phase 7: Pipeline CI/CD com seguranca + correcao do .slnx
+- **Slug:** ci-seguranca
+- **Goal:** corrigir TranslateReader.slnx (referencias a .idea/ gitignored) + GitHub Actions rigoroso: CodeQL, dependency review, secret scanning, OSSF Scorecard, build + testes, SonarQube e release automatizado
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

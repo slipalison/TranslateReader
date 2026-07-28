@@ -29,6 +29,14 @@ design por inferencia de CLAUDE.md/README, sem canal interativo). The Method est
 Na mesma confirmacao o usuario aprovou os 6 candidatos detectados como phases do roadmap
 e orquestracao `enhanced` em `config.json`.
 
+D-2026-07-28-ci-seguranca-1: Phase 'Pipeline CI/CD com seguranca + correcao do .slnx'
+(slug: ci-seguranca) adicionada via /jdi-issue (card colado). Reason: usuario pediu ajuste do
+.slnx ("esta errado" — diagnostico: folder /.idea/ referencia arquivos gitignored) + pipeline
+GitHub Actions com todas as validacoes de seguranca open source disponiveis, testes, releases
+e SonarQube, com rigor. Overlap consciente com a phase `cobertura-e-ci`: o workflow de CI
+nasce aqui; `cobertura-e-ci` mantem apenas o threshold do coverlet (90%, D-6) e o gate de
+cobertura no pipeline.
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
