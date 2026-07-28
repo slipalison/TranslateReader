@@ -23,3 +23,8 @@ Origem: secao "JDI — Workflow de Desenvolvimento" do `CLAUDE.md`.
 
 D-4 (2026-07-28): Conventional commits passam a valer para commits novos (escopo = slug da
 phase). O historico legado tem 0/10 commits no padrao e nao sera reescrito.
+
+D-5 (2026-07-28): D-1 confirmada explicitamente pelo usuario (a adocao havia registrado o
+design por inferencia de CLAUDE.md/README, sem canal interativo). The Method esta LOCKED.
+Na mesma confirmacao o usuario aprovou os 6 candidatos detectados como phases do roadmap
+e orquestracao `enhanced` em `config.json`.
