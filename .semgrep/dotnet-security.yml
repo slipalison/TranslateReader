@@ -1,0 +1,101 @@
+# Custom Semgrep rules for TranslateReader — the 4 concrete risks of this codebase:
+#   1. zip-slip       — EPUB files are untrusted zip archives (ParsingEngine extracts entries)
+#   2. XXE            — XML parsed from untrusted EPUB content (csharp.md section 4)
+#   3. WebView JS     — book HTML flows into EvaluateJavaScriptAsync (ReaderPage bridge)
+#   4. deserialization — BinaryFormatter / Json.NET TypeNameHandling RCE primitives
+rules:
+  - id: translatereader-zip-slip
+    languages: [csharp]
+    severity: ERROR
+    message: >
+      Zip-slip: a zip entry name (entry.FullName) is used to build a filesystem
+      path without proving the resolved path stays inside the destination
+      directory. A crafted EPUB entry ("../../evil") escapes the target. Resolve
+      with Path.GetFullPath and require StartsWith(destinationRoot,
+      StringComparison.Ordinal) before extracting; then suppress with a nosemgrep
+      comment referencing the guard.
+    metadata:
+      cwe: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+      category: security
+      technology: [.net, epub, zip]
+      confidence: HIGH
+      references:
+        - https://security.snyk.io/research/zip-slip-vulnerability
+    pattern-either:
+      - pattern: Path.Combine($DEST, $ENTRY.FullName)
+      - pattern: $ENTRY.ExtractToFile(Path.Combine(...), ...)
+      - pattern: $ENTRY.ExtractToFile(Path.Combine(...))
+
+  - id: translatereader-xxe
+    languages: [csharp]
+    severity: ERROR
+    message: >
+      XXE: DTD processing enabled or a live XmlResolver configured while this
+      codebase parses XML that originates from untrusted EPUB files. Use
+      DtdProcessing.Prohibit and keep XmlResolver null (never XmlUrlResolver)
+      for XmlReaderSettings, XmlDocument.LoadXml and any other XML entry point.
+    metadata:
+      cwe: "CWE-611: Improper Restriction of XML External Entity Reference"
+      category: security
+      technology: [.net, xml]
+      confidence: HIGH
+      references:
+        - https://learn.microsoft.com/en-us/dotnet/standard/data/xml/resolving-external-resources
+    pattern-either:
+      - pattern: $S.DtdProcessing = DtdProcessing.Parse
+      - pattern: new XmlReaderSettings { ..., DtdProcessing = DtdProcessing.Parse, ... }
+      - pattern: new XmlUrlResolver(...)
+
+  # WARNING, not ERROR: two legacy call sites (ReaderPage.xaml.cs:306 and :474)
+  # interpolate a pre-serialized JSON variable / an internal function name instead
+  # of routing through JsStr(...). D-2 forbids editing legacy .cs files, so an
+  # ERROR here would permanently fail the gate on lines that cannot be touched.
+  # New code must wrap every interpolated value in JsStr(...) (JsonSerializer.Serialize).
+  - id: translatereader-webview-js-injection
+    languages: [csharp]
+    severity: WARNING
+    message: >
+      Possible WebView JS injection: EvaluateJavaScriptAsync called with a
+      dynamically built script (interpolation, concatenation or Format). Book
+      HTML is untrusted; any book-derived value reaching this call unencoded
+      executes in the reader WebView. Wrap every interpolated value in
+      JsStr(...) (JsonSerializer.Serialize) or pass only constant scripts.
+    metadata:
+      cwe: "CWE-94: Improper Control of Generation of Code"
+      category: security
+      technology: [.net, maui, webview]
+      confidence: MEDIUM
+      references:
+        - https://learn.microsoft.com/en-us/dotnet/api/microsoft.maui.controls.webview.evaluatejavascriptasync
+    patterns:
+      - pattern-either:
+          - pattern: $W.EvaluateJavaScriptAsync($"...")
+          - pattern: $W.EvaluateJavaScriptAsync($A + $B)
+          - pattern: $W.EvaluateJavaScriptAsync(string.Format(...))
+          - pattern: $W.EvaluateJavaScriptAsync(string.Concat(...))
+      - pattern-not: $W.EvaluateJavaScriptAsync("...")
+      - pattern-not: $W.EvaluateJavaScriptAsync($"...{JsStr(...)}...")
+
+  - id: translatereader-insecure-deserialization
+    languages: [csharp]
+    severity: ERROR
+    message: >
+      Insecure deserialization primitive: BinaryFormatter and Json.NET
+      TypeNameHandling (any value other than None) allow attacker-controlled
+      type resolution and lead to remote code execution when fed untrusted
+      data. Use System.Text.Json with source-generated contexts (the pattern
+      already used in Serialization/) and never enable polymorphic type
+      handling on external input.
+    metadata:
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      category: security
+      technology: [.net]
+      confidence: HIGH
+      references:
+        - https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-security-guide
+    pattern-either:
+      - pattern: new BinaryFormatter(...)
+      - pattern: TypeNameHandling.All
+      - pattern: TypeNameHandling.Auto
+      - pattern: TypeNameHandling.Objects
+      - pattern: TypeNameHandling.Arrays
