@@ -28,6 +28,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** detalhe-livro
 - **Goal:** BookDetailPage + BookDetailPageModel documentados no README passam a existir
 
+### Phase 5: Busca dentro do livro
+- **Slug:** busca-no-livro
+- **Goal:** busca full-text no conteudo dos capitulos do livro aberto
+
 ## Candidatos detectados (NAO aprovados)
 
 Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
