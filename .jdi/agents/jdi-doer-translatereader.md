@@ -223,7 +223,7 @@ or parsing loops. Message templates over interpolation. No book content in logs.
 
 ### Tests (csharp.md §6 — D-2 boundary)
 
-- New/changed code after `4285f25` ships unit tests in the SAME commit: **>=80% line coverage**, covering success, failure/exception, and cancellation/edge paths.
+- New/changed code after `4285f25` ships unit tests in the SAME commit: **>=90% line coverage** (D-6), covering success, failure/exception, and cancellation/edge paths.
 - Legacy code is exempt from the threshold and must NOT be refactored just to raise coverage.
 - The 167 existing tests are baseline — must not regress.
 - Isolated: no network / disk / real SQLite in unit tests. NSubstitute against `Contracts/` interfaces ONLY — never mock concretes. Follow existing xUnit patterns in `test/TranslateReader.Tests`.

@@ -18,7 +18,7 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 
 ### Phase 2: Cobertura e CI
 - **Slug:** cobertura-e-ci
-- **Goal:** threshold de cobertura no coverlet (80% pos-boundary D-2) + workflow de CI com build e testes
+- **Goal:** threshold de cobertura no coverlet (90% pos-boundary D-2, ver D-6) + workflow de CI com build e testes
 
 ### Phase 3: Bookmarks
 - **Slug:** bookmarks

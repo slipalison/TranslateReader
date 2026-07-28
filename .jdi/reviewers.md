@@ -16,7 +16,7 @@ o catch-all `**/*`.
 |---|---|---|
 | 1 Build | `dotnet build -f net10.0-windows10.0.19041.0` | BLOCK |
 | 2 Tests | `dotnet test` (baseline 167) | BLOCK |
-| 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` -> Cobertura, 80% | BLOCK (so em arquivos novos pos-`4285f25`) |
+| 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` -> Cobertura, 90% (D-6) | BLOCK (so em arquivos novos pos-`4285f25`) |
 | 4 Lint | `dotnet format --verify-no-changes` | WARN (sem `.editorconfig`/analyzers ainda) |
 | 5 Security/Layer | greps de camada, zip-slip, XXE, WebView JS, sync-over-async, leak de evento, static mutavel | BLOCK / WARN conforme o check |
 | 6 Consistency | log de commits x PLAN, conventional commits (D-4) | WARN |

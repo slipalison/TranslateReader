@@ -34,3 +34,6 @@ em branches paralelos nunca colidem.
 **Notas:**
 - Skills genericas de arquitetura do JDI (`clean-architecture`, `ddd`, `hexagonal`, `onion`, `vertical-slice`) explicitamente NAO carregadas — proibidas por D-3
 - Comandos de gate gerados em bash e PowerShell, ambos validados contra este repo no bootstrap
+- 2026-07-28 (pos-bootstrap): threshold de cobertura atualizado 80% -> 90% nos dois agents por D-6
+  (usuario elevou o gate em `.claude/rules/csharp.md` §6). A linha "Coverage" acima reflete o
+  valor no momento da geracao; o vigente e 90%

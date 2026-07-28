@@ -58,7 +58,7 @@ You are `jdi-reviewer-translatereader`. Reviewer for project TranslateReader.
 Single-stack project: you own ALL files. There is no second reviewer to chain with.
 
 Stack: C# / .NET 10 (`net10.0`), .NET MAUI 10.0.51. Test framework: xUnit 2.9.3 + NSubstitute 5.3.0
-+ coverlet.collector 8.0.1. Minimum coverage: **80%**.
++ coverlet.collector 8.0.1. Minimum coverage: **90%** (D-6).
 
 Locked code-design: **The Method** (Juval Löwy) — D-1, confirmed D-5. Layer rules are review-blocking.
 
@@ -70,7 +70,7 @@ You KNOW which gates to run. Do not discover. Just run.
 Spawned by: `/jdi-verify {PHASE_SLUG}` (or legacy `/jdi-verify {N}`)
 
 **adopted=true (D-2):**
-- Gate 3 (Coverage) enforces 80% ONLY on NEW files created after `4285f25` — legacy code does not block, and must NOT be flagged for "low coverage"
+- Gate 3 (Coverage) enforces 90% (D-6) ONLY on NEW files created after `4285f25` — legacy code does not block, and must NOT be flagged for "low coverage"
 - Gate 5 (Security + layer rules) enforces on all files (security has no boundary)
 - Gate 4 (Lint) reports WARN on legacy, BLOCK only on new files
 - The 167 existing tests are baseline — a drop in that count is a regression and blocks
@@ -208,7 +208,7 @@ dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
 dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
 ```
 
-Threshold: **80%**. Below = block.
+Threshold: **90%** (D-6). Below = block.
 
 **adopted=true — enforce threshold ONLY on new files (created after `4285f25`).**
 Do NOT gate on the aggregate `line-rate` when adopted=true: the aggregate is dominated by legacy
@@ -260,8 +260,8 @@ if ($newFiles) {
 
   if ($rates) {
     $scoped = [math]::Round(($rates | Measure-Object -Average).Average, 2)
-    Write-Host "New-file coverage: $scoped% (threshold 80%)"
-    if ($scoped -lt 80) { Write-Host "Gate 3: BLOCK" } else { Write-Host "Gate 3: PASS" }
+    Write-Host "New-file coverage: $scoped% (threshold 90%)"
+    if ($scoped -lt 90) { Write-Host "Gate 3: BLOCK" } else { Write-Host "Gate 3: PASS" }
   } else {
     Write-Host "New files present but absent from coverage report. Gate 3: WARN."
   }
@@ -719,7 +719,7 @@ Path: `{PHASE_DIR}/REVIEW.md`
 |---|---|---|
 | Build | PASS/BLOCK | net10.0-windows10.0.19041.0 |
 | Tests | PASS/BLOCK | {X}/{Y} passing (baseline 167) |
-| Coverage | PASS/BLOCK/SKIPPED | new-file scope, {%}, threshold 80% |
+| Coverage | PASS/BLOCK/SKIPPED | new-file scope, {%}, threshold 90% (D-6) |
 | Lint | PASS/WARN | dotnet format --verify-no-changes |
 | Security/Layer | PASS/WARN/BLOCK | ... |
 | Consistency | PASS/WARN | ... |

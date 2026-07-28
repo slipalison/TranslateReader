@@ -28,3 +28,10 @@ D-5 (2026-07-28): D-1 confirmada explicitamente pelo usuario (a adocao havia reg
 design por inferencia de CLAUDE.md/README, sem canal interativo). The Method esta LOCKED.
 Na mesma confirmacao o usuario aprovou os 6 candidatos detectados como phases do roadmap
 e orquestracao `enhanced` em `config.json`.
+
+D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
+`4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
+do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
+testes permanecem inalterados. Sincronizado em `config.json` (`coverage_min`), `PROJECT.md`,
+`ROADMAP.md` (goal da phase `cobertura-e-ci`), `reviewers.md`, `registry.md` e nos specialists
+doer/reviewer.

@@ -85,7 +85,7 @@ Testes existentes: xUnit, 17 arquivos, ~2.526 linhas, **167** `[Fact]`/`[Theory]
 
 ## Restricoes globais
 
-- Cobertura minima 80% **apenas em codigo novo** (legado isento — ver D-2)
+- Cobertura minima 90% **apenas em codigo novo** (legado isento — ver D-2; threshold elevado por D-6)
 - Conventional commits a partir de agora (nao usado no historico legado)
 - Commits atomicos por task
 - Idioma: codigo, commits e PRs em ingles; discussao e docs em `.jdi/` em pt-BR
