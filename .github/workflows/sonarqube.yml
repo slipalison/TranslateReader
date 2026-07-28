@@ -56,7 +56,7 @@ jobs:
           /o:"slipalison"
           /d:sonar.host.url=https://sonarcloud.io
           /d:sonar.token="$SONAR_TOKEN"
-          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
 
       - name: Build Core
         if: env.SONAR_TOKEN != ''
@@ -64,7 +64,7 @@ jobs:
 
       - name: Test with OpenCover coverage
         if: env.SONAR_TOKEN != ''
-        run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+        run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=opencover" --results-directory TestResults
 
       - name: End SonarQube analysis
         if: env.SONAR_TOKEN != ''
