@@ -37,3 +37,8 @@ em branches paralelos nunca colidem.
 - 2026-07-28 (pos-bootstrap): threshold de cobertura atualizado 80% -> 90% nos dois agents por D-6
   (usuario elevou o gate em `.claude/rules/csharp.md` §6). A linha "Coverage" acima reflete o
   valor no momento da geracao; o vigente e 90%
+- 2026-07-28 (fix round ci-seguranca): comando de build do Gate 1 corrigido para
+  `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0`
+  em `jdi-reviewer-translatereader.md` e `reviewers.md` — `-f` a nivel de solution falha com
+  NETSDK1005 nos projetos Core/Tests (`net10.0`-only), REVIEW W-5. A linha "Build" acima reflete
+  o valor no momento da geracao; o vigente e o comando com csproj explicito

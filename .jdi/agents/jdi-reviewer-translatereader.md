@@ -151,18 +151,19 @@ Reviewer picks implementation based on active shell. When in doubt, prefer bash 
 
 Windows TFM is the verification target: LLamaSharp backends (Cpu/Cuda12) ship for Windows only
 today, and a bare solution build attempts Android/iOS TFMs whose workloads may be absent in
-dev/CI. Mobile TFMs are a documented secondary target (CLAUDE.md § Build) — build them only when
-the phase touched `Platforms/`.
+dev/CI. Target the app csproj explicitly — forcing `-f` at solution level fails with NETSDK1005
+on the `net10.0`-only Core/Tests projects (REVIEW ci-seguranca W-5). Mobile TFMs are a documented
+secondary target (CLAUDE.md § Build) — build them only when the phase touched `Platforms/`.
 
 **bash:**
 ```bash
-dotnet restore && dotnet build -f net10.0-windows10.0.19041.0
+dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0
 ```
 
 **PowerShell:**
 ```powershell
 dotnet restore
-if ($LASTEXITCODE -eq 0) { dotnet build -f net10.0-windows10.0.19041.0 }
+if ($LASTEXITCODE -eq 0) { dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 }
 ```
 
 Failure = block.

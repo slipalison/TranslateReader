@@ -14,7 +14,7 @@ o catch-all `**/*`.
 
 | Gate | Comando | Falha |
 |---|---|---|
-| 1 Build | `dotnet build -f net10.0-windows10.0.19041.0` | BLOCK |
+| 1 Build | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` | BLOCK |
 | 2 Tests | `dotnet test` (baseline 167) | BLOCK |
 | 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` -> Cobertura, 90% (D-6) | BLOCK (so em arquivos novos pos-`4285f25`) |
 | 4 Lint | `dotnet format --verify-no-changes` | WARN (sem `.editorconfig`/analyzers ainda) |
