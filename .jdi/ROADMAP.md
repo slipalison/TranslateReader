@@ -20,6 +20,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** cobertura-e-ci
 - **Goal:** threshold de cobertura no coverlet (80% pos-boundary D-2) + workflow de CI com build e testes
 
+### Phase 3: Bookmarks
+- **Slug:** bookmarks
+- **Goal:** completar o vertical morto — expor bookmarks em IReadingManager e entregar UI de criar/listar/remover
+
 ## Candidatos detectados (NAO aprovados)
 
 Lacunas encontradas na varredura do repositorio, com evidencia. Servem so como ponto de
