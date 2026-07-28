@@ -48,7 +48,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
     --include-transitive` nao lista nenhuma linha `SQLitePCLRaw`
   - `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj --nologo` -> **167 passed, 0 failed**
   - `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` OK
-- **Deps:** none | **Test:** restore + `--vulnerable` + suite | **DoD:** 4, 5 | **Status:** pending
+- **Deps:** none | **Test:** restore + `--vulnerable` + suite | **DoD:** 4, 5 | **Status:** completed
 
 #### T-3: Regras Semgrep custom + workflow `semgrep.yml`
 - **Files:** `.semgrep/dotnet-security.yml`, `.github/workflows/semgrep.yml`
@@ -76,7 +76,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
     SUMMARY.md. Se `pip install semgrep` falhar: `yaml.safe_load` nas regras + registrar run pendente
     (nao inventar PASS)
 - **Deps:** none | **Test:** semgrep local (positivo em fixture + limpo no repo) + greps | **DoD:** 1, 2
-- **Status:** pending
+- **Status:** completed
 
 #### T-4: TruffleHog `--only-verified` como job em `secret-scan.yml`
 - **Files:** `.github/workflows/secret-scan.yml`
@@ -90,7 +90,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
 - **Acceptance:**
   - os 4 greps do DoD 6 casam (incl. o negativo: nenhum `trufflesecurity/trufflehog@v[0-9]`)
   - `git diff` **so adiciona** o bloco do job novo (job `gitleaks` intacto); YAML valida
-- **Deps:** none | **Test:** parser YAML + greps do DoD | **DoD:** 6 | **Status:** pending
+- **Deps:** none | **Test:** parser YAML + greps do DoD | **DoD:** 6 | **Status:** completed
 
 #### T-5: Workflow `sbom.yml` (Syft SPDX + dependency snapshot)
 - **Files:** `.github/workflows/sbom.yml`
@@ -103,7 +103,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
 - **Acceptance:**
   - os 4 greps do DoD 8 casam em `.github/workflows/sbom.yml`
   - `contents: write` aparece **apenas** no bloco do job; nenhum `exit 1`/`fail-on`; YAML valida
-- **Deps:** none | **Test:** parser YAML + greps do DoD | **DoD:** 8 | **Status:** pending
+- **Deps:** none | **Test:** parser YAML + greps do DoD | **DoD:** 8 | **Status:** completed
 
 #### T-6: `SECURITY.md` na raiz (politica de report)
 - **Files:** `SECURITY.md`
@@ -117,7 +117,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
 - **Acceptance:**
   - DoD 9 passa (`find . -maxdepth 2 -iname "SECURITY.md"` + `security advisor` + `report|respons`)
   - `sls 'security/advisories/new' SECURITY.md` casa; texto 100% em ingles; sem e-mail pessoal
-- **Deps:** none | **Test:** greps do DoD + leitura | **DoD:** 9 | **Status:** pending
+- **Deps:** none | **Test:** greps do DoD + leitura | **DoD:** 9 | **Status:** completed
 
 ### Wave 2
 
@@ -141,7 +141,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
     Gate que nunca falha nao e gate
   - YAML valida; nenhum `${{ }}` dentro de `run:`
 - **Deps:** T-1 (o gate tem que nascer verde — ordem exigida pelo CONTEXT)
-- **Test:** dry-run local (verde + vermelho) + parser YAML + greps | **DoD:** 3 | **Status:** pending
+- **Test:** dry-run local (verde + vermelho) + parser YAML + greps | **DoD:** 3 | **Status:** completed
 
 ### Wave 3
 
@@ -159,7 +159,7 @@ SECURITY.md. **Specialist (todas as tasks):** `jdi-doer-translatereader` (glob `
   - **as 9 linhas `Verify:` do CONTEXT.md executadas em bash**, uma a uma, saida real colada no SUMMARY.md;
     qualquer FAIL vira correcao aqui ou justificativa explicita (caso T-1)
 - **Deps:** T-1..T-6 | **Test:** bateria dos 9 `Verify:` + validacao YAML | **DoD:** 7 (+ re-check 1..6, 8, 9)
-- **Status:** pending — se nada precisar de ajuste, nao ha commit; evidencia no SUMMARY.md.
+- **Status:** completed — nenhum ajuste necessario; sem commit de codigo (evidencia no SUMMARY.md).
 
 ## Execution
 - **Total tasks:** 7
