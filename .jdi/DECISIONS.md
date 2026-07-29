@@ -130,3 +130,67 @@ confirmado por pesquisa web em 2026-07-28). O workflow passa a existir e referen
 `SONAR_TOKEN`, mas a execucao real (org/projeto criados no Sonar, token configurado nos
 secrets, scan concluido sem findings novos bloqueantes) depende de acao humana fora do
 repositorio — fica em `## Deferred to PR review`.
+
+D-2026-07-28-pipeline-unificada-2: Trigger surface completo, arquivo por arquivo (fecha o
+double-run do fato tecnico 1 do card). Hoje NENHUM dos 10 workflows declara `on: workflow_call:`
+— a migracao adiciona esse trigger aos 8 que entram no orquestrador (`ci.yml`, `codeql.yml`,
+`dependency-review.yml`, `sonarqube.yml`, `sbom.yml`, `sca.yml`, `secret-scan.yml`,
+`semgrep.yml`) e remove `push:`/`pull_request:` de todos eles (mantidos so em `pipeline.yml`,
+`scorecard.yml` e `release.yml`, que nao mudam). `workflow_dispatch:` fica assim: adicionado
+(bare, sem inputs) em `codeql.yml`, `semgrep.yml` e `secret-scan.yml` (nao tinham); mantido em
+`sca.yml` e `sbom.yml` (ja tinham); REMOVIDO de `ci.yml`, que vira `workflow_call` puro (fato
+tecnico 6 do card — o orquestrador passa a ser o unico jeito de rodar build+test manualmente);
+NUNCA adicionado em `dependency-review.yml`, que fica so `workflow_call` — a action
+`dependency-review-action` precisa de `base`/`head` SHA reais de um pull_request, que nao
+existem num `workflow_dispatch` manual, entao dar essa opcao quebraria a execucao. Nenhum
+arquivo e renomeado; `pipeline.yml` e o unico arquivo novo desta fase.
+
+D-2026-07-28-pipeline-unificada-3: Matriz de permissions por job caller (fato tecnico 2 do
+card — permissions efetivas de um reusable sao limitadas pelas permissions do job caller,
+nunca as internas do proprio reusable sozinhas). `pipeline.yml` fica com `contents: read` no
+top-level. Cada job caller eleva SO o que o reusable correspondente ja declara internamente:
+`codeql` e `semgrep` elevam `security-events: write` (upload de SARIF, igual ao que
+`codeql.yml`/`semgrep.yml` ja tem hoje); `sbom` eleva `contents: write` (Dependency Submission
+API, igual ao que `sbom.yml` ja tem hoje); `dependency-review` eleva `pull-requests: write`
+(comment-summary-in-pr, igual ao que `dependency-review.yml` ja tem hoje); `sonarqube`, `sca`,
+`secret-scan` e `ci` ficam em `contents: read` (nenhum dos 3 faz upload de SARIF nem escreve
+no repo). Sub-declarar quebra em runtime (403 silencioso no upload); sobre-declarar e
+regressao de hardening (D-2026-07-28-ci-seguranca-4) — nenhum dos dois e aceitavel.
+
+D-2026-07-28-pipeline-unificada-4: Secrets nao fluem implicitamente pro reusable (fato tecnico
+3 do card). `secrets: inherit` aparece uma unica vez em `pipeline.yml`, so no job caller do
+`sonarqube.yml` (precisa de `SONAR_TOKEN`); nenhum outro job caller herda secrets — least
+privilege. Pesquisa confirmou (GitHub Docs "Reuse workflows"): `secrets: inherit` funciona
+mesmo sem o reusable declarar `on.workflow_call.secrets` — nao e preciso adicionar esse bloco
+em `sonarqube.yml`. Risco adicional identificado (nao estava na lista do card): a deteccao de
+modo PR do SonarCloud NAO pode depender de `github.event_name` implicito dentro do reusable,
+porque esse valor resolve pra `"workflow_call"` la dentro (nao pro evento original que
+disparou o `pipeline.yml`) — em vez disso, `sonarqube.yml` ganha `on: workflow_call: inputs:`
+(chave de PR, branch, base) e `pipeline.yml` preenche esses inputs usando o PROPRIO contexto
+(`github.event.pull_request.*`), que e inambiguo porque `pipeline.yml` e diretamente disparado
+pelo evento `pull_request`. `fetch-depth: 0` no checkout de `sonarqube.yml` (ja presente)
+permanece intocado — necessario pro blame/SCM data do scanner.
+
+D-2026-07-28-pipeline-unificada-5: Jobs condicionais (fato tecnico 7 do card: `dependency-
+review` so faz sentido em pull_request, `sbom` so em push pra main) tem o `if:` no JOB CALLER
+dentro de `pipeline.yml` (`if: github.event_name == 'pull_request'` / `if: github.event_name
+== 'push'`) — NUNCA dentro do proprio arquivo reusable. Risco identificado (nao estava na
+lista do card): dentro de um job disparado por `workflow_call`, `github.event_name` sempre
+resolve pra `"workflow_call"`, nunca pro evento que disparou o orquestrador — se o `if:` fosse
+colocado dentro de `dependency-review.yml` ou `sbom.yml`, a condicao nunca seria verdadeira e
+o job ficaria permanentemente desligado, mesmo rodando em PR/push real. So o `pipeline.yml`,
+que e diretamente disparado pelo evento original, tem o `github.event_name` correto pra essa
+checagem.
+
+D-2026-07-28-pipeline-unificada-6: Dois guardrails adicionais identificados (nao estavam na
+lista do card). (a) Nomes de artifact (`actions/upload-artifact` `name:`) devem continuar
+unicos entre os reusables migrados: antes da migracao cada workflow tinha seu proprio `run_id`
+(sem risco de colisao); depois todos compartilham o `run_id` do `pipeline.yml`, entao dois
+jobs com o mesmo nome de artifact colidiriam. Hoje nao ha colisao (`coverage` em `ci.yml`,
+`sbom-spdx` em `sbom.yml`, unicos nomes existentes no escopo migrado) — convencao pra qualquer
+artifact futuro: prefixar com o nome do job. (b) Antes de qualquer edicao de arquivo desta
+fase, capturar um snapshot dos required status checks atuais de `main` (`gh api
+repos/:owner/:repo/branches/main/protection`) salvo em
+`.jdi/phases/pipeline-unificada/branch-protection-before.json` — baseline auditavel pro remap
+descrito em D-2026-07-28-pipeline-unificada-1(d), pra nao repetir o incidente de hoje (4
+contexts com nome errado travando todos os PRs).
