@@ -79,9 +79,11 @@
         <PackageReference Include="CommunityToolkit.Maui" Version="14.2.2"/>
     </ItemGroup>
 
+    <!-- LLamaSharp.Backend.* must track the same version as LLamaSharp (Core csproj) — the
+         native llama.cpp ABI is version-locked to the managed loader. -->
     <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-        <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.26.0" />
-        <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.26.0" />
+        <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.27.0" />
+        <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
     </ItemGroup>
 
     <!-- GHSA-2m69-gcr7-jv3q: bundle_green 2.1.11 pulls the vulnerable 2.1.11 native libs on
