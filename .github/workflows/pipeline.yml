@@ -56,7 +56,8 @@ jobs:
       pr-key: ${{ github.event.pull_request.number }}
       pr-branch: ${{ github.event.pull_request.head.ref }}
       pr-base: ${{ github.event.pull_request.base.ref }}
-    secrets: inherit
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   dependency-review:
     name: Dependency Review
