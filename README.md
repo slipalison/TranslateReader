@@ -13,8 +13,19 @@ Leitor de livros EPUB construido com .NET MAUI, projetado para Windows, Android 
 - Persistencia automatica da posicao de leitura (SQLite local)
 - Retomar leitura exatamente de onde parou
 - Navegacao por capitulos com indice interativo
-- Bookmarks para marcar trechos importantes
-- Suporte a temas claro/escuro
+- Temas de leitura Light, Dark e Sepia, com fonte, tamanho e espacamento configuraveis
+- **Traducao offline EN -> PT-BR** com LLM local via LLamaSharp: traduz o paragrafo visivel,
+  o capitulo atual ou o livro inteiro sem enviar texto para nenhum servico externo
+- Download e gerenciamento do modelo GGUF usado pela traducao, direto pelo app
+- Cache de traducao por hash do texto original: retraduzir o mesmo trecho nao gasta inferencia
+- Traducao de livro completo roda como job persistido (`BookTranslationJob`) — pode ser pausada,
+  o app fechado, e retomada depois a partir do ultimo capitulo concluido
+- Exportacao do livro traduzido como um novo EPUB
+
+> **Ressalva — traducao offline hoje roda somente Windows.** Os backends nativos do LLamaSharp
+> (`LLamaSharp.Backend.Cpu` e `LLamaSharp.Backend.Cuda12`) so sao referenciados no TFM Windows
+> do app. O leitor em si roda nas 4 plataformas; a inferencia local, nao. Suporte a Android/iOS
+> esta planejado na phase `llm-mobile` — ver [Roadmap](#roadmap).
 
 ## Plataformas Suportadas
 
@@ -91,11 +102,14 @@ Bookmark
 
 ## Stack Tecnologica
 
-- **.NET 10** com **MAUI** (Multi-platform App UI)
-- **SQLite** via Microsoft.Data.Sqlite para persistencia local
-- **VersOne.Epub** para parsing de arquivos EPUB
-- **CommunityToolkit.Mvvm** para padrao MVVM
-- **CommunityToolkit.Maui** para componentes UI extras
+- **.NET 10** com **MAUI** (Multi-platform App UI) — Windows, Android, iOS e Mac Catalyst
+- **Microsoft.Data.Sqlite.Core** 10.0.10 (+ `SQLitePCLRaw.bundle_green` 2.1.11) para persistencia local
+- **VersOne.Epub** 3.3.6 para parsing de arquivos EPUB
+- **LLamaSharp** 0.27.0 para inferencia local do LLM de traducao. Os backends nativos
+  (`LLamaSharp.Backend.Cpu` e `LLamaSharp.Backend.Cuda12`, mesma versao 0.27.0) estao sob
+  condicao de plataforma `windows` no csproj do app — dai a ressalva acima e a phase `llm-mobile`
+- **CommunityToolkit.Mvvm** 8.4.2 para padrao MVVM
+- **CommunityToolkit.Maui** 14.2.2 para componentes UI extras
 - **WebView** para renderizacao de conteudo HTML do EPUB
 
 ## Estrutura do Projeto
