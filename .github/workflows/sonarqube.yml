@@ -1,17 +1,26 @@
 name: SonarQube
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      pr-key:
+        type: string
+        required: false
+        default: ""
+      pr-branch:
+        type: string
+        required: false
+        default: ""
+      pr-base:
+        type: string
+        required: false
+        default: ""
+    secrets:
+      SONAR_TOKEN:
+        required: false
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   sonar:
@@ -50,13 +59,20 @@ jobs:
 
       - name: Begin SonarQube analysis
         if: env.SONAR_TOKEN != ''
-        run: >-
-          dotnet-sonarscanner begin
-          /k:"slipalison_TranslateReader"
-          /o:"slipalison"
-          /d:sonar.host.url=https://sonarcloud.io
-          /d:sonar.token="$SONAR_TOKEN"
-          /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+        env:
+          SONAR_PR_KEY: ${{ inputs.pr-key }}
+          SONAR_PR_BRANCH: ${{ inputs.pr-branch }}
+          SONAR_PR_BASE: ${{ inputs.pr-base }}
+        run: |
+          args=(/k:"slipalison_TranslateReader" /o:"slipalison"
+                /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
+                /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml")
+          if [ -n "$SONAR_PR_KEY" ]; then
+            args+=(/d:sonar.pullrequest.key="$SONAR_PR_KEY"
+                   /d:sonar.pullrequest.branch="$SONAR_PR_BRANCH"
+                   /d:sonar.pullrequest.base="$SONAR_PR_BASE")
+          fi
+          dotnet-sonarscanner begin "${args[@]}"
 
       - name: Build Core
         if: env.SONAR_TOKEN != ''

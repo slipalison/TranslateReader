@@ -1,0 +1,75 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  codeql:
+    name: CodeQL
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+
+  semgrep:
+    name: Semgrep
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/semgrep.yml
+
+  sca:
+    name: SCA
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sca.yml
+
+  secret-scan:
+    name: Secret Scan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/secret-scan.yml
+
+  sonarqube:
+    name: SonarQube
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sonarqube.yml
+    with:
+      pr-key: ${{ github.event.pull_request.number }}
+      pr-branch: ${{ github.event.pull_request.head.ref }}
+      pr-base: ${{ github.event.pull_request.base.ref }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/dependency-review.yml
+
+  sbom:
+    name: SBOM
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/sbom.yml
