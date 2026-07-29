@@ -223,25 +223,52 @@ dotnet restore
 # Build do app para Windows
 dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0
 
-# Build do app para Android
-dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android
-
 # Build do app para iOS
 dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-ios
+
+# Build do app para Android — exige o SDK do Android instalado (ver nota abaixo)
+dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android
 
 # Executar no Windows
 dotnet run --project src/TranslateReader/TranslateReader.csproj -f net10.0-windows10.0.19041.0
 ```
 
-> Os comandos apontam para o csproj do app, e nao para a solution. Passar um TFM de plataforma
-> na raiz falha com `NETSDK1005`: `TranslateReader.Core` e `TranslateReader.Tests` alvejam
-> `net10.0` puro e nao conhecem esse TFM.
+Os TFMs disponiveis nao sao fixos: o csproj do app os monta por condicao de sistema operacional e
+de SDK presente. Para ver quais existem na sua maquina antes de escolher um `-f`:
+
+```bash
+dotnet msbuild src/TranslateReader/TranslateReader.csproj -getProperty:TargetFrameworks
+```
+
+> **`NETSDK1005` no build de Android.** No Windows, `net10.0-android` so entra em
+> `TargetFrameworks` quando o csproj encontra um SDK do Android — `%LocalAppData%\Android\Sdk`,
+> `$ANDROID_HOME` ou `$ANDROID_SDK_ROOT` (`src/TranslateReader/TranslateReader.csproj:7`). Sem
+> nenhum deles o TFM nao existe no projeto e o comando acima falha com `NETSDK1005`. Instale o SDK
+> do Android (via Visual Studio ou Android Studio) ou builde a partir de Linux/macOS, onde o TFM
+> android e incondicional.
+
+> **`NETSDK1005` a partir da raiz.** Todos os comandos apontam para o csproj do app, nao para a
+> solution, de proposito: passar um TFM de plataforma na raiz falha pelo mesmo erro, porque
+> `TranslateReader.Core` e `TranslateReader.Tests` alvejam `net10.0` puro e nao conhecem esse TFM.
 
 ## Testes e Cobertura
 
 Os testes ficam em `test/TranslateReader.Tests`, alvejam `net10.0` puro e nao precisam do
-workload de MAUI instalado. Sao xUnit + NSubstitute, isolados: sem rede, sem disco e sem SQLite
-real.
+workload de MAUI instalado. Sao xUnit + NSubstitute: **171 testes, 169 passando e 2 ignorados** —
+os dois de `TranslationEngineTests` marcados `Skip = "Requires GGUF model file for local
+development"`.
+
+A suite nao acessa a rede. Onde a unidade sob teste **e** o acesso a recurso, ela usa o recurso de
+verdade num ambiente descartavel: SQLite in-memory pelo provider real `Microsoft.Data.Sqlite`
+(`InMemoryDatabase.cs`) e diretorios temporarios sob `Path.GetTempPath()` (`FileUtilityTests`,
+`ModelAccessTests`, `ParsingEngineTests`); `HybridWebViewContractTests` le do disco os assets de
+JS/HTML do proprio repositorio. O restante isola as dependencias com substitutes das interfaces de
+`Contracts/`.
+
+Para **codigo e testes novos**, a regra da secao 6 de
+[`.claude/rules/csharp.md`](.claude/rules/csharp.md) pede isolamento completo — sem rede, sem
+disco e sem SQLite real, com NSubstitute apenas contra interfaces. Ela vale dali para frente; a
+suite legada, anterior ao commit de boundary, nao a cumpre.
 
 ```bash
 # Rodar a suite
@@ -264,29 +291,47 @@ build por ela. O gate automatico que falha abaixo de 90% esta planejado na phase
 Para reportar uma vulnerabilidade, siga a politica em [`SECURITY.md`](SECURITY.md) — o report e
 privado, via GitHub Security Advisories. **Nao abra issue publica para falha de seguranca.**
 
-Todo push e todo pull request passam pelo orquestrador
-[`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml), que dispara os workflows
-reusaveis abaixo:
+Todo push em `main` e todo pull request disparam o orquestrador
+[`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml). Ele despacha 8 jobs, cada um
+um workflow reusavel (`workflow_call`) proprio:
 
-| Verificacao | Workflow | O que faz |
+| Job | Workflow | Disparo | O que faz |
+|---|---|---|---|
+| CI | `ci.yml` | push e PR | Suite de testes com coleta de cobertura no Linux, mais build do app Windows |
+| CodeQL | `codeql.yml` | push e PR, mais cron semanal proprio | Analise estatica de C# com o pacote `security-extended` |
+| Semgrep | `semgrep.yml` | push e PR | SAST com regras da registry mais as regras proprias de `.semgrep/` |
+| SCA | `sca.yml` | push e PR | Gate de vulnerabilidade em dependencias NuGet — reprova em CVE High/Critical |
+| Secret scan | `secret-scan.yml` | push e PR | Gitleaks sobre o historico, complementando o secret scanning nativo do GitHub |
+| SonarQube Cloud | `sonarqube.yml` | push e PR | Quality Gate e cobertura (antigo SonarCloud) |
+| Dependency review | `dependency-review.yml` | somente PR | Diff de dependencias do PR, com resumo comentado quando reprova |
+| SBOM | `sbom.yml` | somente push | Gera SBOM SPDX com Syft e publica na Dependency Submission API |
+
+Outros dois workflows rodam **fora** do orquestrador. Nenhum dos dois declara `workflow_call`,
+entao `pipeline.yml` nao tem como chama-los:
+
+| Workflow | Disparo | Por que fica separado |
 |---|---|---|
-| CodeQL | `codeql.yml` | Analise estatica de C# com o pacote `security-extended`, mais um run agendado semanal |
-| Semgrep | `semgrep.yml` | SAST com regras da registry e regras proprias em `.semgrep/` (zip-slip, XXE, injecao no WebView) |
-| SCA | `sca.yml` | Gate de vulnerabilidade em dependencias NuGet — reprova em CVE High/Critical |
-| Secret scan | `secret-scan.yml` | Gitleaks sobre o historico, complementando o secret scanning nativo do GitHub |
-| Dependency review | `dependency-review.yml` | Diff de dependencias em pull request, com resumo comentado no PR |
-| SBOM | `sbom.yml` | Gera SBOM SPDX com Syft e publica na Dependency Submission API |
-| OpenSSF Scorecard | `scorecard.yml` | Score de postura de supply chain do repositorio |
-| SonarQube Cloud | `sonarqube.yml` | Quality Gate e cobertura (antigo SonarCloud) |
+| `scorecard.yml` | cron semanal (sabado, 02:30 UTC), push em `main` e dispatch manual | Publica o resultado no OpenSSF (`publish_results: true`), o que exige rodar como workflow proprio do repositorio, nao como job aninhado |
+| `release.yml` | push de tag `v*` | Empacota a release do Windows; nao faz parte do ciclo de push/PR |
 
 Hardening de supply chain aplicado a todos esses workflows: **toda action de terceiro e pinada
 por commit SHA completo**, nunca por tag mutavel `@vN`; `permissions:` nega tudo no topo e cada
 job eleva somente o que precisa; jobs em `ubuntu-latest` rodam sob `step-security/harden-runner`.
 
-O proprio codigo trata como **entrada nao confiavel** os arquivos EPUB (extracao de zip valida
-path escape e limita tamanho descomprimido) e o HTML dos livros renderizado no WebView (todo
-valor derivado do livro e codificado antes de chegar em JavaScript). Detalhes das regras
-obrigatorias em [`.claude/rules/csharp.md`](.claude/rules/csharp.md).
+Arquivo EPUB e HTML de livro sao **entrada nao confiavel**. As regras obrigatorias para trata-los
+— rejeitar path escape ao montar caminho a partir de entrada de zip, limitar tamanho
+descomprimido, parsear XML com DTD desabilitado, codificar todo valor derivado do livro antes de
+interpola-lo em JavaScript — estao escritas em
+[`.claude/rules/csharp.md`](.claude/rules/csharp.md) secao 4. Sao **normativas para codigo novo**,
+nao uma descricao do que ja esta implementado.
+
+Quem cobra essas regras hoje e a CI. O arquivo `.semgrep/dotnet-security.yml` traz 4 regras
+proprias que procuram exatamente esses padroes — `translatereader-zip-slip`,
+`translatereader-xxe`, `translatereader-webview-js-injection` e
+`translatereader-insecure-deserialization` — e o job de Semgrep as roda em todo push e PR
+(`semgrep scan --config .semgrep/ --severity ERROR --error`), reprovando o build nas de severidade
+ERROR. Sao regras de **deteccao em CI**, nao defesas em runtime: elas apontam o codigo que
+viola a politica, quem implementa a protecao e o codigo.
 
 ## Roadmap
 
