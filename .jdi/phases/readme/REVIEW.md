@@ -1,389 +1,456 @@
 # Phase 10: Review  (slug: readme)
 
-**Verdict:** BLOCKED
+**Verdict:** APPROVED_WITH_WARNINGS
 
-Iteracao 1 (`mode=verify`). Range revisado: `657cfe6..02bd8eb` (8 commits). Unico arquivo de
-producao tocado: `README.md`. Nenhum `.cs`, `.csproj`, `.yml` ou `.slnx` alterado — confirmado por
-`git diff --name-only 657cfe6~1 02bd8eb` (3 arquivos: `README.md`, `PLAN.md`, `SUMMARY.md`).
+**Round:** 2 (`mode=verify`, iter=2). Commits de correcao revisados: `211a00b`
+(`fix(readme): remove three false claims about code, tests and CI`) e `08a9857`
+(`docs(readme): record fix round 1 and escalate the real zip-slip gap`). HEAD `08a9857`,
+branch `jdi/readme`.
 
-Fase de documentacao: os gates 1-4 sao baratos e servem so para provar ausencia de regressao. O
-peso do review esta no Gate 5 + Gate 8 — **um README que afirma algo falso E o defeito**. Foram
-verificadas uma a uma todas as afirmacoes factuais do arquivo contra o repositorio.
-**Tres afirmacoes falsas sobreviveram**, uma delas um over-claim de seguranca.
+Escopo real da rodada de fix, confirmado por `git diff --name-only 02bd8eb..HEAD`: `README.md`,
+`.jdi/phases/readme/SUMMARY.md`, `.jdi/todos.md` e o `REVIEW.md` da iteracao 1. Nenhum `.cs`,
+`.csproj`, `.yml` ou `.slnx` tocado — a phase continua README-only.
+
+**Os 3 blockers da iteracao 1 estao resolvidos.** Cada um foi re-verificado do zero contra o
+repositorio, frase por frase, sem aceitar o SUMMARY do doer como evidencia. Nenhum blocker novo.
+Um warning novo de peso (W-10) e um julgamento sobre uma remocao voluntaria (W-11) ficam abertos,
+alem de um achado escalado que, na minha leitura, precisa de tratamento mais forte do que
+`todos.md` (ver `## Achado escalado`).
 
 ## Gates
 
 | Gate | Status | Details |
 |---|---|---|
-| Build | PASS | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` -> `0 Erro(s)`, 40 avisos (todos `MVVMTK0045` em `ReaderPageModel.cs`, legado pre-existente) |
-| Tests | PASS | `Aprovado! - Com falha: 0, Aprovado: 169, Ignorado: 2, Total: 171`. Baseline 169+2 preservada; os 2 skips sao os `TranslationEngineTests` que exigem GGUF real |
-| Coverage | SKIPPED | `git log --diff-filter=A ... 4285f25..HEAD \| grep '\.cs$'` vazio — 0 arquivo `.cs` novo/alterado na phase. Esperado (D-2/D-6), mesmo padrao de `ci-seguranca`/`pipeline-unificada` |
-| Lint | PASS | `dotnet format --verify-no-changes` -> exit 0, zero diff de formatacao |
-| Security/Layer | **BLOCK** | B-1: README declara um controle de seguranca (validacao de path escape + limite de tamanho descomprimido) que **nao existe no codigo**. Greps estruturais 5.1/5.2/5.10 limpos; 5.12/5.15 sem novidade sobre a baseline legada |
-| Consistency | PASS | 8 commits, todos `docs(readme): ...` (type correto — nada de `feat` cego), escopo `readme`, atomicos 1:1 com T-1..T-7 + 1 commit de artefato, trailer de sessao em 8/8 |
+| Build | PASS | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` -> `0 Erro(s)`, 40 avisos (todos `MVVMTK0045` em `ReaderPageModel.cs`, legado) |
+| Tests | PASS | `Aprovado! - Com falha: 0, Aprovado: 169, Ignorado: 2, Total: 171`. Baseline 169+2 preservada; os 2 skips sao `TranslationEngineTests.InitializeAsync_LoadsModel_WithValidPath` e `.GenerateAsync_ProducesOutput_WithValidModel` |
+| Coverage | SKIPPED | `git log --diff-filter=A ... 4285f25..HEAD \| grep '\.cs$'` -> 0 arquivos. Esperado (D-2/D-6) |
+| Lint | PASS | `dotnet format --verify-no-changes` -> exit 0, zero diff |
+| Security/Layer | PASS (com warnings) | B-1/B-2/B-3 resolvidos e re-verificados. Greps 5.1/5.2/5.10/5.17 limpos; 5.12 e 5.15 sem novidade sobre a baseline legada. Warnings novos: W-10, W-11 |
+| Consistency | PASS | 2 commits novos, `fix(readme)` + `docs(readme)` (tipo correto: o de correcao e `fix`, o de artefato e `docs`), escopo `readme`, atomicos, trailer de sessao em 2/2 |
 | UI Validation | SKIPPED | `has_frontend=false` (cliente MAUI nativo) — SKIP permanente por design |
-| DoD | PASS (10/10 auto, 0 manual) | Os 10 `Verify:` do CONTEXT rodados verbatim, todos exit 0. **Porem hollow** — ver W-8: nenhum dos 10 comandos e capaz de pegar B-1, B-2 ou B-3 |
+| DoD | PASS (10/10 auto, 0 manual) | Os 10 `Verify:` do CONTEXT rodados verbatim, 10/10 exit 0 |
 
 ## Blockers
 
-### B-1 — Over-claim de seguranca: controle declarado que nao existe (`README.md:286-288`)
+**Nenhum.** Os 3 da iteracao 1 foram fechados.
 
-> "O proprio codigo trata como **entrada nao confiavel** os arquivos EPUB (extracao de zip valida
-> path escape e limita tamanho descomprimido)"
+### Changelog dos blockers resolvidos
 
-**Nao ha, em lugar nenhum do repositorio, validacao de path escape na extracao nem limite de
-tamanho descomprimido.** Evidencia:
+**B-1 — over-claim de seguranca (`README.md:321-334`) — RESOLVIDO.**
+A frase que afirmava que "o proprio codigo ... valida path escape e limita tamanho descomprimido"
+saiu por completo. O texto que ficou no lugar foi verificado clausula a clausula:
 
-- `grep -rnE "ExtractToFile|ExtractToDirectory|entry\.FullName"` em `src/` -> nenhum resultado.
-  Nao existe extracao de entry de zip para disco com validacao.
-- O unico `ZipFile.Open` (`src/TranslateReader.Core/Business/Engines/ParsingEngine.cs:93`) abre a
-  **copia de saida** em `ZipArchiveMode.Update` para reescrever capitulos traduzidos — nao extrai
-  entradas nao confiaveis.
-- O caminho que realmente escreve conteudo derivado do EPUB em disco e
-  `src/TranslateReader.Core/Business/Managers/ReadingManager.cs:56-62`:
-  ```
-  var outputPath = Path.Combine(imagesDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
-  await fileUtility.WriteFileAsync(outputPath, content);
-  ```
-  `relativePath` vem de `epub.Content.Images.Local` (`ParsingEngine.cs:62-64`), ou seja, dos
-  caminhos internos do EPUB — **entrada nao confiavel**. Nao ha `Path.GetFullPath` + checagem de
-  containment, nao ha rejeicao de `..`/path absoluto/letra de drive, e
-  `src/TranslateReader.Core/Utilities/FileUtility.cs:31-32` faz
-  `Directory.CreateDirectory(...)` + `File.WriteAllBytesAsync(filePath, content)` direto.
-- `grep -niE "maxSize|maxBytes|uncompressed|sizeLimit"` em `ParsingEngine.cs` -> nada. Nenhum bound
-  de tamanho descomprimido em lugar algum.
-- O que **existe** e uma regra *preventiva* de Semgrep (`.semgrep/dotnet-security.yml`, id
-  `translatereader-zip-slip`) e o mandato normativo em `.claude/rules/csharp.md` secao 4. Ambos
-  dizem o que o codigo **deve** fazer; o README converteu isso numa afirmacao descritiva de que o
-  codigo **ja faz**.
+- "As regras obrigatorias para trata-los — rejeitar path escape ..., limitar tamanho descomprimido,
+  parsear XML com DTD desabilitado, codificar todo valor derivado do livro antes de interpola-lo em
+  JavaScript — estao escritas em `.claude/rules/csharp.md` secao 4." Li a secao 4: as quatro estao
+  la, literalmente ("reject entry paths that escape the target directory ... Bound decompressed
+  sizes. Parse XML with DTD processing disabled (`DtdProcessing.Prohibit`, no `XmlResolver`)" e
+  "Never inject book-derived strings into JS without encoding"). **CONFERE.**
+- "Sao **normativas para codigo novo**, nao uma descricao do que ja esta implementado." E exatamente
+  o enquadramento que faltava. **CONFERE.**
+- "O arquivo `.semgrep/dotnet-security.yml` traz 4 regras proprias ... `translatereader-zip-slip`,
+  `translatereader-xxe`, `translatereader-webview-js-injection` e
+  `translatereader-insecure-deserialization`". Li o arquivo: sao exatamente 4 regras, com esses 4
+  ids. **CONFERE.**
+- "reprovando o build nas de severidade ERROR". `semgrep.yml:44` roda
+  `semgrep scan --config .semgrep/ --severity ERROR --error --metrics=off .`; das 4 regras, 3 sao
+  `severity: ERROR` e a de WebView e `WARNING`. A qualificacao "nas de severidade ERROR" salva a
+  frase. Confirmado na pratica: rodei o gate e o semgrep reporta `Scanning 112 files with 3 csharp
+  rules` — 3, nao 4. **CONFERE.**
+- "Sao regras de **deteccao em CI**, nao defesas em runtime: elas apontam o codigo que viola a
+  politica, quem implementa a protecao e o codigo." Esta e a frase que fecha o blocker. **CONFERE.**
 
-Isso e o pior tipo de defeito de documentacao: um README publico anunciando defesas contra
-zip-slip e zip-bomb que o app nao tem. Pela regra de prioridade do projeto (1) Seguranca, e
-BLOCK-class no Gate 5.
+Varredura de controle: nao sobrou nenhuma outra afirmacao de hardening em runtime na secao. O unico
+"aplicado" que restou e sobre supply chain de workflow, nao sobre codigo do app — e foi re-verificado
+(ver abaixo). **Fechado.**
 
-**Correcao (uma linha de prosa):** trocar por algo que descreva a postura real — por exemplo, que
-as regras obrigatorias de tratamento de EPUB como entrada nao confiavel estao em
-`.claude/rules/csharp.md` e sao cobradas por regras proprias de Semgrep em `.semgrep/`, sem
-afirmar que a validacao ja esta implementada. (Implementar o controle de fato e trabalho de codigo
-— ver W-2, fora do escopo desta phase README-only.)
+**B-2 — afirmacao falsa sobre a suite de testes (`README.md:256-271`) — RESOLVIDO.**
+Cada numero e cada nome de arquivo do texto novo foi conferido:
 
-### B-2 — Afirmacao falsa sobre a suite de testes (`README.md:242-244`)
+| Afirmacao do README | Verificacao | Veredito |
+|---|---|---|
+| "171 testes, 169 passando e 2 ignorados" | `dotnet test` -> `Com falha: 0, Aprovado: 169, Ignorado: 2, Total: 171` | OK |
+| "os dois de `TranslationEngineTests` marcados `Skip = "Requires GGUF model file for local development"`" | `TranslationEngineTests.cs:56` e `:69`, `[Fact(Skip = "Requires GGUF model file for local development")]` — string **identica**; e a saida do runner nomeia esses 2 testes | OK |
+| "A suite nao acessa a rede" | Nenhum teste exercita caminho HTTP. `ModelAccessTests.cs:8` de fato instancia um `HttpClient` real, mas nenhum dos 8 testes chama `DownloadModelAsync` — so `IsModelAvailable`/`GetModelPath`/`DeleteModelAsync`. A afirmacao e sobre acesso a rede, e nao ha | OK (ver nota) |
+| "SQLite in-memory pelo provider real `Microsoft.Data.Sqlite` (`InMemoryDatabase.cs`)" | `InMemoryDatabase.cs:1` `using Microsoft.Data.Sqlite;`, `:19` `new SqliteConnection(ConnectionString)` | OK |
+| "diretorios temporarios sob `Path.GetTempPath()` (`FileUtilityTests`, `ModelAccessTests`, `ParsingEngineTests`)" | `grep -rln "Path.GetTempPath" test/` devolve **exatamente esses 3 arquivos**, nem mais nem menos | OK |
+| "`HybridWebViewContractTests` le do disco os assets de JS/HTML do proprio repositorio" | `:15` monta `src/TranslateReader/Resources/Raw/wwwroot/js`, `:18/:212/:231` `File.ReadAllText` | OK |
+| "O restante isola as dependencias com substitutes das interfaces de `Contracts/`" | Gate 5.17: `grep Substitute.For<` filtrado por nao-`I[A-Z]` -> vazio. Todo substitute mira interface | OK |
+| "Para **codigo e testes novos**, a regra da secao 6 de `.claude/rules/csharp.md` pede isolamento completo ... a suite legada, anterior ao commit de boundary, nao a cumpre" | Atribuicao correta: a secao 6 e mesmo normativa e o texto agora a apresenta como convencao para codigo novo, nao como descricao | OK |
 
-> "Sao xUnit + NSubstitute, isolados: sem rede, sem disco e sem SQLite real."
+Nota (nao e warning): `ModelAccessTests.cs:8` cria um `HttpClient` vivo. Hoje nenhum teste o usa
+para sair na rede, entao a frase e verdadeira; e so um detalhe que um teste futuro de download
+tornaria falso sem ninguem perceber. **Fechado.**
 
-Falso em duas das tres clausulas. Evidencia direta no proprio repositorio:
+**B-3 — topologia de CI falsa (`README.md:294-315`) — RESOLVIDO.**
+Li `pipeline.yml` inteiro por conta propria. Ele declara exatamente 8 jobs, nesta ordem:
+`ci` (:17), `codeql` (:23), `semgrep` (:31), `sca` (:38), `secret-scan` (:44), `sonarqube` (:50),
+`dependency-review` (:62, `if: github.event_name == 'pull_request'`), `sbom` (:70,
+`if: github.event_name == 'push'`). A tabela do README bate 8/8, na mesma ordem, com a coluna
+Disparo marcando corretamente `somente PR` para dependency-review e `somente push` para sbom.
 
-- **Disco real:** `test/TranslateReader.Tests/FileUtilityTests.cs:18,24,31,43,63,86` usa
-  `File.WriteAllTextAsync` / `File.ReadAllTextAsync` / `File.WriteAllText` de verdade;
-  `test/TranslateReader.Tests/HybridWebViewContractTests.cs:18,212,231` faz `File.ReadAllText`
-  sobre os assets de JS/HTML.
-- **SQLite real:** `test/TranslateReader.Tests/InMemoryDatabase.cs:19` ->
-  `_anchor = new SqliteConnection(ConnectionString)`. E o provider `Microsoft.Data.Sqlite` real
-  (in-memory, mas motor SQLite real), nao um substitute.
+`scorecard.yml` saiu da tabela de despachados. A segunda tabela confere celula a celula:
+`scorecard.yml` -> `schedule: cron "30 2 * * 6"` (dia 6 = sabado, 02:30 UTC), `push: branches:
+[main]`, `workflow_dispatch`, e `publish_results: true` em `:42`; `release.yml` -> `push: tags:
+["v*"]`, `runs-on: windows-latest`, `dotnet publish ... -f net10.0-windows10.0.19041.0`. A
+justificativa "Nenhum dos dois declara `workflow_call`" tambem confere: `grep -c "workflow_call:"`
+devolve 0 para os dois e 1 para os outros 8.
 
-Mesma origem de B-1: a frase foi derivada da **regra** de `.claude/rules/csharp.md` secao 6
-("no network/disk/real SQLite in unit tests") e apresentada como **descricao do estado atual**.
-A regra vale para codigo novo pos-`4285f25`; a suite legada nao a cumpre.
+**Auto-catch do `ci.yml` verificado.** O doer diz ter corrigido a linha para "Suite de testes com
+coleta de cobertura no Linux, mais build do app Windows". Li `ci.yml`: job `test` (`name: Test
+(Linux)`, `runs-on: ubuntu-latest`, `:30` `dotnet test ... --collect:"XPlat Code Coverage"`) e job
+`build` (`name: Build (Windows)`, `runs-on: windows-latest`, instala workload MAUI, builda o app).
+O texto final esta **correto**. **Fechado** — com a ressalva de W-10 abaixo, que e da mesma secao
+mas de outra classe.
 
-**Correcao:** ou remover a clausula, ou reescrever como regra para contribuicao nova
-("testes novos devem ser isolados: sem rede, sem disco e sem SQLite real"), que e o que a
-`csharp.md` de fato manda.
+**W-1 — comando de build Android — RESOLVIDO.**
+Rodei os dois comandos verbatim do README:
 
-### B-3 — Topologia de CI falsa: Scorecard nao e disparado pelo pipeline (`README.md:267-279`)
+- `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-ios` ->
+  `0 Erro(s)`, 8 avisos, exit 0. **Compila.**
+- `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android` ->
+  `error NETSDK1005`, exit 1 — como esperado nesta maquina, que nao tem SDK do Android.
 
-> "Todo push e todo pull request passam pelo orquestrador `pipeline.yml`, que dispara os workflows
-> **reusaveis abaixo**:"
+A diferenca em relacao a iteracao 1 e que agora o README **avisa antes**: a propria linha do bloco
+diz "exige o SDK do Android instalado (ver nota abaixo)" (`:229`) e existe um callout dedicado
+`NETSDK1005` no build de Android (`:243-248`) citando `%LocalAppData%\Android\Sdk`, `$ANDROID_HOME`
+e `$ANDROID_SDK_ROOT`. Conferi a ancora: `src/TranslateReader/TranslateReader.csproj` **linha 7** e
+literalmente a condicao
+`Condition="$([MSBuild]::IsOSPlatform('windows')) AND (Exists('$(LocalAppData)\Android\Sdk') OR Exists('$(ANDROID_HOME)') OR Exists('$(ANDROID_SDK_ROOT)'))"`.
+A citacao esta certa ate o numero da linha.
 
-e a tabela logo em seguida inclui a linha **OpenSSF Scorecard / `scorecard.yml`**.
+Tambem confirmei a afirmacao "builde a partir de Linux/macOS, onde o TFM android e incondicional":
+`csproj:4` acrescenta `net10.0-android` sob `Condition="!$([MSBuild]::IsOSPlatform('windows'))"`,
+sem checagem de SDK. **Verdadeira.**
 
-`pipeline.yml` despacha exatamente 8 jobs: `ci`, `codeql`, `semgrep`, `sca`, `secret-scan`,
-`sonarqube`, `dependency-review` (so em PR), `sbom` (so em push). **`scorecard.yml` nao esta
-entre eles.** Alem disso `scorecard.yml` nem e reusavel: seus triggers sao
-`schedule: cron "30 2 * * 6"` + `push: branches: [main]` + `workflow_dispatch` — nao tem
-`workflow_call`. Logo a linha da tabela esta sob uma frase que a descreve errado em dois pontos
-(nao e disparado pelo orquestrador, e nao e reusavel).
-
-Secundariamente, a mesma frase generaliza demais para mais duas linhas: `dependency-review` so
-roda em pull request e `sbom` so roda em push — nao em "todo push e todo pull request".
-
-**Correcao:** separar a linha do Scorecard (workflow independente, cron semanal + push em `main`)
-ou reescrever a frase introdutoria para nao afirmar despacho universal.
+O callout pre-existente virou `NETSDK1005` a partir da raiz (`:250-252`), entao o leitor que topa
+com o erro no comando Android **nao e mais mandado para a explicacao errada** — que era o ponto
+da W-1. E o comando novo
+`dotnet msbuild src/TranslateReader/TranslateReader.csproj -getProperty:TargetFrameworks`, rodado
+verbatim, devolve `net10.0-windows10.0.19041.0;net10.0-ios;net10.0-maccatalyst`, exatamente o que o
+README promete que ele faz. **Fechado.**
 
 ## Warnings
 
-- **W-1 — comando de build Android documentado falha neste ambiente (`README.md:226-227`).**
-  Rodei o comando verbatim: `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f
-  net10.0-android` -> `error NETSDK1005: O arquivo de ativos ... nao tem um destino para
-  'net10.0-android'`, exit 1. Causa: `src/TranslateReader/TranslateReader.csproj:7` so acrescenta o
-  TFM android se existir `$(LocalAppData)\Android\Sdk` / `$ANDROID_HOME` / `$ANDROID_SDK_ROOT`.
-  `dotnet msbuild -getProperty:TargetFrameworks` nesta maquina devolve
-  `net10.0-windows10.0.19041.0;net10.0-ios;net10.0-maccatalyst`. Ironia relevante: o callout logo
-  abaixo (`README.md:236-238`) explica NETSDK1005 como se fosse exclusivo do build a nivel de
-  solution, entao o leitor que topar com o erro no comando Android e mandado para a explicacao
-  errada. Nao e blocker (o corpo do reviewer classifica falha de TFM mobile como WARN, e o DoD (f)
-  so exigia matar o `-f` bare e apontar o csproj — cumprido). Sugestao: pre-requisito explicito de
-  Android SDK nessa linha. O comando iOS, testado verbatim, compila (`0 Erro(s)`).
-- **W-2 — divida de seguranca real por tras de B-1 (legado, D-2 isenta esta phase).** Independente
-  da redacao do README, `ReadingManager.cs:56-62` + `FileUtility.cs:31-32` escrevem caminhos
-  derivados de EPUB sem containment check e sem bound de tamanho. E codigo anterior a `4285f25`,
-  entao nao bloqueia **esta** phase, mas Gate 5.6 nao tem boundary: vale abrir phase de hardening
-  (`Path.GetFullPath` + `StartsWith(imagesDir)` e limite de bytes por entrada).
+### Novos nesta rodada
+
+- **W-10 — a coluna "Disparo" omite o cron proprio de 4 dos 8 jobs, e "somente push" vira
+  enganoso (`README.md:298-307`).** A linha do CodeQL diz "push e PR, **mais cron semanal
+  proprio**". Isso cria um contraste falso: CodeQL nao e o unico. Contei os `schedule:` de todos os
+  workflows —
+
+  | Workflow | Cron proprio | Como o README descreve o Disparo |
+  |---|---|---|
+  | `codeql.yml` | `26 7 * * 1` (seg) | "push e PR, mais cron semanal proprio" — completo |
+  | `semgrep.yml` | `45 6 * * 1` (seg) | "push e PR" — **omite o cron** |
+  | `sca.yml` | `50 5 * * 3` (qua) | "push e PR" — **omite o cron** |
+  | `secret-scan.yml` | `15 4 * * 0` (dom) | "push e PR" — **omite o cron** |
+  | `sbom.yml` | `20 3 * * 2` (ter) | "**somente push**" — omite o cron E usa exclusiva |
+  | `ci.yml`, `sonarqube.yml`, `dependency-review.yml` | nenhum | corretos |
+
+  Lida so como "quando o pipeline despacha este job", cada celula e defensavel. Mas a linha do
+  CodeQL rompe esse enquadramento ao noticiar um gatilho que **nao** e do pipeline, e a partir dai o
+  leitor conclui que os outros nao tem. Para `sbom` a palavra "somente" passa a ser ativamente
+  errada: um SBOM aparece numa terca-feira sem push nenhum.
+
+  **Nao e blocker.** B-3 foi bloqueado porque atribuia ao pipeline um workflow que ele nao dispara —
+  falso por atribuicao. Aqui nada de falso e atribuido: os 8 jobs, a ordem e a condicionalidade
+  PR/push estao todos certos; o defeito e detalhe distribuido de forma desigual. Correcao de uma
+  linha: ou tirar a clausula de cron da linha do CodeQL, ou acrescenta-la nas outras 4.
+
+- **W-11 — a remocao do claim de WebView foi overcorrection (julgamento pedido).**
+  O doer removeu, junto com B-1, a frase "todo valor derivado do livro e codificado antes de chegar
+  em JavaScript", mesmo tendo eu verificado essa frase como **verdadeira** na iteracao 1. A
+  justificativa dele foi que a regra de Semgrep correspondente e `WARNING` e nao `ERROR`. Re-auditei
+  os 10 call sites de `EvaluateJavaScriptAsync` em `ReaderPage.xaml.cs`:
+
+  | Linha | Forma | Valor derivado do livro? | Codificado? |
+  |---|---|---|---|
+  | 121, 122 | `$"setMode({JsStr(mode)})"`, `$"applyCss({JsStr(...)})"` | nao | sim (`JsStr`) |
+  | 306 | `$"applyTranslations({itemsJson})"` | **sim** (texto traduzido) | sim — `:305` `JsonSerializer.Serialize(items, ...)` |
+  | 324, 461 | script constante | nao | n/a |
+  | 444-445 | `$"scrollToChapter({JsStr(savedHRef)}, {savedPos})"` | sim (`HRef`) | sim (`JsStr`) |
+  | 456 | `$"{functionName}({JsStr(html)})"` | **sim** (HTML do capitulo) | sim (`JsStr`) |
+  | 467 | `$"appendChunk({JsStr(chunk)})"` | **sim** | sim (`JsStr`) |
+  | 474 | `$"flushChunk('{functionName}')"` | **nao** — `functionName` so recebe os literais `"loadScrollContent"` (`:128`) e `"loadChapter"` (`:132`) | n/a |
+  | 480 | `EvaluateJavaScriptAsync(expression)` | nao — expressoes internas | n/a |
+
+  `JsStr` e `JsonSerializer.Serialize` (`:486-487`). **Todo valor derivado do livro e de fato
+  codificado.** Os dois call sites que a regra de Semgrep nao consegue provar (`:306` serializa
+  direto em vez de passar pelo helper; `:474` interpola um nome de funcao interno) sao limitacao do
+  **pattern**, nao furo do codigo — e por isso mesmo a regra foi posta em `WARNING`.
+
+  **Ruling:** remover a **frase composta** foi certo — ela emendava um claim falso (EPUB) num claim
+  verdadeiro (WebView) com um "e", e salvar metade de uma frase sob pressao e como se erra de novo.
+  Mas nao readmitir a metade verdadeira como frase propria custou informacao correta e verificada.
+  E o erro inverso de B-1 (subdeclarar em vez de superdeclarar), muito menos danoso, e o texto que
+  ficou continua verdadeiro — a codificacao de JS aparece agora como regra normativa da secao 4.
+  **Nao bloqueia.** Sugestao para uma passada futura: uma frase propria, precisa, do tipo "hoje o
+  codigo ja encoda todo valor derivado do livro antes de interpolar em JavaScript (`JsStr` =
+  `JsonSerializer.Serialize`, `ReaderPage.xaml.cs:486`)" — que e uma afirmacao pontual e
+  verificavel, nao um claim blanket de hardening.
+
+### Carregados da iteracao 1 (nao tocados pela rodada de fix, todos confirmados ainda abertos)
+
 - **W-3 — "7 tabelas do SQLite" lista nomes de modelo, nao de tabela (`README.md:125-152`).** Os
   nomes reais no DDL sao `Books`, `Chapters`, `Bookmarks`, `BookTranslationJobs` (plural) e
-  `ReadingProgress`, `Settings`, `TranslationCache` (singular). O README lista os 7 no singular.
-  As **colunas** conferem 1:1 com o DDL de `BooksAccess.cs:23-42`, `ReadingStateAccess.cs:23-38`,
-  `SettingsAccess.cs:23-26`, `TranslationCacheAccess.cs:22-30` e `BookTranslationJobAccess.cs:23-32`
-  — inclusive o `UNIQUE(BookId, ChapterHRef, OriginalHash)` e o `LastCompletedChapterIndex`.
-  Unica coluna com nuance perdida: `ReadingProgress.BookId` e `NOT NULL UNIQUE` no DDL, e o README
-  so marca `UNIQUE` em `TranslationCache`.
-- **W-4 — `CLAUDE.md` ficou defasado em relacao ao README (backlog).** Confirmado o achado do doer:
-  a tabela de Componentes do `CLAUDE.md` lista 15 de 16 servicos (falta `BookTranslationJobAccess`),
-  e a secao Modelos de Dados do `CLAUDE.md` lista 6 de 7 tabelas (falta `BookTranslationJob`).
-  O README agora e **mais correto que a fonte que ele cita**. Registrar em `todos.md` / phase de
-  manutencao.
-- **W-5 — inconsistencia interna de plataformas.** `README.md:10` diz "projetado para Windows,
-  Android e iOS (iPhone/iPad)" (3 plataformas), enquanto a tabela `README.md:37-43` e a Stack
-  `README.md:161` dizem 4 (com macOS / Mac Catalyst). A linha 10 e pre-existente, mas o texto novo
-  da linha 161 tornou o conflito visivel. O csproj confirma 4 TFMs.
-- **W-6 — preambulo do Roadmap se contradiz (`README.md:293`).** "Tudo abaixo esta planejado, nao
-  construido — **nao existe no repositorio hoje**", mas a propria linha de `bookmarks` (`:300`)
-  diz "Hoje so existe a camada de dados". A ressalva da linha vence, mas o preambulo absoluto
-  deveria ser suavizado.
+  `ReadingProgress`, `Settings`, `TranslationCache` (singular). As colunas conferem 1:1 com o DDL.
+- **W-4 — `CLAUDE.md` esta defasado em relacao ao README.** A tabela de Componentes do `CLAUDE.md`
+  lista 15 de 16 servicos (falta `BookTranslationJobAccess`) e a secao Modelos de Dados lista 6 de 7
+  tabelas (falta `BookTranslationJob`). O README hoje e mais correto que a fonte que ele cita.
+- **W-5 — inconsistencia interna de plataformas.** `README.md:10` diz "Windows, Android e iOS"
+  (3), a tabela `:37-43` e a Stack `:161` dizem 4 (com macOS / Mac Catalyst). O csproj confirma 4.
+- **W-6 — preambulo do Roadmap se contradiz (`README.md:338`).** "Tudo abaixo esta planejado ... nao
+  existe no repositorio hoje", mas a linha de `bookmarks` (`:345`) diz "Hoje so existe a camada de
+  dados".
 - **W-7 — arvore de estrutura omite caminhos existentes.** Faltam `docs/` (contem
-  `docs/translation-feature-plan.md`, referenciado pelo ROADMAP como evidencia de `llm-mobile`),
-  `.semgrep/` (citado em prosa na secao Seguranca, `README.md:274`) e
-  `src/TranslateReader/Properties/`. Todo caminho **mostrado** existe (verifiquei os 20 diretorios
-  e 13 arquivos da arvore, 100% presentes) e `.idea/` sumiu corretamente — a arvore erra por
-  omissao, nao por invencao. Baixa severidade.
-- **W-8 — o DoD desta phase e verificavel sem ser verdadeiro (risco de hollow pass).** Os 10
-  `Verify:` sao greps de presenca (`grep -qi "Scorecard"`, `grep -qi "Semgrep"`, `grep -q "90%"`).
-  Nenhum deles poderia ter reprovado B-1, B-2 ou B-3, porque todos os tres sao afirmacoes **falsas
-  sobre conteudo presente**. Recomendacao para o `/jdi-discuss` de futuras phases de documentacao:
-  pelo menos um item de DoD que cruze a afirmacao com o artefato (ex: "todo workflow citado como
-  disparado pelo pipeline aparece em `pipeline.yml`").
-- **W-9 — imprecisao no SUMMARY (nao no README).** O desvio 1 do `SUMMARY.md` diz que o probe dos
-  "3 badges externos" mudou de HEAD para GET por causa do 405. Verifiquei independentemente: so as
-  **2** URLs do SonarCloud retornam `405` em HEAD; `api.scorecard.dev` responde `200` tanto em HEAD
-  quanto em GET. A conclusao do doer (405 e falha do metodo de sondagem, nao da URL) esta correta,
-  a contagem e que ficou imprecisa.
+  `docs/translation-feature-plan.md`, nao linkado de lugar nenhum), `.semgrep/` (agora citado em
+  prosa em `:328`) e `src/TranslateReader/Properties/`. Erra por omissao, nunca por invencao.
+- **W-8 — o DoD desta phase e verificavel sem ser verdadeiro.** Confirmado outra vez nesta rodada:
+  os 10 `Verify:` deram 10/10 PASS **tanto antes quanto depois** da correcao dos 3 blockers. Sao
+  greps de presenca; nenhum consegue avaliar veracidade. Gate 8 verde nao e evidencia de README
+  correto nesta classe de phase. Recomendacao para `/jdi-discuss` de futuras phases de doc:
+  pelo menos um item que cruze afirmacao com artefato.
+- **W-9 — imprecisao de contagem no SUMMARY da iteracao 1** (2 URLs do SonarCloud em 405-HEAD, nao
+  3). O SUMMARY nao foi corrigido; segue sendo detalhe de artefato, nao de produto.
 
-## Verificacao factual detalhada (nucleo do review)
+### Lacunas de "bem explicado" (nao bloqueantes, ver secao propria)
 
-### Tabela de 16 componentes — CONFERE
+- **Nao ha "como usar" / primeiro uso**, e em particular nenhum aviso de que a traducao offline
+  exige **baixar um modelo GGUF pelo app antes** de funcionar. Segue aberto.
+- Sem screenshot/GIF. Opcional.
 
-Contagem de linhas da tabela: 16 (`grep -cE '^\| \`[A-Za-z]+(Manager|Engine|Access|Utility)\` \|'`).
-Cada servico existe no disco, na camada declarada:
+## Achado escalado: a regra `translatereader-zip-slip` nao cobre o unico caminho real de risco
 
-| Camada | Declarado | Real (`ls`) | Veredito |
-|---|---|---|---|
-| Manager (4) | Reading, Library, Translation, Settings | `Business/Managers/` tem exatamente esses 4 | OK |
-| Engine (3) | Parsing, Translation, Theme | `Business/Engines/` tem exatamente esses 3 | OK |
-| ResourceAccess (6) | Books, ReadingState, Settings, TranslationCache, Model, BookTranslationJob | `Access/` tem exatamente esses 6 | OK |
-| Utility (3) | File, Prompt, Html | `Utilities/` tem exatamente esses 3 | OK |
+Este e, na minha leitura, o output mais consequente da phase. **Verifiquei de forma independente e
+CONFIRMO — com evidencia empirica, nao so por leitura de pattern.**
 
-As 15 descricoes que existem em `CLAUDE.md` foram copiadas **literalmente**, como o CONTEXT mandou
-— comparei celula a celula. A 16a (`BookTranslationJobAccess`) foi derivada: ver ruling do desvio 3.
-
-Detalhe correto e facil de errar: `HtmlUtility` esta marcado "(estatico)" e a arvore mostra
-`Contracts/Utilities/` com apenas `IFileUtility, IPromptUtility` — confere com o `ls` real (nao
-existe `IHtmlUtility`).
-
-### Diagrama de camadas e casos de uso — CONFEREM
-
-As regras de chamada (`README.md:79-84`) sao transcricao fiel do bloco de `CLAUDE.md`. Spot-check
-do caso de uso 7 ("`LibraryPage -> TranslationManager -> ParsingEngine + TranslationEngine +
-BookTranslationJobAccess`"): o ctor de `TranslationManager.cs:14-21` injeta `ITranslationEngine`,
-`IModelAccess`, `ITranslationCacheAccess`, `IBookTranslationJobAccess`, `IPromptUtility`,
-`IBooksAccess`, `IParsingEngine`. Caso 6 idem. Confere.
-
-### Versoes declaradas — TODAS CONFEREM
-
-| Afirmacao README | Fonte | Veredito |
-|---|---|---|
-| LLamaSharp 0.27.0 | `TranslateReader.Core.csproj:19` | OK |
-| Backends Cpu/Cuda12 0.27.0 sob condicao `windows` | app csproj:84-86 (`ItemGroup Condition ... == 'windows'`) | OK — a ressalva D-...-3 esta factualmente ancorada |
-| VersOne.Epub 3.3.6 | Core.csproj | OK |
-| Microsoft.Data.Sqlite.Core 10.0.10 | Core.csproj | OK |
-| SQLitePCLRaw.bundle_green 2.1.11 | Core.csproj | OK |
-| CommunityToolkit.Mvvm 8.4.2 | app csproj:78 | OK |
-| CommunityToolkit.Maui 14.2.2 | app csproj:79 | OK |
-| .NET 10 / `net10.0` | os 3 csproj | OK |
-| MAUI (sem numero de versao) | `Microsoft.Maui.Controls` 10.0.60 | OK (nao ha numero afirmado, logo nada a contradizer) |
-
-### Nada nao-construido descrito como pronto — CONFERE (e o desvio 2 estava certo)
-
-- `BookDetailPage` / `BookDetailPageModel`: `grep -c` = 0 para os nomes de arquivo; aparecem so na
-  tabela de Roadmap, marcados "Planejado", apontando `detalhe-livro`. Os arquivos de fato nao
-  existem (`ls src/TranslateReader/Pages` -> `LibraryPage`, `ReaderPage`, `Controls/`).
-- `bookmarks`, `busca-no-livro`, `llm-mobile`: todos so na tabela de Roadmap, coluna "Planejado".
-- A ordem das 6 linhas do Roadmap (`baseline-de-estilo`, `cobertura-e-ci`, `bookmarks`,
-  `detalhe-livro`, `busca-no-livro`, `llm-mobile`) bate exatamente com Phases 1-6 de
-  `.jdi/ROADMAP.md` — a afirmacao "na ordem em que sera atacada" e verdadeira.
-- Varredura de outras alegacoes "shipped-sounding" nas Funcionalidades: cada bullet foi checado
-  contra codigo. Todos ancorados (`CreateTranslatedEpubAsync` para o export de EPUB,
-  `IModelAccess` para o download do GGUF, `TranslationCacheAccess` para o cache por hash,
-  `BookTranslationJob` + `LastCompletedChapterIndex` para pause/retomada). Nenhum sobrevivente.
-
-### Badges — 6/6 resolvem 200 em GET
-
-Sondados por mim com `curl -sL -o /dev/null -w '%{http_code}'`:
-
-| Badge | GET | HEAD |
-|---|---|---|
-| Pipeline (`actions/workflows/pipeline.yml/badge.svg`) | **200** | — |
-| CodeQL (`actions/workflows/codeql.yml/badge.svg`) | **200** | — |
-| OpenSSF Scorecard (`api.scorecard.dev/...`) | **200** | 200 |
-| Sonar Quality Gate (`metric=alert_status`) | **200** | 405 |
-| Sonar Coverage (`metric=coverage`) | **200** | 405 |
-| License (`img.shields.io/...Apache_2.0...`) | **200** | — |
-
-Ordem locked (Pipeline -> CodeQL -> Scorecard -> alert_status -> coverage -> shields) confirmada
-por posicao no arquivo. Todo `actions/workflows/*.yml` citado em badge existe em
-`.github/workflows/`. **O 405-em-HEAD do SonarCloud e independentemente confirmado** e e mesmo
-falha do metodo de sondagem, nao da URL — o desvio 1 do doer procede (com a imprecisao de contagem
-de W-9).
-
-### Restante da secao Seguranca — confere, exceto B-3
-
-Verifiquei linha a linha da tabela de 8 scanners:
-
-- CodeQL "`security-extended` + run agendado semanal": `codeql.yml:36` `queries: security-extended`,
-  `codeql.yml:5-6` `schedule: cron "26 7 * * 1"`. OK.
-- Semgrep "registry + regras proprias em `.semgrep/`": `semgrep.yml:37`
-  `--config auto --config .semgrep/`; `.semgrep/dotnet-security.yml` contem os ids
-  `translatereader-zip-slip`, `translatereader-xxe`, `translatereader-webview-js-injection` — os
-  tres exatamente como o README enumera. OK.
-- SCA "reprova em CVE High/Critical": `sca.yml:43` `SCA gate (fail on High/Critical)`,
-  `sca.yml:55` `BLOCKED_SEVERITIES = {"High", "Critical"}`. OK.
-- Secret scan "Gitleaks sobre o historico": `secret-scan.yml:31` `gitleaks/gitleaks-action` com
-  `fetch-depth: 0`. OK.
-- Dependency review "resumo comentado no PR": `dependency-review.yml:31`
-  `comment-summary-in-pr: on-failure`. OK.
-- SBOM "SPDX com Syft + Dependency Submission API": `sbom.yml:32-38` `anchore/sbom-action`,
-  `format: spdx-json`, `dependency-snapshot: true`. OK.
-- SonarQube Cloud: `sonarqube.yml` presente, project key/org conferem com D-...-2. OK.
-- **Scorecard: ver B-3.**
-- "toda action de terceiro pinada por commit SHA completo": as 13 actions externas em
-  `.github/workflows/*.yml` estao todas em SHA de 40 hex, com a tag so em comentario. OK.
-- "`permissions:` nega tudo no topo": os 11 workflows tem `permissions: contents: read` no topo —
-  e declarar qualquer escopo zera os demais, entao a afirmacao procede. OK.
-- "jobs em `ubuntu-latest` rodam sob `step-security/harden-runner`": 9 workflows usam harden-runner;
-  os 2 que nao usam sao `pipeline.yml` (so orquestra, nao tem runner proprio) e `release.yml` (roda
-  em `windows-latest`). A qualificacao "ubuntu-latest" salva a frase. OK — precisa e verdadeira.
-- Claim do WebView ("todo valor derivado do livro e codificado antes de chegar em JavaScript"):
-  todas as interpolacoes em `ReaderPage.xaml.cs` passam por `JsStr(...)`
-  (= `JsonSerializer.Serialize`, `:486-487`) ou por um `*Json` pre-serializado (`:305-306`). OK.
-- Claim de cobertura ("a CI **coleta** mas ainda **nao reprova**"): `ci.yml:29-36` roda
-  `--collect:"XPlat Code Coverage"` e sobe artefato, sem threshold. OK.
-
-### Restricao de acentos — PASS (metodo declarado)
-
-Como instruido, **nao** usei a forma que da falso-positivo. Rodei um scan em Python que enumera
-todo code point > 127 (impossivel abortar silenciosamente):
+**A regra.** `.semgrep/dotnet-security.yml:24-27`, `pattern-either`:
 
 ```
-non-ascii count: 17  — todos U+2014 EM DASH, nas linhas 26,30,33,157,161,166,179,198,206,260,264,275,293,300,301,312,313
+- pattern: Path.Combine($DEST, $ENTRY.FullName)
+- pattern: $ENTRY.ExtractToFile(Path.Combine(...), ...)
+- pattern: $ENTRY.ExtractToFile(Path.Combine(...))
 ```
 
-Zero letras acentuadas. Como contra-prova rodei tambem
-`LC_ALL=C.UTF-8 grep -nP "[\x{00C0}-\x{00FF}]" README.md` -> saida vazia, exit 1, **sem** a
-mensagem "supports only unibyte and UTF-8 locales" que o doer reportou. Os 17 em-dash sao
-pontuacao tipografica, nao acento, e ja eram convencao do arquivo. **PASS.**
+Os tres exigem sintaxe de `System.IO.Compression`: ou o acesso literal ao membro `.FullName`, ou a
+chamada `.ExtractToFile`.
 
-## Ruling sobre os 3 desvios declarados pelo doer
+**O codigo real.** `ReadingManager.cs:57-61`:
 
-**Desvio 2 (remover o bullet "Bookmarks" de Funcionalidades) — CORRETO, era obrigatorio.**
-Nao aceitei a justificativa: verifiquei. `IReadingManager` expoe exatamente 5 operacoes
-(`OpenBookAsync`, `LoadChaptersAsync`, `LoadChapterContentAsync`, `SaveProgressAsync`,
-`LoadProgressAsync`) — **nenhuma** de bookmark. `grep -rniE "bookmark" src/TranslateReader/` (Pages
-+ PageModels + XAML) retorna **zero** ocorrencias: nao existe UI. So
-`IReadingStateAccess:9-11` tem as 3 operacoes de dados. Manter o bullet seria exatamente a
-violacao que D-2026-07-29-readme-1 proibe ("nenhuma feature futura descrita como pronta"). Migrar
-para o Roadmap com a nota "so existe a camada de dados" e a acao certa. **Aprovado.**
+```csharp
+foreach (var (relativePath, content) in images)
+{
+    var outputPath = Path.Combine(imagesDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+    await fileUtility.WriteFileAsync(outputPath, content);
+}
+```
 
-**Desvio 3 (derivar a descricao de `BookTranslationJobAccess`) — CORRETO.**
-Comparei a celula do README ("Estado do job de traducao de livro completo: buscar job ativo,
-salvar, atualizar progresso, remover") com `Contracts/Access/IBookTranslationJobAccess.cs`:
-`FetchActiveJobAsync` / `SaveJobAsync` / `UpdateJobProgressAsync` / `DeleteJobAsync`. Mapeamento
-1:1, nada inventado, e no estilo das outras 15 celulas. A alternativa (omitir o 16o servico) teria
-reprovado o DoD (c). **Aprovado** — e o gap do `CLAUDE.md` vira backlog (W-4).
+`relativePath` vem de `epub.Content.Images.Local` (`ParsingEngine.cs:63-64`, `images[img.FilePath] =
+img.Content`) — caminho interno do EPUB, entrada nao confiavel. `FileUtility.cs:31-32` escreve com
+`Directory.CreateDirectory(Path.GetDirectoryName(filePath)!)` + `File.WriteAllBytesAsync`, sem
+containment. Nao existe `.FullName` nem `ExtractToFile` em lugar nenhum de `src/` — o projeto usa
+VersOne.Epub, que nunca expoe `ZipArchiveEntry`.
 
-**Desvio 1 (coluna "Volatilidade Encapsulada" -> "Responsabilidade") — ACEITO, com ressalva.**
-Julgado, nao aceito de cara. Argumento contra: The Method e o design travado (D-1/D-5) e
-decomposicao por volatilidade e a ideia que o define; o README antigo usava o rotulo de proposito.
-Argumento a favor, que vence: o CONTEXT mandou **reusar literalmente** as descricoes de
-`CLAUDE.md` e proibiu explicitamente "inventar volatilidade encapsulada nova" (Notes do CONTEXT).
-Aquelas descricoes sao responsabilidades ("Orquestra leitura: abrir livro, salvar/carregar
-progresso, navegar"), nao eixos de volatilidade. Manter o cabecalho "Volatilidade Encapsulada"
-sobre texto de responsabilidade seria um **rotulo falso** — precisamente o defeito que esta phase
-existe para eliminar. Renomear e a escolha honesta. **Ressalva:** o enquadramento de volatilidade
-sobrevive apenas na prosa acima da tabela (`README.md:47`, "The Method (Decomposicao Baseada em
-Volatilidade)"), entao nao se perdeu do documento. Se o dono quiser a moldura de volta, o caminho
-certo e uma **coluna adicional** com o eixo de volatilidade real de cada servico — nunca renomear
-o cabecalho de volta sem trocar o texto. Fica como sugestao, nao como pendencia.
+**Prova empirica.** Rodei o proprio gate de CI contra `src/`:
+
+```
+semgrep scan --config .semgrep/ --severity ERROR --metrics=off src/
+-> Ran 3 rules on 112 files: 0 findings.
+```
+
+Depois montei um probe com 4 variantes e rodei a mesma regra:
+
+| Caso | Forma | Resultado |
+|---|---|---|
+| A | `Path.Combine(dest, entry.FullName)` | **DETECTADO** (linha 11) |
+| B | `entry.ExtractToFile(Path.Combine(dest, entry.FullName), true)` | **DETECTADO** (linha 20) |
+| C | espelho exato de `ReadingManager.cs:59` (`Path.Combine(imagesDir, relativePath.Replace(...))`) | **NAO detectado** |
+| D | `Path.Combine(imagesDir, relativePath)` — variavel simples, sem `.Replace` | **NAO detectado** |
+
+`Findings: 3` — todos em A e B, nenhum em C ou D. A regra funciona perfeitamente para o codigo que
+ela foi escrita para pegar, e e cega para o codigo que este repositorio realmente tem.
+
+**Conclusao — e ela e mais forte do que a que o doer registrou.** `todos.md` atribui a falha a "uma
+variavel intermediaria (`relativePath`)". O caso D mostra que nao e sobre a variavel intermediaria
+nem sobre o `.Replace`: a regra exige o **acesso sintatico a `.FullName`**. Como este codebase
+extrai EPUB pela API do VersOne.Epub e nunca toca em `ZipArchiveEntry`, a regra
+`translatereader-zip-slip` **nao pode disparar no caminho de extracao real, em nenhuma forma que ele
+venha a assumir**. Nao e um falso negativo pontual; e cobertura estruturalmente zero sobre o unico
+vetor de zip-slip do produto. O gate de CI verde sobre este risco significa, hoje, exatamente nada.
+
+**O `todos.md` captura adequadamente? Nao. Recomendo escalar para phase propria.** Motivos:
+
+1. **O lugar esta errado por definicao.** O cabecalho do proprio `.jdi/todos.md:4-5` diz "Nunca vira
+   phase automaticamente — precisa ser promovido via `/jdi-add-phase`". Um item de seguranca
+   prioridade 1 num backlog explicitamente nao-promotor e um item que expira em silencio.
+2. **A prioridade do projeto contradiz o enquadramento.** `CLAUDE.md` § "Prioridade quando conflita"
+   poe Seguranca em 1o, e o corpo deste reviewer diz que o gate 5.6 "nao tem boundary" — D-2 isenta
+   legado de cobertura e estilo, nunca de seguranca. Registrar como scope creep trata como
+   nice-to-have algo que a politica do repo classifica como topo.
+3. **O escopo e maior do que o registro sugere.** O item de `todos.md` descreve so a divida de
+   **codigo**. A phase precisa de **duas** entregas: (a) o containment (`Path.GetFullPath` +
+   `StartsWith(imagesDir, StringComparison.Ordinal)`, rejeitando e nao sanitizando) mais um bound de
+   bytes por entrada/livro; e (b) **consertar a regra de Semgrep**, senao o mesmo defeito volta sem
+   ser detectado. Hoje nada em `todos.md` obriga (b).
+4. **Ha um efeito README de segunda ordem.** A secao Seguranca agora diz "Quem cobra essas regras
+   hoje e a CI". Isso e verdadeiro sobre a intencao e sobre 3 das 4 regras, e o README nao promete
+   que as regras pegam tudo — por isso **nao e blocker**. Mas quem le fica com a impressao de que o
+   risco de zip-slip esta sob vigilancia automatica, e ele nao esta.
+
+Acao concreta sugerida: `/jdi-add-phase "hardening-epub" --goal "containment de path e bound de
+tamanho na extracao de EPUB, mais regra de Semgrep que cubra o caminho real"`. Enquanto nao virar
+phase, o item de `todos.md` merece ao menos ganhar a conclusao do caso D acima (cobertura zero, nao
+falso negativo pontual) e a exigencia (b).
+
+## Re-verificacao factual das secoes alteradas
+
+Alem dos 3 blockers, re-conferi tudo que sobreviveu nas secoes tocadas.
+
+### Hardening de supply chain (`README.md:317-319`) — CONFERE
+
+O antecedente da frase mudou (agora "todos esses workflows" cobre as duas tabelas), entao refiz as
+tres checagens:
+
+- "toda action de terceiro e pinada por commit SHA completo": as **14** actions externas distintas
+  em `.github/workflows/*.yml` estao todas em SHA de 40 hex (`actions/checkout`, `setup-dotnet`,
+  `setup-java`, `upload-artifact`, `dependency-review-action`, `anchore/sbom-action`,
+  `github/codeql-action/{init,analyze,upload-sarif}`, `gitleaks/gitleaks-action`,
+  `ossf/scorecard-action`, `softprops/action-gh-release`, `step-security/harden-runner`,
+  `trufflesecurity/trufflehog`). Nenhuma tag `@vN`. OK.
+- "`permissions:` nega tudo no topo": os **11** workflows tem `permissions: contents: read` no topo.
+  OK.
+- "jobs em `ubuntu-latest` rodam sob `step-security/harden-runner`": 9 dos 11 usam harden-runner; os
+  2 que nao usam sao `pipeline.yml` (so orquestra, sem runner proprio) e `release.yml`
+  (`runs-on: windows-latest`). A qualificacao "ubuntu-latest" mantem a frase precisa. OK.
+
+### Badges — 6/6 GET 200 (re-sondados nesta rodada)
+
+`curl -sL -o /dev/null -w '%{http_code}' --max-time 30`:
+
+| Badge | GET |
+|---|---|
+| Pipeline (`actions/workflows/pipeline.yml/badge.svg`) | 200 |
+| CodeQL (`actions/workflows/codeql.yml/badge.svg`) | 200 |
+| OpenSSF Scorecard (`api.scorecard.dev/...`) | 200 |
+| Sonar Quality Gate (`metric=alert_status`) | 200 |
+| Sonar Coverage (`metric=coverage`) | 200 |
+| License (`img.shields.io/...Apache_2.0...`) | 200 |
+
+Ordem locked (Pipeline -> CodeQL -> Scorecard -> alert_status -> coverage -> shields) confirmada por
+posicao (`README.md:3-8`). Todo `actions/workflows/*.yml` citado em badge existe em
+`.github/workflows/`.
+
+### Restricao de acentos — PASS (metodo que nao consegue passar em falso)
+
+Scan em Python que enumera **todo** code point > 127 e testa acento por decomposicao NFD
+(`unicodedata.combining`), em vez de depender de locale do `grep -P`:
+
+```
+total non-ascii code points: 25
+  U+2014 EM DASH  x25
+ACCENTED LETTERS: 0  []
+LETTERS (any non-ascii alphabetic): []
+```
+
+Subiu de 17 para 25 em-dashes por causa da prosa nova. A restricao locked e **sem acentos**, nao sem
+em-dash; em-dash e pontuacao tipografica e ja era convencao do arquivo. Zero letras acentuadas, zero
+caracteres alfabeticos nao-ASCII. **PASS.**
+
+### Greps estruturais do Gate 5
+
+| Check | Resultado |
+|---|---|
+| 5.1 Client -> Access/Engines | vazio (OK) |
+| 5.2 storage tech em `Contracts/Access/` | vazio (OK) |
+| 5.10 sync-over-async | vazio (OK) |
+| 5.12 static mutavel | 1 hit, `TranslationEngine.cs:16` — baseline legada conhecida |
+| 5.15 catch vazio | 5 hits, todos legados em `LibraryPageModel`/`ReaderPageModel`/`ReaderPage.xaml.cs`; nenhum `.cs` tocado nesta phase |
+| 5.17 substitutes em concretos | vazio (OK) |
+
+Nenhum `.cs` foi alterado na phase, entao nada disso e atribuivel a esta entrega — sao a mesma
+baseline da iteracao 1.
 
 ## Leitura de ponta a ponta como recem-chegado ("bem explicado")
 
-Ordem das secoes esta boa: identidade -> o que faz -> onde roda -> como e construido -> o que tem
-dentro -> como buildar -> como testar -> seguranca -> o que falta -> como contribuir -> licenca.
-Um recem-chegado consegue clonar, buildar no Windows e rodar os testes so com o README. A secao de
-Roadmap separando "pronto" de "planejado" e a maior melhoria sobre a versao anterior, e o callout
-do NETSDK1005 mostra o porque do comando, nao so o comando. Lacunas substantivas, todas como
-warning:
+Reli o README inteiro do zero, nao so o diff.
 
-- **Nao ha "como usar".** Nenhuma linha sobre o primeiro uso: importar um EPUB, e sobretudo que a
-  traducao offline exige **baixar um modelo GGUF pelo app antes** (o `DefaultModel` e
-  `gemma-2-2b-it-Q4_K_M.gguf`, `TranslationManager.cs:23-25`). O leitor descobre que existe
-  download de modelo na lista de features, mas nunca que e passo obrigatorio, nem a ordem de
-  grandeza de disco/RAM. E a duvida numero 1 de quem chega pela feature principal.
-- **Falta o pre-requisito de SDK Android** no bloco de build (W-1) — o unico ponto do README que
-  entrega um comando que falha.
-- Nao ha screenshot nem GIF. Para um leitor de EPUB com temas, e a forma mais barata de comunicar
-  o produto. Opcional.
-- `docs/translation-feature-plan.md` existe e nao e linkado de lugar nenhum (W-7).
+**Melhorou de verdade em relacao a iteracao 1**, e nas partes que importam. A secao Build ficou
+notavelmente melhor: em vez de tres comandos soltos, agora ha uma explicacao de *por que* os TFMs
+variam por maquina, um comando para o leitor descobrir os seus, e dois callouts `NETSDK1005`
+distintos que mandam o leitor para a causa certa. Isso e a diferenca entre um README que lista
+comandos e um que ensina o projeto.
 
-Nada disso e bloqueante. B-1/B-2/B-3 sao.
+A secao Testes ficou mais honesta e, por isso, mais util: dizer "SQLite in-memory pelo provider real
+e diretorios temporarios, porque a unidade sob teste **e** o acesso a recurso" explica uma decisao de
+design; a versao anterior ("sem disco, sem SQLite real") era so falsa. Idem a secao Seguranca: a
+distincao entre **deteccao em CI** e **defesa em runtime** e exatamente o tipo de precisao que faz um
+leitor tecnico confiar no resto do documento. Um README que diz com clareza o que **nao** esta
+implementado compra credibilidade para tudo que afirma que esta.
+
+A ordem das secoes continua boa: identidade -> o que faz -> onde roda -> como e construido -> o que
+tem dentro -> como buildar -> como testar -> seguranca -> o que falta -> como contribuir -> licenca.
+Um recem-chegado clona, builda no Windows e roda os testes so com este arquivo.
+
+**A lacuna que continua incomodando e a mesma:** nao ha "como usar". O leitor chega pela feature
+principal (traducao offline EN -> PT-BR), le que ela existe, le que so roda em Windows — e nunca
+descobre que precisa **baixar um modelo GGUF pelo app antes de qualquer traducao funcionar**, nem a
+ordem de grandeza de disco e RAM que isso custa. O download aparece na lista de Funcionalidades como
+se fosse mais um recurso, e nao como passo obrigatorio. E a duvida numero 1 de quem instala.
+Continua sendo warning, nao blocker — o card pedia "preciso e bem explicado", e o documento hoje e
+preciso; "bem explicado" ele cumpre para *entender e construir* o projeto, e ainda nao para *usar*
+o app.
+
+Segundo ponto: `docs/translation-feature-plan.md` existe, e o plano detalhado justamente dessa
+feature, e nao e linkado de lugar nenhum (W-7).
 
 ## DoD Checklist (gate 8)
 
+Os 10 `Verify:` do CONTEXT.md rodados verbatim da raiz do repo, no HEAD `08a9857`:
+
 | # | Criterion | Source | Type | Status | Evidence |
 |---|---|---|---|---|---|
-| 1 | (a) Licenca: sem "Projeto privado", cita Apache 2.0 + `LICENSE` | CONTEXT | Auto | PASS | exit 0; `LICENSE` presente; secao `README.md:320-322` |
-| 2 | (b)+readme-3 Traducao offline documentada + ressalva Windows-only -> `llm-mobile` | CONTEXT | Auto | PASS | exit 0; `README.md:22-33`; ressalva ancorada em app csproj:84-86 |
-| 3 | (c) 16 servicos reais na tabela | CONTEXT | Auto | PASS | exit 0; 16 linhas de tabela; 16/16 existem no disco na camada declarada |
-| 4 | (d) 3 projetos reais na estrutura | CONTEXT | Auto | PASS | exit 0; `README.md:176-210`; todos os 33 caminhos mostrados existem |
-| 5 | (e) `BookDetailPage`/`BookDetailPageModel` so em roadmap | CONTEXT | Auto | PASS | exit 0; `grep -c` = 0 para ambos os nomes de arquivo; `detalhe-livro` presente |
-| 6 | (f) Build aponta o csproj (sem `-f` bare); `dotnet test` presente | CONTEXT | Auto | PASS | exit 0; `grep -c "dotnet build -f "` = 0; comandos rodados de verdade (ver W-1 p/ android) |
-| 7 | (g) Modelos de Dados com `TranslationCache` + `BookTranslationJob` + `OriginalHash` | CONTEXT | Auto | PASS | exit 0; colunas conferidas contra o DDL real (ver W-3) |
-| 8 | (h)+(i) `.idea/` fora da arvore; temas Light/Dark/Sepia | CONTEXT | Auto | PASS | exit 0; `grep -c "\.idea"` = 0; "claro/escuro" eliminado |
-| 9 | Badges D-2026-07-29-readme-2: 6 badges, URL real e resolvivel, ordem locked | CONTEXT | Auto | PASS | exit 0; 6/6 GET 200 sondados por mim; ordem confirmada; workflows citados existem |
-| 10 | D-2026-07-29-readme-4: 4 secoes novas (Seguranca, Testes+90%, Contributing/JDI, Licenca) | CONTEXT | Auto | PASS | exit 0; todas as 4 presentes — mas ver B-2 e B-3, dentro de 2 delas |
+| 1 | (a) Licenca: sem "Projeto privado", cita Apache 2.0 + `LICENSE` | CONTEXT | Auto | PASS | exit 0; `LICENSE` presente; secao `README.md:365-367` |
+| 2 | (b)+readme-3 Traducao offline documentada + ressalva Windows-only -> `llm-mobile` | CONTEXT | Auto | PASS | exit 0; `README.md:22-33` |
+| 3 | (c) 16 servicos reais na tabela | CONTEXT | Auto | PASS | exit 0; 16/16 existem no disco na camada declarada |
+| 4 | (d) 3 projetos reais na estrutura | CONTEXT | Auto | PASS | exit 0; `README.md:176-210` |
+| 5 | (e) `BookDetailPage`/`BookDetailPageModel` so em roadmap | CONTEXT | Auto | PASS | exit 0; `grep -c` = 0 para ambos os nomes de arquivo |
+| 6 | (f) Build aponta o csproj (sem `-f` bare); `dotnet test` presente | CONTEXT | Auto | PASS | exit 0; comandos rodados de verdade — iOS compila, Android documenta o pre-requisito |
+| 7 | (g) Modelos de Dados com `TranslationCache` + `BookTranslationJob` + `OriginalHash` | CONTEXT | Auto | PASS | exit 0 |
+| 8 | (h)+(i) `.idea/` fora da arvore; temas Light/Dark/Sepia | CONTEXT | Auto | PASS | exit 0 |
+| 9 | Badges D-2026-07-29-readme-2: 6 badges, URL real e resolvivel, ordem locked | CONTEXT | Auto | PASS | exit 0; 6/6 GET 200 re-sondados nesta rodada |
+| 10 | D-2026-07-29-readme-4: 4 secoes novas (Seguranca, Testes+90%, Contributing/JDI, Licenca) | CONTEXT | Auto | PASS | exit 0; as 4 presentes, e agora factualmente corretas |
 
 **Totals:** 10 items | Auto: 10 (10 PASS, 0 FAIL) | Manual: 0 pending
 
-Gate 8 fecha PASS, e mesmo assim a phase esta BLOCKED: os blockers estao em afirmacoes que nenhum
-dos 10 comandos consegue avaliar (W-8). Gate 8 verde nao e evidencia de README correto aqui.
+Registro para o dod-critic: estes mesmos 10 comandos davam 10/10 PASS **na iteracao 1, com os 3
+blockers presentes**. Gate 8 nao mudou de estado porque nao e capaz de medir o que mudou. O que
+fecha esta phase e a re-verificacao factual acima, nao a linha PASS do gate 8 (W-8).
 
 ## Recommendation
 
-Nao e retrabalho de phase — sao **tres correcoes de prosa** em `README.md`, nenhuma linha de
-codigo, nenhuma decisao a redecidir:
+**Aprovado com warnings — pode seguir para `/jdi-ship`.** Os 3 blockers estao resolvidos com
+evidencia verificada de forma independente, o W-1 foi corrigido junto e melhor do que o pedido, e
+nada de novo classe-blocker apareceu. Os gates 1-4 continuam verdes e a baseline de 169+2 testes
+esta preservada.
 
-1. `README.md:286-288` — parar de afirmar que o codigo valida path escape e limita tamanho
-   descomprimido; descrever a postura real (regra obrigatoria em `.claude/rules/csharp.md` +
-   regras proprias de Semgrep). **Este e o unico blocker de classe seguranca.**
-2. `README.md:242-244` — transformar "sao isolados: sem rede, sem disco e sem SQLite real" em
-   regra para testes novos, ou remover a clausula.
-3. `README.md:267-279` — tirar `scorecard.yml` de baixo de "o pipeline dispara os workflows
-   reusaveis abaixo", ou reescrever a frase; de quebra, marcar `dependency-review` (so PR) e
-   `sbom` (so push) como condicionais.
+Antes do merge, se quiser gastar mais uma passada barata no `README.md` (tudo prosa, nenhuma linha
+de codigo), a ordem de retorno e:
 
-Aproveitar a mesma passada para W-1 (pre-requisito de Android SDK), W-5 (linha 10 com 3 de 4
-plataformas) e W-6 (preambulo do Roadmap). Um unico commit `fix(readme): ...` resolve todos.
+1. **W-10** — a coluna Disparo. Uma linha: ou tirar "mais cron semanal proprio" do CodeQL, ou
+   acrescentar o cron nas linhas de Semgrep/SCA/Secret scan/SBOM. E o unico ponto do documento que
+   hoje pode induzir conclusao errada sobre a CI.
+2. **W-5** e **W-6** — duas contradicoes internas de uma linha cada (3 vs 4 plataformas; preambulo
+   absoluto do Roadmap).
+3. **W-11** — readmitir, como frase propria e precisa, o claim de encoding do WebView, que e
+   verdadeiro e verificado.
+4. A lacuna de "como usar": um paragrafo curto de primeiro uso (importar EPUB -> baixar o modelo
+   GGUF -> traduzir), que e a maior melhoria de didatica restante.
 
-W-2 (hardening real de zip-slip/zip-bomb) e W-4 (`CLAUDE.md` com 15/16 servicos e 6/7 tabelas) sao
-trabalho de outra phase — registrar no roadmap, nao segurar esta.
+Fora do escopo desta phase, e o item mais importante que ela produziu: **promover o achado de
+zip-slip a phase propria** (`/jdi-add-phase`), com as duas entregas — o containment/bound no codigo
+**e** a correcao da regra de Semgrep, que hoje tem cobertura estruturalmente zero sobre o caminho de
+extracao real deste codebase. Deixar isso em `.jdi/todos.md`, que por definicao nunca vira phase
+sozinho, subestima o achado.
 
-Depois do commit de correcao, re-rodar `/jdi-verify readme`. Gates 1-4, 6 e 7 nao precisam de nova
-evidencia (nenhum `.cs` sera tocado); a iteracao 2 deve reconferir os tres trechos corrigidos e a
-bateria de DoD.
+W-3, W-4, W-7, W-8 e W-9 seguem como backlog de manutencao — nenhum segura o merge.
