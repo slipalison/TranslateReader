@@ -57,7 +57,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** none
 - **Test:** DoD (b) + D-...-3 + parte de (i); grep battery acima
 - **DoD:** (b)+readme-3, (i)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2
 
@@ -71,7 +71,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-1
 - **Test:** DoD (c); loop de 16 nomes + contagem de linhas
 - **DoD:** (c)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3
 
@@ -85,7 +85,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-2
 - **Test:** DoD (d), (e), (h); greps + assercoes de existencia de pasta
 - **DoD:** (d), (e), (h)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 
@@ -99,7 +99,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-3
 - **Test:** DoD (g); loop de 7 modelos + campos
 - **DoD:** (g)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 5
 
@@ -113,7 +113,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-4
 - **Test:** DoD (f) + D-...-4 itens (2) e (3)
 - **DoD:** (f), D-...-4(2), D-...-4(3)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 6
 
@@ -127,7 +127,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-5
 - **Test:** DoD (a) + D-...-4 itens (1) e (4)
 - **DoD:** (a), D-...-4(1), D-...-4(4)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 7
 
@@ -142,7 +142,7 @@ Ordem herdada do CONTEXT: (1) defeitos (a)-(i) -> (2) secoes novas -> (3) badges
 - **Dependencies:** T-6
 - **Test:** DoD de badges (D-...-2) + re-run dos 10 itens auto-verificaveis
 - **DoD:** badges (D-...-2) + revalidacao de (a)-(i) e D-...-4
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Total tasks: 7
