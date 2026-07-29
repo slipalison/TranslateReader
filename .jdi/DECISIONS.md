@@ -194,3 +194,34 @@ repos/:owner/:repo/branches/main/protection`) salvo em
 `.jdi/phases/pipeline-unificada/branch-protection-before.json` — baseline auditavel pro remap
 descrito em D-2026-07-28-pipeline-unificada-1(d), pra nao repetir o incidente de hoje (4
 contexts com nome errado travando todos os PRs).
+
+D-2026-07-28-pipeline-unificada-7: SUPERSEDE a clausula `secrets: inherit` da
+D-2026-07-28-pipeline-unificada-4 (o resto da D-...-4 — inputs explicitos de PR-context e
+`fetch-depth: 0` intocado — continua valendo integralmente). O job caller do sonar em
+`pipeline.yml` passa a declarar `secrets: SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}`, e
+`sonarqube.yml` passa a declarar o secret em `on: workflow_call: secrets: SONAR_TOKEN:
+required: false`. Os dois arquivos mudam JUNTOS: adicionar o map so no caller falha com
+"Invalid input, SONAR_TOKEN is not defined in the referenced workflow". `required: false` e
+deliberado — preserva o no-op gracioso dos `if: env.SONAR_TOKEN != ''` quando o secret nao
+existe (fork, repo clonado). Raciocinio em tres partes, levantado pelo reviewer e aceito pelo
+orquestrador: (1) NAO ha regressao de seguranca hoje — `inherit` nao despeja secrets no
+ambiente, apenas os torna referenciaveis, e `sonarqube.yml` referencia unicamente
+`SONAR_TOKEN`; a exposicao em runtime e identica com e sem `inherit`, entao isso era WARN, nao
+BLOCK. (2) A D-...-4 se auto-contradizia: intitula-se "secrets nao fluem implicitamente /
+least privilege" e mandava usar justamente o mecanismo que derrota least privilege; o
+argumento registrado a favor de `inherit` ("funciona sem o reusable declarar
+`on.workflow_call.secrets`") era de conveniencia, nao de seguranca. (3) O risco e futuro e
+previsivel, nao teorico: `todos.md` ja contempla assinatura e publicacao em loja; no dia em
+que um `SIGNING_KEY` entrar nos secrets do repo, `inherit` o tornaria referenciavel pelo job
+que roda `dotnet-sonarscanner` + JRE + analisadores baixados em runtime e que egressa pra
+`sonarcloud.io` por design, com `harden-runner` em `egress-policy: audit` (nao `block`), que
+registra mas nao conteria exfiltracao. Atenuante registrado: o reusable e LOCAL (`uses: ./`,
+mesmo repo e mesmo commit), entao a clausula mais forte da regra Semgrep
+`yaml.github-actions.security.secrets-inherit` ("or sourced from a third party") nao se
+aplicava — o ganho aqui e defesa em profundidade, nao correcao de vulnerabilidade ativa. O
+DoD 5 da fase (`grep -c "secrets: inherit" == 1`) era um PROXY do objetivo "least privilege",
+nao o objetivo; quando proxy e meta divergem, a meta vence — CLAUDE.md fixa a ordem Seguranca
+> Performance > Boas praticas. O DoD 5 foi reescrito no CONTEXT.md desta fase pra provar o
+estado novo (zero `secrets: inherit` no repo + exatamente um pass-through explicito no caller
++ declaracao presente no `workflow_call` do callee). Efeito colateral esperado: limpa o check
+vermelho `Semgrep OSS` (regra `secrets-inherit`, antes em `pipeline.yml:59`).

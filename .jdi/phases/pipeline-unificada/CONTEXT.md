@@ -23,6 +23,10 @@ de check.
   CALLER dentro de `pipeline.yml`, nunca dentro do proprio reusable.
 - D-2026-07-28-pipeline-unificada-6: guardrail de nomes de artifact unicos (run_id compartilhado) +
   snapshot do branch protection atual ANTES de qualquer edicao.
+- D-2026-07-28-pipeline-unificada-7: **supersede a clausula `secrets: inherit` da D-...-4** — o job
+  caller do sonar passa `SONAR_TOKEN` explicitamente e `sonarqube.yml` declara o secret em
+  `on.workflow_call.secrets`. O restante da D-...-4 (inputs explicitos de PR-context) segue valendo.
+  Reescreve o DoD 5 abaixo.
 
 ## Canonical refs
 - Card colado via `/jdi-issue` (sem URL/ID externo — 9 fatos tecnicos listados no dispatch, todos
@@ -69,9 +73,13 @@ de check.
       `pull-requests: write` — sem elevacao generica
       **Verify:** `grep -q "contents: read" .github/workflows/pipeline.yml && grep -B10 "codeql.yml" .github/workflows/pipeline.yml | grep -q "security-events: write" && grep -B10 "semgrep.yml" .github/workflows/pipeline.yml | grep -q "security-events: write" && grep -B10 "sbom.yml" .github/workflows/pipeline.yml | grep -q "contents: write" && grep -B10 "dependency-review.yml" .github/workflows/pipeline.yml | grep -q "pull-requests: write"`
       **Source:** CONTEXT
-- [ ] `secrets: inherit` aparece uma unica vez em `pipeline.yml`, so no job caller do sonar — nenhum
-      outro job herda secrets
-      **Verify:** `test "$(grep -c "secrets: inherit" .github/workflows/pipeline.yml)" = "1" && grep -B10 "secrets: inherit" .github/workflows/pipeline.yml | grep -q "sonarqube.yml"`
+- [ ] Secrets nao fluem implicitamente (least privilege de verdade, nao por proxy): **zero**
+      `secrets: inherit` em todo `.github/workflows/`; o job caller do sonar passa exclusivamente
+      `SONAR_TOKEN`, de forma explicita; `sonarqube.yml` declara esse secret em
+      `on.workflow_call.secrets` com `required: false` (para o no-op gracioso quando ausente)
+      — emendado por D-2026-07-28-pipeline-unificada-7, que supersede a clausula `inherit` de
+      D-2026-07-28-pipeline-unificada-4
+      **Verify:** `! grep -rq "secrets: inherit" .github/workflows/ && test "$(grep -Fc 'SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}' .github/workflows/pipeline.yml)" = "1" && grep -F -B10 'SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}' .github/workflows/pipeline.yml | grep -q "sonarqube.yml" && python -c "import yaml,sys; d=yaml.safe_load(open('.github/workflows/sonarqube.yml',encoding='utf-8')); t=d.get('on', d.get(True)); sys.exit(0 if 'SONAR_TOKEN' in (t['workflow_call'].get('secrets') or {}) else 1)"`
       **Source:** CONTEXT
 - [ ] Sonar: `on: workflow_call: inputs:` para contexto de PR explicito (nao depende de
       `github.event_name` implicito dentro do reusable); `fetch-depth: 0` do checkout intocado
