@@ -169,3 +169,12 @@ de terceiro, o que enfraquece o modelo de ameaca da regra; mesmo assim o map exp
 estritamente menos privilegiado. `Semgrep OSS` nao e required context e o job que gateia
 (`Semgrep / Semgrep SAST`, regras custom `.semgrep/`) passou verde. Se o revisor preferir o map
 explicito, e alterar `pipeline.yml` + emendar D-2026-07-28-pipeline-unificada-4 + ajustar o DoD 5.
+
+---
+
+## EXECUTADO em 2026-07-29
+
+PATCH aplicado (variante `checks[]` com `app_id`) apos os 13 checks reportarem no head `e3ab287`.
+Verificacao pos-PATCH: `comm -23 required reportado` retorna **vazio** — zero required orfao.
+Resto da protection intacto: `enforce_admins=false`, `force_push=false`, `deletions=false`,
+`conversation_resolution=true`, `reviews=0`. PR #7 saiu de `BLOCKED` para `CLEAN`.
