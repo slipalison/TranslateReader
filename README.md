@@ -209,22 +209,50 @@ rodar os testes sem workload de MAUI instalado.
 
 ## Build e Execucao
 
+Pre-requisitos: SDK do .NET 10 e o workload de MAUI (`dotnet workload install maui`).
+
 ```bash
 # Restaurar dependencias
 dotnet restore
 
-# Build para Windows
-dotnet build -f net10.0-windows10.0.19041.0
+# Build do app para Windows
+dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0
 
-# Build para Android
-dotnet build -f net10.0-android
+# Build do app para Android
+dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android
 
-# Build para iOS
-dotnet build -f net10.0-ios
+# Build do app para iOS
+dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-ios
 
-# Executar (Windows)
-dotnet run -f net10.0-windows10.0.19041.0
+# Executar no Windows
+dotnet run --project src/TranslateReader/TranslateReader.csproj -f net10.0-windows10.0.19041.0
 ```
+
+> Os comandos apontam para o csproj do app, e nao para a solution. Passar um TFM de plataforma
+> na raiz falha com `NETSDK1005`: `TranslateReader.Core` e `TranslateReader.Tests` alvejam
+> `net10.0` puro e nao conhecem esse TFM.
+
+## Testes e Cobertura
+
+Os testes ficam em `test/TranslateReader.Tests`, alvejam `net10.0` puro e nao precisam do
+workload de MAUI instalado. Sao xUnit + NSubstitute, isolados: sem rede, sem disco e sem SQLite
+real.
+
+```bash
+# Rodar a suite
+dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release
+
+# Rodar coletando cobertura (mesmo comando usado na CI)
+dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage"
+```
+
+Regra de cobertura: **90% de linha em codigo novo ou alterado** a partir do commit de boundary
+`4285f25`. Codigo anterior a esse commit e legado, fica isento do limite e nao deve ser
+refatorado so para subir numero.
+
+Hoje esse limite e cobrado na revisao: a CI **coleta** a cobertura, mas ainda **nao reprova** o
+build por ela. O gate automatico que falha abaixo de 90% esta planejado na phase
+`cobertura-e-ci` — ver [Roadmap](#roadmap).
 
 ## Roadmap
 
@@ -239,6 +267,21 @@ uma phase do roadmap JDI (`.jdi/ROADMAP.md`), na ordem em que sera atacada.
 | `detalhe-livro` | Tela de detalhe do livro (`BookDetailPage` + `BookDetailPageModel`). Nao existem no repositorio — versoes antigas deste README as documentavam como se existissem | Planejado |
 | `busca-no-livro` | Busca full-text no conteudo dos capitulos do livro aberto. Hoje `ILibraryManager.SearchBooksAsync` busca apenas na biblioteca | Planejado |
 | `llm-mobile` | Backends nativos do LLamaSharp em Android/iOS, para a traducao offline sair do Windows | Planejado |
+
+## Contribuindo
+
+O desenvolvimento segue o **JDI** (Just Do It), um workflow de phases versionado em `.jdi/`:
+cada entrega passa por discuss -> plan -> do -> verify -> ship, e toda decisao travada fica
+registrada em `.jdi/DECISIONS.md`.
+
+Antes de abrir um PR, leia [`CLAUDE.md`](CLAUDE.md): ele traz as regras de arquitetura (The
+Method — camadas fechadas e o que cada Manager/Engine/ResourceAccess/Utility pode chamar) e a
+secao "JDI — Workflow de Desenvolvimento" com o loop de comandos. As regras obrigatorias de C#
+(seguranca, alocacao, concorrencia, testes, estilo) estao em
+[`.claude/rules/csharp.md`](.claude/rules/csharp.md).
+
+Convencoes: Conventional Commits com escopo igual ao slug da phase, commits atomicos (1 task =
+1 commit), codigo e mensagens de commit em ingles, documentacao de processo em pt-BR.
 
 ## Licenca
 
