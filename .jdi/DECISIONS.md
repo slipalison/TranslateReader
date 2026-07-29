@@ -77,6 +77,56 @@ DEVE ser re-mapeada na mesma phase, com verificacao de que os required contexts 
 check names reais (incidente de hoje: 4 contexts com nome errado travaram todos os PRs);
 (e) concurrency passa a ser do orquestrador (cancel-in-progress unico por ref).
 
+D-2026-07-29-readme-1: Phase 'README completo com badges' (slug: readme) adicionada via
+/jdi-issue (card colado: "Melhore o Readme.md do projeto, adicione as badges deixe bem
+explicado"). Reason: alem das badges pedidas, a varredura do README atual (160 linhas)
+encontrou erros factuais que tornam o documento enganoso — o escopo da phase inclui corrigi-los:
+(a) **"Licenca: Projeto privado"** e FALSO — repo e PUBLIC no GitHub com arquivo `LICENSE`
+Apache 2.0; (b) a feature que da nome ao projeto (traducao offline EN->PT-BR via LLamaSharp,
+traducao de livro completo com job persistido, cache por hash, download de modelo GGUF) NAO
+aparece em Funcionalidades nem na Stack; (c) tabela de Componentes lista 6 de 16 servicos reais
+(faltam TranslationManager, SettingsManager, TranslationEngine, ThemeEngine, SettingsAccess,
+TranslationCacheAccess, ModelAccess, BookTranslationJobAccess, PromptUtility, HtmlUtility);
+(d) Estrutura do Projeto poe Contracts/Business/Access/Models dentro de `src/TranslateReader/`
+quando vivem em `src/TranslateReader.Core/` (a solution tem 3 projetos, o README mostra 1);
+(e) documenta `BookDetailPage.xaml` e `BookDetailPageModel.cs` que NAO existem no repo — e a
+mesma evidencia que gerou a phase `detalhe-livro`, entao ficam marcados como planejados, nao
+como existentes; (f) comandos de build usam `-f <TFM>` a nivel de solution, que falha com
+NETSDK1005 (learning de ci-seguranca W-5) — corrigir para o csproj do app; (g) Modelos de Dados
+omite Settings, TranslationCache e BookTranslationJob; (h) estrutura cita `.idea/` que e
+gitignorada; (i) temas dizem "claro/escuro" mas o ThemeEngine entrega Light/Dark/**Sepia**.
+Decisoes locked: badges apontam para workflows que existem no momento do merge (`pipeline.yml`
+depende da phase 9 — ver ordem abaixo); nada de badge apontando para arquivo inexistente;
+README continua em pt-BR sem acentos (padrao do arquivo atual, nao reescrever a grafia);
+nenhuma feature futura pode ser descrita como pronta — o que nao existe vai para uma secao
+explicitamente de roadmap. A branch desta phase sai de `jdi/pipeline-unificada` (PR #7) porque
+o README documenta a pipeline unificada e a badge aponta para `pipeline.yml`, que so existe la;
+se a PR #7 for mergeada antes, um rebase em `main` colapsa a dependencia.
+
+D-2026-07-29-epub-zip-slip-1: Phase 'Zip-slip e bound de descompressao no EPUB'
+(slug: epub-zip-slip) adicionada. Reason: achado da phase `readme` — ao verificar um claim de
+seguranca do README o reviewer descobriu que o claim era falso E que a lacuna e real. Evidencia:
+`ReadingManager.cs:59-60` monta o caminho de saida a partir de `epub.Content.Images.Local`
+(derivado do arquivo EPUB, input nao confiavel) e entrega a `FileUtility.cs:31-32`, que faz
+`Path.Combine` + `Directory.CreateDirectory` + `File.WriteAllBytesAsync` sem containment check e
+sem bound de tamanho. Greps de confirmacao em `src/`: `GetFullPath|ExtractToFile|
+ExtractToDirectory|entry.FullName` = zero; `maxSize|maxBytes|uncompressed|sizeLimit` = zero.
+Viola `.claude/rules/csharp.md` §4 ("EPUB files are untrusted input... reject entry paths that
+escape the target directory — zip-slip. Bound decompressed sizes").
+AGRAVANTE (motivo de virar phase e nao ficar em todos.md): a regra custom
+`translatereader-zip-slip` em `.semgrep/dotnet-security.yml` **nao cobre o caminho real** —
+comprovado empiricamente pelo reviewer com probe de 4 casos: `Path.Combine(dest, entry.FullName)`
+detecta, `entry.ExtractToFile(...)` detecta, espelho de `ReadingManager.cs:59` NAO detecta.
+A regra exige o acesso sintatico a `.FullName`; como o projeto extrai via VersOne.Epub e nunca
+toca `ZipArchiveEntry`, a regra nao pode disparar no unico vetor de zip-slip do produto em
+nenhuma forma que ele venha a assumir. O gate de CI da falso conforto.
+Escopo locked: a phase entrega **duas** coisas — (1) o containment de path (`Path.GetFullPath` +
+verificacao de prefixo do diretorio destino) e o bound de tamanho descomprimido; (2) a correcao
+da regra Semgrep para casar o padrao real, com fixture provando red antes e green depois.
+Entregar so (1) deixa o defeito invisivel para o CI na proxima regressao. Codigo tocado e
+pos-boundary, entao vale o gate de 90% de cobertura (D-6) e o teste comeca falhando (bugfix
+starts with a failing test, `.claude/rules/csharp.md` §6).
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
@@ -225,3 +275,42 @@ nao o objetivo; quando proxy e meta divergem, a meta vence — CLAUDE.md fixa a 
 estado novo (zero `secrets: inherit` no repo + exatamente um pass-through explicito no caller
 + declaracao presente no `workflow_call` do callee). Efeito colateral esperado: limpa o check
 vermelho `Semgrep OSS` (regra `secrets-inherit`, antes em `pipeline.yml:59`).
+
+D-2026-07-29-readme-2: Conjunto e ordem de badges definidos para a phase `readme`, todos com
+URL real e resolvivel: (1) Pipeline (`actions/workflows/pipeline.yml/badge.svg`) — build/test/
+scan agregado, existe nesta branch (saida de `jdi/pipeline-unificada`, PR #7 — ver
+D-2026-07-29-readme-1); (2) CodeQL (`actions/workflows/codeql.yml/badge.svg`) — badge PROPRIO,
+NAO dobrado dentro do badge do Pipeline: `codeql.yml` e hibrido (`workflow_call` + `schedule`
+semanal + `workflow_dispatch`, via D-2026-07-28-pipeline-unificada-2), entao tem execucoes fora
+do grafo do orquestrador (o cron semanal) e o sinal de seguranca de code-scanning merece
+visibilidade independente do status geral do pipeline; (3) OpenSSF Scorecard — mantido, ja
+existia no README; (4) e (5) SonarCloud Quality Gate + Coverage (`sonarcloud.io/api/
+project_badges/measure?project=slipalison_TranslateReader&metric={alert_status,coverage}`) —
+project key e org confirmados em `.github/workflows/sonarqube.yml` (`/k:"slipalison_
+TranslateReader" /o:"slipalison"`); (6) License (shield Apache 2.0, linkado pro arquivo
+`LICENSE`). Ordem no README: saude de build -> scanners de seguranca -> score de supply chain
+-> qualidade -> licenca. Nenhuma badge pode referenciar workflow ausente de
+`.github/workflows/` — o DoD desta fase verifica isso programaticamente (extrai todo
+`actions/workflows/*.yml` citado no README e testa `-f` contra o diretorio real).
+
+D-2026-07-29-readme-3: Defeito adicional encontrado nesta fase (nao estava no card nem na
+lista (a)-(i) de D-2026-07-29-readme-1): a tabela "Plataformas Suportadas" do README atual
+(linhas 19-27) marca Android/iOS/macOS como "Suportado" sem ressalva — ao entrar a feature de
+traducao offline em Funcionalidades/Stack (item b da D-2026-07-29-readme-1), a tabela fica
+enganosa por omissao: a traducao (o diferencial do projeto) so roda hoje em Windows
+(`LLamaSharp` backends `Cpu`/`Cuda12` condicionados a `'windows'` no csproj — `PROJECT.md` >
+Stack). Mitigacao: a descricao da feature de traducao (Funcionalidades e/ou Stack) traz
+explicitamente a ressalva "traducao offline: hoje somente Windows; Android/iOS planejado via
+phase `llm-mobile`" — a tabela de plataformas em si nao muda (ela descreve o app como um todo,
+que roda nas 4 plataformas). Verificado no mesmo DoD da feature de traducao, sem item proprio,
+pra nao estourar o cap de 10 itens da phase.
+
+D-2026-07-29-readme-4: Alem da correcao dos defeitos (a)-(i) de D-2026-07-29-readme-1, o README
+ganha 4 conteudos que hoje nao existem e o repo ja justifica (pos ci-seguranca/sast-sca-sbom/
+pipeline-unificada): (1) Seguranca — cita `SECURITY.md` (politica de report ja existe no
+repo), o conjunto de scanners rodando (CodeQL, Semgrep, SCA dotnet, secret scan, OpenSSF
+Scorecard) e o hardening de supply-chain (actions de terceiro pinadas por SHA, D-2026-07-28-
+ci-seguranca-4); (2) como rodar os testes (`dotnet test`) e a regra de cobertura 90% em codigo
+novo/alterado pos-boundary (D-6); (3) Contributing/JDI — ponteiro pra secao "JDI — Workflow de
+Desenvolvimento" do `CLAUDE.md`, pra quem quiser contribuir; (4) licenca Apache 2.0 (fundida
+com a correcao do defeito (a)).
