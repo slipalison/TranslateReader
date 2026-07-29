@@ -1,6 +1,11 @@
 # TranslateReader - Leitor de EPUB Multiplataforma
 
+[![Pipeline](https://github.com/slipalison/TranslateReader/actions/workflows/pipeline.yml/badge.svg)](https://github.com/slipalison/TranslateReader/actions/workflows/pipeline.yml)
+[![CodeQL](https://github.com/slipalison/TranslateReader/actions/workflows/codeql.yml/badge.svg)](https://github.com/slipalison/TranslateReader/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/slipalison/TranslateReader/badge)](https://scorecard.dev/viewer/?uri=github.com/slipalison/TranslateReader)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=slipalison_TranslateReader&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=slipalison_TranslateReader)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=slipalison_TranslateReader&metric=coverage)](https://sonarcloud.io/summary/new_code?id=slipalison_TranslateReader)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Leitor de livros EPUB construido com .NET MAUI, projetado para Windows, Android e iOS (iPhone/iPad).
 
