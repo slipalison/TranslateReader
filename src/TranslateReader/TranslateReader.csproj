@@ -66,15 +66,17 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.51"/>
+        <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.60"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10"/>
-        <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003"
+        <!-- CommunityToolkit.Maui 14.2.2 requires WindowsAppSDK >= 2.2.0 (NU1605 downgrade
+             otherwise). Bumped alongside the CommunityToolkit.Maui update in this PR. -->
+        <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1"
             Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'" />
     </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
-        <PackageReference Include="CommunityToolkit.Maui" Version="14.0.1"/>
+        <PackageReference Include="CommunityToolkit.Maui" Version="14.2.2"/>
     </ItemGroup>
 
     <!-- LLamaSharp.Backend.* must track the same version as LLamaSharp (Core csproj) — the
