@@ -42,6 +42,73 @@ Leitor de livros EPUB construido com .NET MAUI, projetado para Windows, Android 
 | macOS (Mac Catalyst) | Suportado |
 | Linux | Nao suportado oficialmente pelo MAUI |
 
+## Como usar
+
+Nao ha instalador publicado ainda: rode o app a partir do fonte, seguindo
+[Build e Execucao](#build-e-execucao). O fluxo e sempre o mesmo — importar um EPUB, ler e,
+opcionalmente, traduzir.
+
+### 1. Importar um EPUB
+
+A tela inicial e a **Biblioteca**, vazia no primeiro uso. O item **Importar** na barra de
+ferramentas abre o seletor de arquivos do sistema ja filtrado por EPUB (`.epub` no Windows,
+`application/epub+zip` no Android, `org.idpf.epub-container` no iOS). O arquivo escolhido e
+copiado para o armazenamento do app; dele saem os metadados, a capa e a lista de capitulos, e o
+livro aparece na grade com capa, titulo, autor e uma barra de progresso de leitura sobre a capa.
+EPUB sem capa cai num placeholder com o titulo.
+
+O menu de contexto de cada livro traz **Traduzir livro** e **Excluir**. Excluir pede confirmacao e
+apaga o EPUB copiado, a capa, as imagens extraidas, o progresso de leitura e o cache de traducao
+daquele livro.
+
+### 2. Ler
+
+Tocar no livro abre o **Reader**, que renderiza o capitulo num WebView. O botao de engrenagem no
+topo abre as **Configuracoes de leitura**, que valem para o app inteiro (nao por livro), se
+aplicam na hora e sao gravadas quando voce fecha o painel:
+
+- **Tema** — Claro, Escuro ou Sepia
+- **Modo de leitura** — **Rolagem** (todos os capitulos num scroll continuo) ou **Paginado** (uma
+  pagina por vez, com botoes Anterior/Proximo e indicador de pagina). O padrao e Paginado
+- **Tipografia** — fonte (Georgia, serif, sans-serif, monospace ou OpenDyslexic), tamanho da
+  fonte e espacamento de linha, de letra e de palavra
+- **Traducao** — idioma de origem e de destino, com `English` -> `Brazilian Portuguese (PT-BR)`
+  como padrao
+
+No modo Paginado, **Anterior**/**Proximo** viram pagina e, ao chegar no fim do capitulo, pulam
+para o capitulo seguinte. A posicao de leitura e gravada ao sair da tela do leitor e restaurada na
+proxima vez que voce abrir o mesmo livro — a pagina no modo Paginado, o ponto do scroll no modo
+Rolagem.
+
+### 3. Traduzir
+
+> Vale a ressalva do inicio deste README: **a inferencia local so roda no Windows hoje**; suporte a
+> Android/iOS esta na phase `llm-mobile`.
+
+**Antes da primeira traducao o app precisa baixar um modelo GGUF** — e o passo que surpreende quem
+instala. Nao ha nada para configurar: na primeira vez que voce pede uma traducao, o app baixa o
+modelo padrao (`gemma-2-2b-it-Q4_K_M.gguf`, cerca de 1,6 GB, do Hugging Face) e depois o carrega
+na memoria. As duas etapas aparecem como overlay com progresso ("Baixando modelo de traducao" e
+"Carregando modelo") e, no leitor, podem ser canceladas. O download acontece uma vez so: o arquivo
+fica em `models/`, dentro do diretorio de dados do app. Para recuperar o espaco, o painel de
+configuracoes do leitor ganha um botao **Excluir modelo** assim que o modelo esta pronto.
+
+Com o modelo baixado, ha dois caminhos:
+
+- **Traduzir o que esta na tela** — no leitor, o botao **Aa** liga o modo de traducao e traduz os
+  paragrafos visiveis da pagina atual, com barra de progresso. Tocar de novo desliga o modo e
+  devolve o texto original. **So funciona no modo Paginado**: em Rolagem o app avisa e nao traduz.
+- **Traduzir o livro inteiro** — na Biblioteca, **Traduzir livro** no menu de contexto. Um popup
+  pede os idiomas de origem e destino e a traducao roda capitulo a capitulo em segundo plano, com
+  progresso e botao **Pausar**. O trabalho e persistido como `BookTranslationJob`: se voce pausar
+  ou fechar o app, na proxima vez o app pergunta se quer retomar a traducao anterior, e ela
+  recomeca do capitulo seguinte ao ultimo concluido. No fim, o resultado vira um **novo EPUB**, com
+  os idiomas no titulo, importado automaticamente para a biblioteca ao lado do original.
+
+Os dois caminhos passam pelo mesmo cache: cada trecho vira um hash SHA-256 de
+`origem|destino|texto` e a traducao fica em `TranslationCache`. Repetir o mesmo trecho — reler uma
+pagina ja traduzida, ou retomar um livro pausado — nao gasta inferencia de novo.
+
 ## Arquitetura
 
 O projeto segue **The Method** (Decomposicao Baseada em Volatilidade) com arquitetura em camadas fechadas.
