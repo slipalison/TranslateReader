@@ -298,13 +298,20 @@ um workflow reusavel (`workflow_call`) proprio:
 | Job | Workflow | Disparo | O que faz |
 |---|---|---|---|
 | CI | `ci.yml` | push e PR | Suite de testes com coleta de cobertura no Linux, mais build do app Windows |
-| CodeQL | `codeql.yml` | push e PR, mais cron semanal proprio | Analise estatica de C# com o pacote `security-extended` |
-| Semgrep | `semgrep.yml` | push e PR | SAST com regras da registry mais as regras proprias de `.semgrep/` |
-| SCA | `sca.yml` | push e PR | Gate de vulnerabilidade em dependencias NuGet — reprova em CVE High/Critical |
-| Secret scan | `secret-scan.yml` | push e PR | Gitleaks sobre o historico, complementando o secret scanning nativo do GitHub |
+| CodeQL | `codeql.yml` | push e PR, mais cron proprio (segunda, 07:26 UTC) | Analise estatica de C# com o pacote `security-extended` |
+| Semgrep | `semgrep.yml` | push e PR, mais cron proprio (segunda, 06:45 UTC) | SAST com regras da registry mais as regras proprias de `.semgrep/` |
+| SCA | `sca.yml` | push e PR, mais cron proprio (quarta, 05:50 UTC) | Gate de vulnerabilidade em dependencias NuGet — reprova em CVE High/Critical |
+| Secret scan | `secret-scan.yml` | push e PR, mais cron proprio (domingo, 04:15 UTC) | Gitleaks sobre o historico, complementando o secret scanning nativo do GitHub |
 | SonarQube Cloud | `sonarqube.yml` | push e PR | Quality Gate e cobertura (antigo SonarCloud) |
-| Dependency review | `dependency-review.yml` | somente PR | Diff de dependencias do PR, com resumo comentado quando reprova |
-| SBOM | `sbom.yml` | somente push | Gera SBOM SPDX com Syft e publica na Dependency Submission API |
+| Dependency review | `dependency-review.yml` | somente PR (`if: github.event_name == 'pull_request'`) | Diff de dependencias do PR, com resumo comentado quando reprova |
+| SBOM | `sbom.yml` | push, nunca em PR (`if: github.event_name == 'push'`), mais cron proprio (terca, 03:20 UTC) | Gera SBOM SPDX com Syft e publica na Dependency Submission API |
+
+A coluna Disparo soma duas coisas diferentes: quando o `pipeline.yml` despacha o job, e quando o
+workflow roda por conta propria. Cinco dos oito — `codeql.yml`, `semgrep.yml`, `sca.yml`,
+`secret-scan.yml` e `sbom.yml` — declaram `schedule` e `workflow_dispatch` alem de
+`workflow_call`, entao rodam no dia e hora agendados sem push nenhum e podem ser disparados a mao
+pela aba Actions. Os outros tres (`ci.yml`, `sonarqube.yml` e `dependency-review.yml`) declaram
+somente `workflow_call`: fora do pipeline eles nao rodam.
 
 Outros dois workflows rodam **fora** do orquestrador. Nenhum dos dois declara `workflow_call`,
 entao `pipeline.yml` nao tem como chama-los:
@@ -332,6 +339,17 @@ proprias que procuram exatamente esses padroes — `translatereader-zip-slip`,
 (`semgrep scan --config .semgrep/ --severity ERROR --error`), reprovando o build nas de severidade
 ERROR. Sao regras de **deteccao em CI**, nao defesas em runtime: elas apontam o codigo que
 viola a politica, quem implementa a protecao e o codigo.
+
+Uma dessas quatro protecoes ja esta implementada no codigo, e nao so escrita na regra: **todo
+valor derivado do livro e codificado antes de virar JavaScript.** Os 10 pontos de
+`EvaluateJavaScriptAsync` em `src/TranslateReader/Pages/ReaderPage.xaml.cs` foram auditados um a
+um — o HTML do capitulo, os chunks desse HTML e o `HRef` do capitulo passam pelo helper `JsStr`
+(`:486`, que e `JsonSerializer.Serialize`), e os paragrafos traduzidos chegam como payload ja
+serializado por `JsonSerializer.Serialize` (`:305-306`). O que sobra sao scripts constantes e
+nomes de funcao internos, que so recebem os literais `loadScrollContent` e `loadChapter`. A regra
+`translatereader-webview-js-injection` esta em `WARNING`, e nao em `ERROR`, porque o pattern nao
+consegue provar os dois casos que nao passam pelo helper: a severidade menor descreve o limite do
+detector, nao um furo no codigo.
 
 ## Roadmap
 
