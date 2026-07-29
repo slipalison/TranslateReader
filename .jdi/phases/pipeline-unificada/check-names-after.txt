@@ -1,0 +1,10 @@
+CI / Build (Windows)
+CI / Test (Linux)
+CodeQL / Analyze C#
+Dependency Review / Dependency review
+SBOM
+SCA / Dependency vulnerability gate
+Secret Scan / Gitleaks
+Secret Scan / TruffleHog
+Semgrep / Semgrep SAST
+SonarQube / SonarQube Cloud scan
