@@ -77,6 +77,32 @@ DEVE ser re-mapeada na mesma phase, com verificacao de que os required contexts 
 check names reais (incidente de hoje: 4 contexts com nome errado travaram todos os PRs);
 (e) concurrency passa a ser do orquestrador (cancel-in-progress unico por ref).
 
+D-2026-07-29-readme-1: Phase 'README completo com badges' (slug: readme) adicionada via
+/jdi-issue (card colado: "Melhore o Readme.md do projeto, adicione as badges deixe bem
+explicado"). Reason: alem das badges pedidas, a varredura do README atual (160 linhas)
+encontrou erros factuais que tornam o documento enganoso — o escopo da phase inclui corrigi-los:
+(a) **"Licenca: Projeto privado"** e FALSO — repo e PUBLIC no GitHub com arquivo `LICENSE`
+Apache 2.0; (b) a feature que da nome ao projeto (traducao offline EN->PT-BR via LLamaSharp,
+traducao de livro completo com job persistido, cache por hash, download de modelo GGUF) NAO
+aparece em Funcionalidades nem na Stack; (c) tabela de Componentes lista 6 de 16 servicos reais
+(faltam TranslationManager, SettingsManager, TranslationEngine, ThemeEngine, SettingsAccess,
+TranslationCacheAccess, ModelAccess, BookTranslationJobAccess, PromptUtility, HtmlUtility);
+(d) Estrutura do Projeto poe Contracts/Business/Access/Models dentro de `src/TranslateReader/`
+quando vivem em `src/TranslateReader.Core/` (a solution tem 3 projetos, o README mostra 1);
+(e) documenta `BookDetailPage.xaml` e `BookDetailPageModel.cs` que NAO existem no repo — e a
+mesma evidencia que gerou a phase `detalhe-livro`, entao ficam marcados como planejados, nao
+como existentes; (f) comandos de build usam `-f <TFM>` a nivel de solution, que falha com
+NETSDK1005 (learning de ci-seguranca W-5) — corrigir para o csproj do app; (g) Modelos de Dados
+omite Settings, TranslationCache e BookTranslationJob; (h) estrutura cita `.idea/` que e
+gitignorada; (i) temas dizem "claro/escuro" mas o ThemeEngine entrega Light/Dark/**Sepia**.
+Decisoes locked: badges apontam para workflows que existem no momento do merge (`pipeline.yml`
+depende da phase 9 — ver ordem abaixo); nada de badge apontando para arquivo inexistente;
+README continua em pt-BR sem acentos (padrao do arquivo atual, nao reescrever a grafia);
+nenhuma feature futura pode ser descrita como pronta — o que nao existe vai para uma secao
+explicitamente de roadmap. A branch desta phase sai de `jdi/pipeline-unificada` (PR #7) porque
+o README documenta a pipeline unificada e a badge aponta para `pipeline.yml`, que so existe la;
+se a PR #7 for mergeada antes, um rebase em `main` colapsa a dependencia.
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
