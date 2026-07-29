@@ -206,3 +206,74 @@ na ordem travada PR -> nomes reais -> PATCH -> merge (D-2026-07-28-pipeline-unif
 - Estado transitorio esperado na PR #7: os 8 contexts antigos do Actions ficam "Expected — waiting
   for status to be reported" ate o PATCH do remap. Nao e falha. (`CodeQL` nao entra nesse limbo.)
 - `npx jdi-cli` nao foi usado em nenhum passo (quebrado neste ambiente Windows).
+
+---
+
+## Fix round 1
+
+Rodada autonoma de correcao apos o verify round 1 (veredito `APPROVED_WITH_WARNINGS`, 0 blockers,
+8 warnings). Escopo travado pelo orquestrador: **um unico item, a W-1**. As demais warnings
+(W-2..W-8) seguem como estavam — W-3/W-4 sao legado isento por D-2, W-2 e pre-condicao do remap,
+W-5/W-6/W-7/W-8 sao follow-up.
+
+### Warning atacada
+
+**W-1 — `secrets: inherit` no job caller do sonar (`pipeline.yml:59`).** A
+D-2026-07-28-pipeline-unificada-4 se intitula "secrets nao fluem implicitamente / least privilege"
+mas mandava usar justamente o mecanismo que derrota least privilege. Tambem deixava o check
+`Semgrep OSS` vermelho (regra `yaml.github-actions.security.secrets-inherit`).
+
+### Correcao
+
+Map explicito, nos **dois** arquivos ao mesmo tempo — mexer so no caller falha com
+`"SONAR_TOKEN is not defined in the referenced workflow"`:
+
+- `.github/workflows/pipeline.yml` — `secrets: inherit` (1 linha) vira
+  `secrets:` + `SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}` (2 linhas).
+- `.github/workflows/sonarqube.yml` — `on: workflow_call:` ganha
+  `secrets: SONAR_TOKEN: required: false`. Os 3 inputs `pr-*` ficam intocados. O
+  `required: false` e deliberado: preserva o no-op gracioso dos `if: env.SONAR_TOKEN != ''`
+  quando o secret nao existe. O `env: SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}` do job continua
+  resolvendo — dentro de um workflow chamado, `secrets.SONAR_TOKEN` referencia o secret passado.
+
+Por ser mudanca de nivel de decisao, e nao edicao silenciosa:
+
+- `.jdi/DECISIONS.md` — **append** de `D-2026-07-28-pipeline-unificada-7` (a `-4` NAO foi editada,
+  o arquivo e append-only). Registra o raciocinio em tres partes do reviewer, que o callee e local
+  (`uses: ./`) — logo defesa em profundidade, nao vulnerabilidade ativa — e que o DoD 5 era um
+  **proxy** de least privilege: quando proxy e meta divergem, a meta vence.
+- `.jdi/phases/pipeline-unificada/CONTEXT.md` — DoD 5 reescrito pra provar o estado NOVO, e bullet
+  da `-7` adicionado na lista de locked decisions (a linha da `-4` continua sendo o resumo fiel da
+  `-4`).
+
+### Evidencia
+
+| Validacao | Resultado |
+|---|---|
+| `yaml.safe_load` nos 2 workflows tocados | ambos parseiam OK |
+| AST do caller | `jobs.sonarqube.secrets` = `{SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}}` |
+| AST do callee | `on.workflow_call` = `[inputs, secrets]`; `secrets.SONAR_TOKEN.required` = `false`; 3 inputs `pr-key/pr-branch/pr-base` preservados |
+| Jobs com chave `secrets:` no repo (11 arquivos) | exatamente 1 (o do sonar), agora explicito |
+| `grep -rc "secrets: inherit" .github/workflows/` | **0** nos 11 arquivos |
+| **DoD (10 `Verify:` do CONTEXT, com o 5 novo)** | **10/10 PASS, 0 FAIL** |
+| Distancias de `grep -B` (regra 6 do PLAN) | DoD 4: 1/8/1/1 dentro de `-B10`; DoD 5: 6 dentro de `-B10`; DoD 7: 4 e 3 dentro de `-B5`. A linha extra caiu ENTRE blocos de job, entao nenhuma distancia intra-bloco mudou |
+| SHA pin de terceiro (AST) | 41/41 em 40-hex, 0 mutaveis, 8 usos locais `./` |
+| harden-runner | 10/10 jobs ubuntu |
+| persist-credentials: false | 12/12 `actions/checkout` |
+| `${{ }}` dentro de `run:` | 0 |
+| `semgrep --config p/github-actions .github/workflows/` | **0 findings** (antes: 1 blocking em `pipeline.yml:59`) |
+| Gate real `semgrep --config .semgrep/ --severity ERROR --error` | 0 findings, exit 0 |
+
+Nenhum `.cs` tocado — `dotnet build`/`dotnet test` continuam nao se aplicando (mesma justificativa
+da entrega original).
+
+### Commits
+
+| Commit | Tipo/scope | Conteudo |
+|---|---|---|
+| `bf260b2` | `fix(pipeline-unificada)` | `pipeline.yml` + `sonarqube.yml` — o map explicito |
+| `7a230ea` | `docs(pipeline-unificada)` | `DECISIONS.md` (D-...-7) + `CONTEXT.md` (DoD 5 reescrito) |
+| _este_ | `docs(pipeline-unificada)` | este bloco `## Fix round 1` no SUMMARY |
+
+Fora de escopo nesta rodada, por instrucao explicita: remap do branch protection, merge,
+`scorecard.yml`, `release.yml`, `TranslateReader.slnx` e a stash. `LOOP.md` segue untracked (W-7).
