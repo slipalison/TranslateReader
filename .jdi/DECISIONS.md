@@ -59,6 +59,24 @@ lock files); substituido pelo gate SCA nativo dotnet, que enxerga transitivas (p
 detectado no probe). Coverage gate no CI segue fora (pertence a phase cobertura-e-ci, D-2026-
 07-28-ci-seguranca-5).
 
+D-2026-07-28-pipeline-unificada-1: Phase 'Pipeline unificada (orquestrador reusable)'
+(slug: pipeline-unificada) adicionada. Reason: usuario esperava visualizar todos os fluxos
+numa unica pipeline; hoje cada push/PR gera ~8 runs separados na aba Actions. Validacao
+tecnica: GitHub nao tem view nativa cross-workflow, mas reusable workflows (`workflow_call`)
+entregam run graph unico — um orquestrador `pipeline.yml` (on: push main / pull_request /
+workflow_dispatch) chama os demais como sub-workflows aninhados. Decisoes locked:
+(a) ficam FORA do orquestrador, por limite tecnico real: `scorecard.yml` (OSSF exige workflow
+isolado com `id-token: write` para `publish_results: true` — embutir quebra publish/badge) e
+`release.yml` (trigger `tags: v*`, fluxo de release nao pertence ao pipeline de commit);
+(b) scanners com cron semanal viram hibridos: mesmo arquivo com `on: workflow_call` +
+`on: schedule` — rodam no grafo do orquestrador em push/PR e standalone no agendamento;
+(c) chamadas locais usam path relativo (`uses: ./.github/workflows/_x.yml`) — sem SHA pin
+(mesmo repo, sem supply-chain externo); hardening D-2026-07-28-ci-seguranca-4 continua valendo
+dentro de cada reusable; (d) nomes de check mudam para `Pipeline / <job>` — branch protection
+DEVE ser re-mapeada na mesma phase, com verificacao de que os required contexts batem com os
+check names reais (incidente de hoje: 4 contexts com nome errado travaram todos os PRs);
+(e) concurrency passa a ser do orquestrador (cancel-in-progress unico por ref).
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167
