@@ -91,7 +91,9 @@ modelo padrao (`gemma-2-2b-it-Q4_K_M.gguf`, cerca de 1,6 GB, do Hugging Face) e 
 na memoria. As duas etapas aparecem como overlay com progresso ("Baixando modelo de traducao" e
 "Carregando modelo") e, no leitor, podem ser canceladas. O download acontece uma vez so: o arquivo
 fica em `models/`, dentro do diretorio de dados do app. Para recuperar o espaco, o painel de
-configuracoes do leitor ganha um botao **Excluir modelo** assim que o modelo esta pronto.
+configuracoes do leitor tem um botao **Excluir modelo**, visivel depois que o modelo e baixado ou
+carregado na sessao atual — reabrir o app esconde o botao mesmo com o arquivo em disco
+(`ReaderPageModel.IsModelAvailable` e um flag de sessao, nao uma checagem de disco).
 
 Com o modelo baixado, ha dois caminhos:
 
