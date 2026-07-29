@@ -117,6 +117,8 @@ Os 16 servicos do sistema. Managers, Engines e ResourceAccess vivem em
 
 ### Modelos de Dados
 
+As 7 tabelas do SQLite local (criadas sob demanda pelos respectivos ResourceAccess):
+
 ```
 Book
   ID, Title, Author, Publisher, Language, CoverImagePath,
@@ -131,7 +133,23 @@ ReadingProgress
 
 Bookmark
   ID, BookId, ChapterHRef, Position, Label, CreatedAt
+
+Settings
+  Key (PK), Value
+
+TranslationCache
+  ID, BookId, ChapterHRef, OriginalHash, TranslatedText, CreatedAt
+  UNIQUE (BookId + ChapterHRef + OriginalHash)
+
+BookTranslationJob
+  Id, BookId, SourceLanguage, TargetLanguage, Status,
+  LastCompletedChapterIndex, CreatedAt, UpdatedAt
 ```
+
+`TranslationCache` e a chave da economia de inferencia: o texto original vira `OriginalHash` e a
+restricao `UNIQUE` garante uma traducao por trecho por capitulo. `BookTranslationJob` guarda
+`LastCompletedChapterIndex`, que e o ponto de retomada quando um livro completo e pausado.
+`Bookmark` existe na camada de dados, mas ainda nao tem UI — ver [Roadmap](#roadmap).
 
 ## Stack Tecnologica
 
