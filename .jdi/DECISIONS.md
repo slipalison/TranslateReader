@@ -251,3 +251,42 @@ nao o objetivo; quando proxy e meta divergem, a meta vence — CLAUDE.md fixa a 
 estado novo (zero `secrets: inherit` no repo + exatamente um pass-through explicito no caller
 + declaracao presente no `workflow_call` do callee). Efeito colateral esperado: limpa o check
 vermelho `Semgrep OSS` (regra `secrets-inherit`, antes em `pipeline.yml:59`).
+
+D-2026-07-29-readme-2: Conjunto e ordem de badges definidos para a phase `readme`, todos com
+URL real e resolvivel: (1) Pipeline (`actions/workflows/pipeline.yml/badge.svg`) — build/test/
+scan agregado, existe nesta branch (saida de `jdi/pipeline-unificada`, PR #7 — ver
+D-2026-07-29-readme-1); (2) CodeQL (`actions/workflows/codeql.yml/badge.svg`) — badge PROPRIO,
+NAO dobrado dentro do badge do Pipeline: `codeql.yml` e hibrido (`workflow_call` + `schedule`
+semanal + `workflow_dispatch`, via D-2026-07-28-pipeline-unificada-2), entao tem execucoes fora
+do grafo do orquestrador (o cron semanal) e o sinal de seguranca de code-scanning merece
+visibilidade independente do status geral do pipeline; (3) OpenSSF Scorecard — mantido, ja
+existia no README; (4) e (5) SonarCloud Quality Gate + Coverage (`sonarcloud.io/api/
+project_badges/measure?project=slipalison_TranslateReader&metric={alert_status,coverage}`) —
+project key e org confirmados em `.github/workflows/sonarqube.yml` (`/k:"slipalison_
+TranslateReader" /o:"slipalison"`); (6) License (shield Apache 2.0, linkado pro arquivo
+`LICENSE`). Ordem no README: saude de build -> scanners de seguranca -> score de supply chain
+-> qualidade -> licenca. Nenhuma badge pode referenciar workflow ausente de
+`.github/workflows/` — o DoD desta fase verifica isso programaticamente (extrai todo
+`actions/workflows/*.yml` citado no README e testa `-f` contra o diretorio real).
+
+D-2026-07-29-readme-3: Defeito adicional encontrado nesta fase (nao estava no card nem na
+lista (a)-(i) de D-2026-07-29-readme-1): a tabela "Plataformas Suportadas" do README atual
+(linhas 19-27) marca Android/iOS/macOS como "Suportado" sem ressalva — ao entrar a feature de
+traducao offline em Funcionalidades/Stack (item b da D-2026-07-29-readme-1), a tabela fica
+enganosa por omissao: a traducao (o diferencial do projeto) so roda hoje em Windows
+(`LLamaSharp` backends `Cpu`/`Cuda12` condicionados a `'windows'` no csproj — `PROJECT.md` >
+Stack). Mitigacao: a descricao da feature de traducao (Funcionalidades e/ou Stack) traz
+explicitamente a ressalva "traducao offline: hoje somente Windows; Android/iOS planejado via
+phase `llm-mobile`" — a tabela de plataformas em si nao muda (ela descreve o app como um todo,
+que roda nas 4 plataformas). Verificado no mesmo DoD da feature de traducao, sem item proprio,
+pra nao estourar o cap de 10 itens da phase.
+
+D-2026-07-29-readme-4: Alem da correcao dos defeitos (a)-(i) de D-2026-07-29-readme-1, o README
+ganha 4 conteudos que hoje nao existem e o repo ja justifica (pos ci-seguranca/sast-sca-sbom/
+pipeline-unificada): (1) Seguranca — cita `SECURITY.md` (politica de report ja existe no
+repo), o conjunto de scanners rodando (CodeQL, Semgrep, SCA dotnet, secret scan, OpenSSF
+Scorecard) e o hardening de supply-chain (actions de terceiro pinadas por SHA, D-2026-07-28-
+ci-seguranca-4); (2) como rodar os testes (`dotnet test`) e a regra de cobertura 90% em codigo
+novo/alterado pos-boundary (D-6); (3) Contributing/JDI — ponteiro pra secao "JDI — Workflow de
+Desenvolvimento" do `CLAUDE.md`, pra quem quiser contribuir; (4) licenca Apache 2.0 (fundida
+com a correcao do defeito (a)).
