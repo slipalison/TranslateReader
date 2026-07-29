@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="VersOne.Epub" Version="3.3.6" />
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.10" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
     <!-- GHSA-2m69-gcr7-jv3q: bundle_green 2.1.11 (latest) pulls lib.e_sqlite3 2.1.11 (vulnerable
          <= 2.1.11). No fixed bundle exists; nearest-wins override to 2.1.12, the in-band vendor
