@@ -19,7 +19,8 @@ dos ~8 runs independentes de antes. `scorecard.yml` e `release.yml` seguem isola
 | T-5 | Novo `pipeline.yml` — 8 jobs caller sem `needs:`, permissions por job, `secrets: inherit` so no sonar, `if:` de evento so no caller, concurrency unica | `74b9347` |
 | T-6 | Bateria de validacao local (10 DoD + sweeps de hardening/injection/artifact). Zero correcoes necessarias -> sem commit proprio (PLAN: `files modified: nenhum`) | — |
 | T-7 | Push do branch, PR #7, captura dos check names reais via API, `branch-protection-remap.md` com o PATCH pronto (NAO executado) | `00ae5cd` |
-| — | Atualizacao de `PLAN.md` (7x `completed`) + este SUMMARY | commit final |
+| — | `PLAN.md` com as 7 tasks `completed` + primeira versao deste SUMMARY | `2c144a6` |
+| T-7 (cont.) | Recaptura dos check names apos o run completo e correcao do remap (`CodeQL` nao muda de nome) | commit final |
 
 ## Arquivos modificados
 
@@ -104,42 +105,95 @@ git diff --name-only main...HEAD -- .github/workflows/scorecard.yml .github/work
 # (vazio)
 ```
 
-## Check names capturados (T-7)
+## T-7 — run real e check names
 
-Um unico run criado pela PR: `30444846178 Pipeline [pull_request]`. Nomes lidos de
-`gh api repos/slipalison/TranslateReader/commits/74b9347c8151075a16ee1b30211e79d63f3577e3/check-runs`
-(nenhum escrito a mao) — 10 linhas em `check-names-after.txt`.
+Run graph unico confirmado: **um** run por evento (`gh run list --branch jdi/pipeline-unificada`
+-> `Pipeline [pull_request]`), com os 13 checks apontando todos pro mesmo `runs/30445084653`.
 
-| context ANTES (required) | check name DEPOIS |
-|---|---|
-| `Test (Linux)` | `CI / Test (Linux)` |
-| `Build (Windows)` | `CI / Build (Windows)` |
-| `CodeQL` | `CodeQL / Analyze C#` |
-| `Semgrep SAST` | `Semgrep / Semgrep SAST` |
-| `Dependency vulnerability gate` | `SCA / Dependency vulnerability gate` |
-| `Gitleaks` | `Secret Scan / Gitleaks` |
-| `TruffleHog` | `Secret Scan / TruffleHog` |
-| `SonarQube Cloud scan` | `SonarQube / SonarQube Cloud scan` |
-| `Dependency review` | `Dependency Review / Dependency review` |
-| — (nao required) | `SBOM` (caller skipped em PR; em push vira `SBOM / Generate SBOM (Syft)`) |
+Resultado do run (`gh pr checks 7`) — todos os jobs do Actions verdes:
 
-O PATCH pronto, a verificacao pos-remap e o rollback estao em `branch-protection-remap.md`.
-**Nada foi executado:** o remap e o merge sao `Deferred to PR review`, na ordem travada
-PR -> nomes reais -> PATCH -> merge (D-2026-07-28-pipeline-unificada-1d).
+```
+CI / Test (Linux)                     pass  32s
+CI / Build (Windows)                  pass  7m35s
+CodeQL / Analyze C#                   pass  1m51s
+Semgrep / Semgrep SAST                pass  39s
+SCA / Dependency vulnerability gate   pass  1m1s
+Secret Scan / Gitleaks                pass  16s
+Secret Scan / TruffleHog              pass  20s
+SonarQube / SonarQube Cloud scan      pass  1m23s
+Dependency Review / Dependency review pass  14s
+SBOM                                  skipping   (if: push - correto em PR)
+CodeQL                    (app)       pass  3s
+SonarCloud Code Analysis  (app)       pass  29s
+Semgrep OSS               (app)       FAIL  4s   -> ver "Achados pro revisor"
+```
+
+Prova de que o `workflow_call` funciona de fato, nao so no YAML: o SonarQube rodou em modo PR com
+os inputs explicitos e o `dependency-review` (que exige base/head SHA reais de PR) passou.
+
+### Mapa de check names (capturado, nunca escrito a mao)
+
+`check-names-after.txt` = saida literal de
+`gh api repos/slipalison/TranslateReader/commits/<head>/check-runs --jq '.check_runs[].name' | sort -u`,
+recapturada depois que TODOS os checks reportaram (13 nomes).
+
+| context ANTES (required) | app_id | check name DEPOIS |
+|---|---|---|
+| `CodeQL` | 57789 (github-advanced-security) | `CodeQL` — **INALTERADO** |
+| `Test (Linux)` | 15368 (github-actions) | `CI / Test (Linux)` |
+| `Build (Windows)` | 15368 | `CI / Build (Windows)` |
+| `Semgrep SAST` | 15368 | `Semgrep / Semgrep SAST` |
+| `Dependency vulnerability gate` | 15368 | `SCA / Dependency vulnerability gate` |
+| `Gitleaks` | 15368 | `Secret Scan / Gitleaks` |
+| `TruffleHog` | 15368 | `Secret Scan / TruffleHog` |
+| `SonarQube Cloud scan` | 15368 | `SonarQube / SonarQube Cloud scan` |
+| `Dependency review` | 15368 | `Dependency Review / Dependency review` |
+| — (nao required) | 15368 | `SBOM` (skipped em PR; em push vira `SBOM / Generate SBOM (Syft)`) |
+| — (nao required) | 57789 / 12526 | `Semgrep OSS`, `SonarCloud Code Analysis` — checks de app, nome inalterado |
+
+O prefixo `<caller> / <job>` vale so pros checks do Actions. Confirmado contra `main` pre-migracao
+(`e5541f2`), onde os mesmos jobs reportavam como `Analyze C#`, `Test (Linux)`, `Build (Windows)`...
+
+O PATCH pronto (variante que preserva `app_id`), a verificacao pos-remap e o rollback estao em
+`branch-protection-remap.md`. **Nada foi executado:** remap e merge sao `Deferred to PR review`,
+na ordem travada PR -> nomes reais -> PATCH -> merge (D-2026-07-28-pipeline-unificada-1d).
+
+## Achados pro revisor
+
+1. **`Semgrep OSS` vermelho: 1 alerta novo em `pipeline.yml:59`** —
+   `yaml.github-actions.security.secrets-inherit`, regra de registry contra `secrets: inherit`,
+   sugerindo `secrets: { SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} }`.
+   **Nao alterado de proposito:** `secrets: inherit` e decisao locked
+   (D-2026-07-28-pipeline-unificada-4) e o DoD 5 exige literalmente
+   `grep -c "secrets: inherit" == 1` — trocar reprovaria o DoD e reabriria decisao travada, fora
+   da alcada do doer. Atenuantes: o reusable chamado e local (`./`), nao de terceiro; `Semgrep OSS`
+   nao e required context; o job que gateia (`Semgrep / Semgrep SAST`, regras custom `.semgrep/`)
+   passou verde. Pra adotar o map explicito: alterar `pipeline.yml` + emendar a decisao -4 +
+   ajustar o DoD 5.
+2. **`CodeQL` (required) nao precisa de remap.** Descoberto ao ler o `app_id` no snapshot: e o
+   agregado de code scanning do app `github-advanced-security` (57789), nao um job do Actions. O
+   job do Actions era `Analyze C#` (nunca required) e virou `CodeQL / Analyze C#`. Logo o remap
+   mexe em 8 dos 9 contexts, nao nos 9 — o `branch-protection-remap.md` ja reflete isso.
 
 ## Desvios
 
 1. **`-F strict=true` em vez de `-f strict=true`** no comando do remap (PLAN T-7 cita `-f`
    literalmente). Com `-f` o `gh` envia a string `"true"` e o endpoint responde 422, porque
-   `strict` e boolean. Desvio de 1 caractere, corrige um comando que falharia; anotado tambem
-   dentro do proprio `branch-protection-remap.md`.
+   `strict` e boolean. Alem disso o `branch-protection-remap.md` traz como variante recomendada um
+   `--input` JSON que preserva o `app_id` de cada context: `contexts[]` grava `app_id: null` e
+   afrouxa o pin de app (regressao pequena de hardening, mas evitavel).
 2. **T-6 sem commit proprio.** O PLAN define `files modified: nenhum` e nenhuma validacao falhou,
    entao nao houve o que corrigir/commitar — a evidencia vive neste SUMMARY.
-3. **Dois `git push`, nenhum no meio da migracao.** O primeiro e o da T-7 (exigido pela ordem
-   travada: push -> PR -> captura). O segundo carrega os commits documentais posteriores
-   (`00ae5cd` + PLAN/SUMMARY). A regra 1 do PLAN — nao empurrar estado meio-migrado — foi
-   respeitada: T-2..T-5 ficaram locais ate o pipeline estar completo.
-4. **`SBOM` aparece sem sufixo** na lista de check names. Nao e bug: o caller e
+3. **Tres `git push`, nenhum no meio da migracao.** O primeiro e o da T-7 (exigido pela ordem
+   travada: push -> PR -> captura); os outros dois carregam commits documentais (`00ae5cd`,
+   `2c144a6` e a correcao do remap). A regra 1 do PLAN — nao empurrar estado meio-migrado — foi
+   respeitada: T-2..T-5 ficaram locais ate o pipeline estar completo. Efeito colateral conhecido:
+   cada push dispara um run novo e o `concurrency` cancela o anterior (comportamento desejado).
+4. **`check-names-after.txt` recapturado** depois que os checks de app reportaram — a primeira
+   captura tinha so os 10 nomes do Actions, a final tem 13. Foi a recaptura que revelou o achado 2.
+   As definicoes de workflow nao mudaram entre as duas capturas
+   (`git diff --name-only 74b9347 HEAD -- .github/` vazio).
+5. **`SBOM` aparece sem sufixo** na lista de check names. Nao e bug: o caller e
    `if: github.event_name == 'push'` e um job caller skipped reporta com o nome do caller. Nao e
    required context (nunca foi) e nao deve virar um, senao travaria toda PR.
 
@@ -147,8 +201,8 @@ PR -> nomes reais -> PATCH -> merge (D-2026-07-28-pipeline-unificada-1d).
 
 - Cobertura: **SKIPPED** — phase infra-only, nenhum `.cs` novo ou alterado, D-6 nao se aplica
   (mesmo padrao de `ci-seguranca` e `sast-sca-sbom`).
-- `dotnet build` / `dotnet test` nao rodaram: nenhum arquivo de codigo foi tocado; o gate real de
-  build/test roda dentro da propria PR #7 via `Pipeline / CI`.
-- Estado transitorio esperado na PR #7: os 9 contexts antigos ficam "Expected — waiting for status
-  to be reported" ate o PATCH do remap. Nao e falha.
+- `dotnet build` / `dotnet test` locais nao rodaram: nenhum arquivo de codigo foi tocado; o gate
+  real rodou na propria PR #7 (`CI / Test (Linux)` e `CI / Build (Windows)` verdes).
+- Estado transitorio esperado na PR #7: os 8 contexts antigos do Actions ficam "Expected — waiting
+  for status to be reported" ate o PATCH do remap. Nao e falha. (`CodeQL` nao entra nesse limbo.)
 - `npx jdi-cli` nao foi usado em nenhum passo (quebrado neste ambiente Windows).
