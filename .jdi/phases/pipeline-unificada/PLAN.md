@@ -45,7 +45,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - `git branch --show-current` = `jdi/pipeline-unificada`
 - **Dependencies:** none
 - **Test:** o `json.load` acima. `gh api` falhou = ABORTAR a phase (sem baseline nao ha remap auditavel).
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 (3 tasks paralelas — arquivos disjuntos)
 
@@ -59,7 +59,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - diff nao toca step: `git diff main -- .github/workflows/ci.yml | grep -E "^[+-]" | grep -Eq "(uses:|run:)"` = FALSE
 - **Dependencies:** T-1
 - **Test:** `python -c "import yaml;yaml.safe_load(open('.github/workflows/ci.yml',encoding='utf-8'))"`
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: 4 scanners semanais -> `workflow_call` + `schedule` [+ `workflow_dispatch`]
 - **Files modified:** `.github/workflows/codeql.yml`, `semgrep.yml`, `sca.yml`, `secret-scan.yml`
@@ -79,7 +79,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - hardening intacto: o diff nao contem linha `uses:` nem `permissions:` de job
 - **Dependencies:** T-1
 - **Test:** `yaml.safe_load` nos 4
-- **Status:** pending
+- **Status:** completed
 
 #### T-4: `sonarqube.yml` (inputs de PR) + `dependency-review.yml` + `sbom.yml`
 - **Files modified:** `.github/workflows/sonarqube.yml`, `dependency-review.yml`, `sbom.yml`
@@ -116,7 +116,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - nos 3: `grep -q "workflow_call:"`, `! grep -Eq "^\s*(push|pull_request):"`, `! grep -q "concurrency:"` (DoD 1,2,8)
 - **Dependencies:** T-1
 - **Test:** `yaml.safe_load` nos 3 + `bash -n` no bloco `run:` extraido (sintaxe do array)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3
 
@@ -158,7 +158,7 @@ names unicos + snapshot do branch protection ANTES de editar.
     hardening vive dentro de cada reusable
 - **Dependencies:** T-2, T-3, T-4
 - **Test:** `yaml.safe_load('.github/workflows/pipeline.yml')`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 
@@ -176,7 +176,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - intocados: `git diff --name-only main...HEAD -- .github/workflows/scorecard.yml .github/workflows/release.yml` **VAZIO**
 - **Dependencies:** T-5
 - **Test:** a propria bateria
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 5
 
@@ -196,7 +196,7 @@ names unicos + snapshot do branch protection ANTES de editar.
   - **NAO executar** PATCH nem merge — ambos sao `Deferred to PR review`
 - **Dependencies:** T-6
 - **Test:** `gh pr checks` lista os checks do `Pipeline`; `test -s check-names-after.txt`
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Total tasks: 7
