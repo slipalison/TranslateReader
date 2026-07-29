@@ -254,6 +254,35 @@ Hoje esse limite e cobrado na revisao: a CI **coleta** a cobertura, mas ainda **
 build por ela. O gate automatico que falha abaixo de 90% esta planejado na phase
 `cobertura-e-ci` — ver [Roadmap](#roadmap).
 
+## Seguranca
+
+Para reportar uma vulnerabilidade, siga a politica em [`SECURITY.md`](SECURITY.md) — o report e
+privado, via GitHub Security Advisories. **Nao abra issue publica para falha de seguranca.**
+
+Todo push e todo pull request passam pelo orquestrador
+[`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml), que dispara os workflows
+reusaveis abaixo:
+
+| Verificacao | Workflow | O que faz |
+|---|---|---|
+| CodeQL | `codeql.yml` | Analise estatica de C# com o pacote `security-extended`, mais um run agendado semanal |
+| Semgrep | `semgrep.yml` | SAST com regras da registry e regras proprias em `.semgrep/` (zip-slip, XXE, injecao no WebView) |
+| SCA | `sca.yml` | Gate de vulnerabilidade em dependencias NuGet — reprova em CVE High/Critical |
+| Secret scan | `secret-scan.yml` | Gitleaks sobre o historico, complementando o secret scanning nativo do GitHub |
+| Dependency review | `dependency-review.yml` | Diff de dependencias em pull request, com resumo comentado no PR |
+| SBOM | `sbom.yml` | Gera SBOM SPDX com Syft e publica na Dependency Submission API |
+| OpenSSF Scorecard | `scorecard.yml` | Score de postura de supply chain do repositorio |
+| SonarQube Cloud | `sonarqube.yml` | Quality Gate e cobertura (antigo SonarCloud) |
+
+Hardening de supply chain aplicado a todos esses workflows: **toda action de terceiro e pinada
+por commit SHA completo**, nunca por tag mutavel `@vN`; `permissions:` nega tudo no topo e cada
+job eleva somente o que precisa; jobs em `ubuntu-latest` rodam sob `step-security/harden-runner`.
+
+O proprio codigo trata como **entrada nao confiavel** os arquivos EPUB (extracao de zip valida
+path escape e limita tamanho descomprimido) e o HTML dos livros renderizado no WebView (todo
+valor derivado do livro e codificado antes de chegar em JavaScript). Detalhes das regras
+obrigatorias em [`.claude/rules/csharp.md`](.claude/rules/csharp.md).
+
 ## Roadmap
 
 Tudo abaixo esta **planejado, nao construido** — nao existe no repositorio hoje. Cada item e
@@ -285,4 +314,4 @@ Convencoes: Conventional Commits com escopo igual ao slug da phase, commits atom
 
 ## Licenca
 
-Projeto privado.
+Distribuido sob a **Apache License 2.0**. O texto completo esta em [`LICENSE`](LICENSE).
