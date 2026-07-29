@@ -222,3 +222,141 @@ correcao esperada. Registrado tambem que a regra `translatereader-zip-slip` do S
 este caso** (ela casa `Path.Combine($DEST, $ENTRY.FullName)`, e o codigo real usa uma variavel
 intermediaria vinda da API do VersOne.Epub) — ou seja, o gate de CI da falsa sensacao de cobertura
 aqui. Candidato a phase de hardening.
+
+---
+
+## Fix round 2
+
+Iteracao 3, `mode=fix_blockers` disparado apos o REVIEW round 2 devolver
+**APPROVED_WITH_WARNINGS**. Escopo fechado em tres itens: os dois warnings novos da rodada (W-10,
+W-11) mais a lacuna de "como usar" apontada em `## Leitura de ponta a ponta`. Nenhum `.cs`,
+`.csproj`, `.github/**`, `.semgrep/**` ou `TranslateReader.slnx` tocado — a phase continua
+README-only. Metodo, terceira rodada seguida: cada frase verificada contra o repositorio antes de
+ser commitada; politica nunca reescrita como comportamento implementado; nada descrito que eu nao
+consiga apontar no fonte.
+
+### W-10 — a coluna "Disparo" da tabela de jobs despachados
+
+**Warning.** A clausula "mais cron semanal proprio" aparecia so na linha do CodeQL, criando um
+contraste falso — o leitor concluia que os outros 7 jobs nao tinham cron. Pior, a celula do SBOM
+dizia "**somente** push", o que e ativamente errado: ele tambem roda no cron proprio de terca.
+
+**Fix.** Li o bloco `on:` dos 8 workflows reusaveis e reescrevi a coluna de forma uniforme,
+citando dia e horario UTC de cada cron. Abaixo da tabela entrou um paragrafo explicando que a
+coluna soma duas coisas distintas: quando o `pipeline.yml` despacha o job, e quando o workflow
+roda por conta propria.
+
+**Evidencia** — lida dos arquivos, nao inferida:
+
+| Workflow | bloco `on:` real | cron proprio |
+|---|---|---|
+| `ci.yml` | `workflow_call` | nenhum |
+| `codeql.yml` | `workflow_call` + `schedule` + `workflow_dispatch` | `26 7 * * 1` (segunda, 07:26 UTC) |
+| `semgrep.yml` | `workflow_call` + `schedule` + `workflow_dispatch` | `45 6 * * 1` (segunda, 06:45 UTC) |
+| `sca.yml` | `workflow_call` + `workflow_dispatch` + `schedule` | `50 5 * * 3` (quarta, 05:50 UTC) |
+| `secret-scan.yml` | `workflow_call` + `schedule` + `workflow_dispatch` | `15 4 * * 0` (domingo, 04:15 UTC) |
+| `sonarqube.yml` | `workflow_call` (com `inputs` + `secrets`) | nenhum |
+| `dependency-review.yml` | `workflow_call` | nenhum |
+| `sbom.yml` | `workflow_call` + `workflow_dispatch` + `schedule` | `20 3 * * 2` (terca, 03:20 UTC) |
+
+Cinco de oito tem cron, nao um. As duas condicionalidades do `pipeline.yml` passaram a aparecer
+literalmente na tabela do README: `dependency-review` em `pipeline.yml:64` e `sbom` em
+`pipeline.yml:72`, cada uma com o `if: github.event_name` correspondente.
+
+### W-11 — readmitir a metade verdadeira do claim de WebView
+
+**Warning.** No fix da rodada 1 a frase composta que soldava um claim falso (EPUB) num verdadeiro
+(WebView) saiu inteira. O reviewer julgou correto remover a frase composta, mas overcorrection nao
+readmitir a metade verdadeira, que ele proprio havia verificado.
+
+**Fix.** Frase propria no fim da secao Seguranca, pontual e ancorada em file:line — nao um claim
+blanket de hardening. Cita os call sites, o helper, e explica por que a regra de Semgrep esta em
+`WARNING`: limite do pattern, nao furo do codigo.
+
+**Evidencia** — reauditei por conta propria os 10 `EvaluateJavaScriptAsync` de
+`ReaderPage.xaml.cs`:
+
+| Linha | Forma | Derivado do livro | Codificado |
+|---|---|---|---|
+| 121, 122 | `JsStr(mode)`, `JsStr(CurrentCss)` | nao | sim (`JsStr`) |
+| 306 | `applyTranslations({itemsJson})` | sim (texto traduzido) | sim — `:305` `JsonSerializer.Serialize` |
+| 324, 461 | script constante | nao | n/a |
+| 444-445 | `scrollToChapter({JsStr(savedHRef)}, {savedPos})` | sim (`HRef`); `savedPos` e `double` | sim (`JsStr`) |
+| 456 | `{functionName}({JsStr(html)})` | sim (HTML do capitulo) | sim (`JsStr`) |
+| 467 | `appendChunk({JsStr(chunk)})` | sim | sim (`JsStr`) |
+| 474 | `flushChunk` com `functionName` interpolado | nao — `functionName` so recebe os literais de `:128` e `:132` | n/a |
+| 480 | `EvalJsAsync(expression)` | nao — chamadores em `:295`, `:365`, `:371`, `:379`, `:387`, `:395`, `:430` passam literais ou `goToPage` com `page` `int` | n/a |
+
+`JsStr` e `JsonSerializer.Serialize` do valor (`:486-487`).
+
+### Lacuna de "como usar" — secao nova
+
+**Warning** (de `## Leitura de ponta a ponta`, round 2). O README ficou preciso e bom para
+*entender e construir*, mas o leitor nunca aprendia a *usar* o app — em especial que a traducao
+exige **baixar um modelo GGUF pelo app antes** de qualquer coisa funcionar.
+
+**Fix.** Secao `## Como usar` entre Plataformas Suportadas e Arquitetura, em 3 passos: importar,
+ler, traduzir. Cada afirmacao foi checada no codigo antes de ser escrita.
+
+**Evidencia** — ancoras usadas para escrever cada bloco:
+
+| Afirmacao | Fonte |
+|---|---|
+| Importar abre o FilePicker com os filtros de EPUB por plataforma | `LibraryPageModel.cs:54-66`; item `Importar` em `LibraryPage.xaml:11` |
+| EPUB e copiado; metadados, capa e capitulos extraidos | `LibraryManager.ImportBookAsync:40-58`, `SaveCoverImageAsync:81-90` |
+| Grade com capa, titulo, autor e barra de progresso; placeholder sem capa | `LibraryPage.xaml:58-128` |
+| Menu de contexto Traduzir livro / Excluir; Excluir confirma e limpa arquivos, progresso e cache | `LibraryPage.xaml:38-46`; `LibraryPageModel.cs:84-97`; `LibraryManager.DeleteBookAsync:60-70` |
+| Configuracoes globais: tema, modo, tipografia, idiomas; aplicam na hora, salvam ao fechar | `SettingsOverlay.xaml:48-188`, `SettingsOverlay.xaml.cs:7-21`; `ReaderPage.xaml.cs:345-352` |
+| Padrao Paginado; lista de fontes; idiomas padrao | `ReadingSettings.cs`, `ReadingMode.cs`, `ThemeType.cs`, `SettingsOverlay.xaml.cs:7-21` |
+| Anterior/Proximo viram pagina e pulam de capitulo no limite | `ReaderPage.xaml.cs:216-257` |
+| Posicao de leitura salva ao sair e restaurada ao abrir | `ReaderPage.xaml.cs:55-68` e `:426-447`; `ReaderPageModel.InitializeAsync:73-98` |
+| Modelo padrao `gemma-2-2b-it-Q4_K_M.gguf`, ~1,6 GB, do Hugging Face | `TranslationManager.cs:23-27` (`SizeBytes: 1_629_413_888`) |
+| Download automatico na primeira traducao, depois load; overlays com progresso; cancelavel no leitor | `ReaderPageModel.EnsureModelDownloadedAsync:251-276`; `ReaderPage.xaml:82-150`; `LibraryPage.xaml:171-200` |
+| Modelo fica em `models/` no diretorio de dados do app | `MauiProgram.cs:67` |
+| Botao Excluir modelo aparece quando o modelo esta pronto | `SettingsOverlay.xaml.cs:177` e `:219-220`; `ReaderPage.xaml.cs:354-355` |
+| Botao `Aa` traduz paragrafos visiveis, e toggle, e so funciona no modo Paginado | `ReaderPage.xaml:20-26`; `ReaderPage.xaml.cs:259-283` — o proprio alert do codigo diz isso |
+| Livro inteiro: popup de idiomas, progresso, Pausar, retomada, novo EPUB importado | `LibraryPageModel.cs:106-235`; `TranslateBookPopup.xaml.cs:7-45`; `TranslationManager.TranslateBookAsync:44-76` |
+| Cache SHA-256 sobre origem, destino e texto evita reinferencia | `TranslationManager.ComputeHash:343-348`, consultado em `:149`, `:231` e `:279` |
+
+Duas capacidades foram deliberadamente **nao** escritas, por nao existirem de fato: a escolha de
+modelo no painel de configuracoes (os botoes Gemma/Qwen/Phi gravam
+`ReadingSettings.TranslationModelName`, mas `TranslationManager` ignora o valor e sempre usa
+`DefaultModel`) e retomada de download interrompido (`ModelAccess` baixa para `.tmp` e move no
+fim; nao retoma). Descrever qualquer uma das duas seria exatamente a classe de defeito que esta
+phase existe para matar.
+
+### Validacao (rodada apos as edicoes, antes dos commits)
+
+```
+DoD (10 Verify: do CONTEXT.md, verbatim)  10/10 PASS (rodado 2x: apos W-10/W-11 e apos Como usar)
+Badges (GET, curl -sL -o /dev/null -w %{http_code} --max-time 30)
+  pipeline.yml/badge.svg .................. 200
+  codeql.yml/badge.svg ................... 200
+  api.scorecard.dev/.../badge ............ 200
+  sonarcloud .../metric=alert_status ..... 200
+  sonarcloud .../metric=coverage ......... 200
+  img.shields.io/.../License-Apache_2.0 .. 200
+Acentos (scan Python, todo code point > 127, teste por decomposicao NFD)
+  non-ascii total: 39 — 39/39 EM DASH (U+2014); letras acentuadas: 0; alfabeticos nao-ASCII: 0
+dotnet test -c Release ... Com falha: 0, Aprovado: 169, Ignorado: 2, Total: 171
+```
+
+Em-dashes subiram de 25 para 39 pela prosa nova; a restricao locked e **sem acentos**, nao sem
+em-dash. Nenhum outro code point nao-ASCII entrou: a seta que `TranslateBookAsync` usa no titulo
+do EPUB traduzido e o glifo de engrenagem da UI foram descritos em prosa justamente para nao
+irem parar no arquivo.
+
+### Commits desta rodada
+
+| Hash | Commit |
+|---|---|
+| `82b3628` | `fix(readme): correct CI trigger table and restore verified WebView claim` (W-10 + W-11) |
+| `2f3da79` | `docs(readme): add a Como usar section covering the real user flow` |
+
+### Warnings que seguem abertos (fora do escopo desta rodada)
+
+W-3, W-4, W-5, W-6, W-7, W-8 e W-9 — backlog de manutencao, nenhum blocker. Segue tambem de pe a
+recomendacao do reviewer de promover o achado de zip-slip a phase propria
+(`/jdi-add-phase "hardening-epub"`), com as **duas** entregas: containment de path e bound de
+tamanho no codigo, **e** correcao da regra `translatereader-zip-slip`, que hoje tem cobertura
+estruturalmente zero sobre o caminho de extracao real deste codebase.
