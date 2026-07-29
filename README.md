@@ -147,41 +147,47 @@ Bookmark
 
 ## Estrutura do Projeto
 
+A solution tem **3 projetos**: a biblioteca de logica (`TranslateReader.Core`), o app MAUI
+(`TranslateReader`) e os testes (`TranslateReader.Tests`).
+
 ```
 TranslateReader.slnx
 +-- src/
-|   +-- TranslateReader/          (MAUI App)
-|       +-- Contracts/
-|       |   +-- Managers/         IReadingManager, ILibraryManager
-|       |   +-- Engines/          IParsingEngine
-|       |   +-- Access/           IBooksAccess, IReadingStateAccess
-|       |   +-- Utilities/        IFileUtility
-|       +-- Business/
-|       |   +-- Managers/         ReadingManager, LibraryManager
-|       |   +-- Engines/          ParsingEngine
-|       +-- Access/
-|       |   +-- BooksAccess.cs
-|       |   +-- ReadingStateAccess.cs
-|       +-- Utilities/
-|       |   +-- FileUtility.cs
-|       +-- Models/
-|       |   +-- Book.cs, Chapter.cs
-|       |   +-- ReadingProgress.cs, Bookmark.cs
-|       +-- Pages/                (Client Layer)
-|       |   +-- LibraryPage.xaml
-|       |   +-- ReaderPage.xaml
-|       |   +-- BookDetailPage.xaml
-|       |   +-- Controls/
-|       +-- PageModels/
-|       |   +-- LibraryPageModel.cs
-|       |   +-- ReaderPageModel.cs
-|       |   +-- BookDetailPageModel.cs
-|       +-- Resources/
-|       +-- Platforms/
-+-- test/                         (Projetos de teste)
-+-- .claude/                      (Claude Code config e skills)
-+-- .idea/                        (Rider config)
+|   +-- TranslateReader.Core/     (Business + Data — TFM net10.0, sem MAUI)
+|   |   +-- Contracts/
+|   |   |   +-- Managers/         IReadingManager, ILibraryManager,
+|   |   |   |                     ITranslationManager, ISettingsManager
+|   |   |   +-- Engines/          IParsingEngine, ITranslationEngine, IThemeEngine
+|   |   |   +-- Access/           IBooksAccess, IReadingStateAccess, ISettingsAccess,
+|   |   |   |                     ITranslationCacheAccess, IModelAccess,
+|   |   |   |                     IBookTranslationJobAccess
+|   |   |   +-- Utilities/        IFileUtility, IPromptUtility
+|   |   +-- Business/
+|   |   |   +-- Managers/         ReadingManager, LibraryManager,
+|   |   |   |                     TranslationManager, SettingsManager
+|   |   |   +-- Engines/          ParsingEngine, TranslationEngine, ThemeEngine
+|   |   +-- Access/               BooksAccess, ReadingStateAccess, SettingsAccess,
+|   |   |                         TranslationCacheAccess, ModelAccess,
+|   |   |                         BookTranslationJobAccess
+|   |   +-- Utilities/            FileUtility, PromptUtility, HtmlUtility
+|   |   +-- Models/               Book, Chapter, ReadingProgress, Bookmark,
+|   |                             ReadingSettings, BookTranslationJob, ...
+|   +-- TranslateReader/          (App MAUI — Client Layer)
+|       +-- Pages/                LibraryPage.xaml, ReaderPage.xaml
+|       |   +-- Controls/         SettingsOverlay.xaml, TranslateBookPopup.xaml
+|       +-- PageModels/           LibraryPageModel.cs, ReaderPageModel.cs
+|       +-- Serialization/        JSON contexts e converters
+|       +-- Utilities/            Converters de XAML
+|       +-- Resources/            Fontes, estilos, assets
+|       +-- Platforms/            Codigo platform-specific
++-- test/TranslateReader.Tests/   (xUnit + NSubstitute + coverlet — TFM net10.0)
++-- .github/workflows/            (pipeline, CI, scanners de seguranca, release)
++-- .claude/                      (Claude Code config, rules e skills)
++-- .jdi/                         (workflow JDI: roadmap, phases, decisoes)
 ```
+
+`TranslateReader.Core` nao referencia MAUI: e uma biblioteca `net10.0` pura, o que permite
+rodar os testes sem workload de MAUI instalado.
 
 ## Build e Execucao
 
@@ -201,6 +207,20 @@ dotnet build -f net10.0-ios
 # Executar (Windows)
 dotnet run -f net10.0-windows10.0.19041.0
 ```
+
+## Roadmap
+
+Tudo abaixo esta **planejado, nao construido** — nao existe no repositorio hoje. Cada item e
+uma phase do roadmap JDI (`.jdi/ROADMAP.md`), na ordem em que sera atacada.
+
+| Phase (slug) | O que entra | Situacao |
+|---|---|---|
+| `baseline-de-estilo` | `.editorconfig`, `.gitattributes` e analyzers configurados na raiz | Planejado |
+| `cobertura-e-ci` | Threshold de cobertura que reprova o build abaixo de 90% em codigo novo | Planejado |
+| `bookmarks` | Expor bookmarks em `IReadingManager` e entregar a UI de criar/listar/remover. Hoje so existe a camada de dados (`Bookmark` + operacoes em `IReadingStateAccess`) — nao ha UI | Planejado |
+| `detalhe-livro` | Tela de detalhe do livro (`BookDetailPage` + `BookDetailPageModel`). Nao existem no repositorio — versoes antigas deste README as documentavam como se existissem | Planejado |
+| `busca-no-livro` | Busca full-text no conteudo dos capitulos do livro aberto. Hoje `ILibraryManager.SearchBooksAsync` busca apenas na biblioteca | Planejado |
+| `llm-mobile` | Backends nativos do LLamaSharp em Android/iOS, para a traducao offline sair do Windows | Planejado |
 
 ## Licenca
 
