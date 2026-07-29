@@ -103,6 +103,30 @@ explicitamente de roadmap. A branch desta phase sai de `jdi/pipeline-unificada` 
 o README documenta a pipeline unificada e a badge aponta para `pipeline.yml`, que so existe la;
 se a PR #7 for mergeada antes, um rebase em `main` colapsa a dependencia.
 
+D-2026-07-29-epub-zip-slip-1: Phase 'Zip-slip e bound de descompressao no EPUB'
+(slug: epub-zip-slip) adicionada. Reason: achado da phase `readme` — ao verificar um claim de
+seguranca do README o reviewer descobriu que o claim era falso E que a lacuna e real. Evidencia:
+`ReadingManager.cs:59-60` monta o caminho de saida a partir de `epub.Content.Images.Local`
+(derivado do arquivo EPUB, input nao confiavel) e entrega a `FileUtility.cs:31-32`, que faz
+`Path.Combine` + `Directory.CreateDirectory` + `File.WriteAllBytesAsync` sem containment check e
+sem bound de tamanho. Greps de confirmacao em `src/`: `GetFullPath|ExtractToFile|
+ExtractToDirectory|entry.FullName` = zero; `maxSize|maxBytes|uncompressed|sizeLimit` = zero.
+Viola `.claude/rules/csharp.md` §4 ("EPUB files are untrusted input... reject entry paths that
+escape the target directory — zip-slip. Bound decompressed sizes").
+AGRAVANTE (motivo de virar phase e nao ficar em todos.md): a regra custom
+`translatereader-zip-slip` em `.semgrep/dotnet-security.yml` **nao cobre o caminho real** —
+comprovado empiricamente pelo reviewer com probe de 4 casos: `Path.Combine(dest, entry.FullName)`
+detecta, `entry.ExtractToFile(...)` detecta, espelho de `ReadingManager.cs:59` NAO detecta.
+A regra exige o acesso sintatico a `.FullName`; como o projeto extrai via VersOne.Epub e nunca
+toca `ZipArchiveEntry`, a regra nao pode disparar no unico vetor de zip-slip do produto em
+nenhuma forma que ele venha a assumir. O gate de CI da falso conforto.
+Escopo locked: a phase entrega **duas** coisas — (1) o containment de path (`Path.GetFullPath` +
+verificacao de prefixo do diretorio destino) e o bound de tamanho descomprimido; (2) a correcao
+da regra Semgrep para casar o padrao real, com fixture provando red antes e green depois.
+Entregar so (1) deixa o defeito invisivel para o CI na proxima regressao. Codigo tocado e
+pos-boundary, entao vale o gate de 90% de cobertura (D-6) e o teste comeca falhando (bugfix
+starts with a failing test, `.claude/rules/csharp.md` §6).
+
 D-6 (2026-07-28): Gate de cobertura sobe de 80% para 90% em codigo novo/alterado pos-boundary
 `4285f25`. Origem: o usuario elevou o threshold em `.claude/rules/csharp.md` §6 no mesmo dia
 do bootstrap. Supersede o numero de D-2; o boundary, a isencao do legado e o baseline de 167

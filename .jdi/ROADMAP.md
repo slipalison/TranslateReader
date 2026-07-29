@@ -44,6 +44,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** sast-sca-sbom
 - **Goal:** Semgrep SAST com regras custom (zip-slip/XXE/WebView), gate SCA nativo dotnet (bloqueia CVE HIGH/CRITICAL), bump SQLitePCLRaw (GHSA-2m69-gcr7-jv3q), TruffleHog verified, SBOM Syft e SECURITY.md
 
+### Phase 11: Zip-slip e bound de descompressao no EPUB
+- **Slug:** epub-zip-slip
+- **Goal:** containment de path e limite de tamanho descomprimido na extracao de EPUB (input nao confiavel) + corrigir a regra Semgrep que hoje nao cobre o caminho real — duas entregas, senao o defeito volta invisivel
+
 ### Phase 10: README completo com badges
 - **Slug:** readme
 - **Goal:** README preciso e bem explicado — badges de pipeline/CodeQL/Sonar/Scorecard/licenca, feature de traducao offline documentada, tabela de componentes completa (4 Manager/3 Engine/6 Access/3 Utility), estrutura de pastas real (Core vs App), comandos de build corrigidos e licenca Apache 2.0
