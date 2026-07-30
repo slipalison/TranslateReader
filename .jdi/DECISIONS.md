@@ -637,3 +637,90 @@ sed de `CONTEXT.md` em `bc4f1c6`, NEW = comando desta decisao):
 
 Zero linha de producao mudou por causa desta decisao — o codigo ja estava correto; o gate e que
 nao provava.
+
+D-2026-07-30-the-method-refactor-9: O `Verify:` do item 4 do Definition of Done desta fase
+(CONTEXT.md) fica SUPERSEDED pelo comando registrado no proprio CONTEXT.md sob esta decisao. Ela
+NAO reescreve D-2026-07-30-the-method-refactor-5, -7 nem -8 (append-only): o QUE deve ser feito
+segue igual, o endurecimento de identidade pattern/options entregue por D-...-7 e a checagem POR
+NOME com descarte de comentario entregue por D-...-8 seguem valendo integralmente. Muda UMA coisa:
+como o passe AWK reconhece o nome da factory dentro de uma linha viva.
+
+Furo (W-2/E5 da REVIEW iter 3, evasao EXECUTADA pelo reviewer): o passe AWK locked por D-...-8
+testava o call site com `index(l, "<Nome>Regex()")` — casamento por SUBSTRING. Um call site trocado
+por nome lookalike PREFIXADO (`ParsingEngine.cs:196`: `StylesheetRelRegex()` ->
+`MyStylesheetRelRegex()`) CONTEM a string `StylesheetRelRegex()` como sufixo, entao a factory real
+ficava DECLARADA E NUNCA CHAMADA e o gate saia `exit 0`. E a mesma familia do furo que D-...-8
+fechou (orfao compensado), pela via do prefixo em vez da via da contagem agregada — e a mais
+proxima de slip acidental das tres evasoes catalogadas em W-2, porque nao depende de nenhuma
+construcao exotica de linguagem, so de um nome derivado.
+
+Correcao locked (nenhuma clausula removida ou afrouxada; 12 das 13 clausulas ficam BYTE-IDENTICAS,
+so o passe AWK muda): o reconhecimento do nome passa a exigir FRONTEIRA DE IDENTIFICADOR a
+esquerda — a ocorrencia so conta se estiver no inicio da linha ou precedida por caractere fora de
+`[A-Za-z0-9_]`. A fronteira a direita ja existia (o token inclui `()`). Implementacao: o
+`if(index(l,t))` vira varredura de TODAS as ocorrencias de `t` na linha, aceitando a primeira que
+tenha fronteira valida.
+
+Containment formal (NEW `exit 0` implica OLD `exit 0` — provado, nao alegado):
+- 12/13 clausulas identicas por comparacao literal de substring (`&&`-split); so a clausula do AWK
+  difere.
+- No AWK, o conjunto de linhas casadas por TOKEN e subconjunto das casadas por SUBSTRING, logo
+  `c_novo[n] <= c_velho[n]` para todo nome.
+- As DECLARACOES sao identicas nas duas versoes: a classificacao usa `index(l,"partial Regex " t)`,
+  literal que ja embute um espaco antes do nome — toda declaracao reconhecida pela versao velha tem
+  fronteira valida e e reconhecida igual pela nova. Medido: no arquivo pristino as duas versoes dao
+  `d=1 / c=1` nos 7 nomes; no mutante de declaracao duplicada as duas dao `d=2`.
+- Logo `k_novo <= k_velho`, e como o gate exige `k == 7`, nao existe estado de codigo em que a
+  versao nova passe e a velha reprove. Nenhuma protecao antiga foi perdida.
+
+Prova por mutacao nos DOIS sentidos (25 mutantes, harness em scratchpad, repo real nunca mutado;
+OLD = comando vigente extraido por sed do CONTEXT.md em `7a4081a`):
+- alvo novo — call site com lookalike PREFIXADO: `MyStylesheetRelRegex()` OLD 0 / NEW 1, e
+  `CachedImgSrcRegex()` (2o nome, para nao provar em cima de um caso unico) OLD 0 / NEW 1. Nesse
+  mutante o agregado `-eq 14` ainda le 14 e `[GeneratedRegex` ainda le 7: quem pega e
+  exclusivamente o passe AWK novo.
+- zero regressao — os 17 mutantes que a versao anterior ja pegava continuam pegos (OLD 1 / NEW 1):
+  os 7 orfaos COMPENSADOS (um por nome), call site comentado com `//`, dentro de bloco `/* */`
+  multi-linha, dentro de `///`, orfao SIMPLES (linha deletada), pattern corrompido + `IgnoreCase`
+  removido (M1 da iter 2), `IgnoreCase` removido de `ImgSrcRegex`, rename consistente decl+call,
+  `nameof(...)` sem parenteses, declaracao duplicada, e lookalike SUFIXADO.
+- zero falso positivo novo — pristino OLD 0 / NEW 0, e as tres formas legitimas de call site que
+  uma fronteira mal feita quebraria seguem 0/0: acesso por membro
+  (`ParsingEngine.StylesheetRelRegex()`, fronteira `.`), chamada na coluna 1 (fronteira = inicio de
+  linha) e chamada indentada com TAB.
+
+Fora de escopo desta decisao (registrado, NAO fechado): as evasoes E1 (call site substituido por
+string literal com o texto exato da invocacao) e E2 (call site vivo so sob `#if SIMBOLO_INDEFINIDO`)
+continuam `exit 0`. Fecha-las exige, respectivamente, remover string literals do texto e resolver
+diretiva de compilacao condicional — ou seja, parsear C# e o build graph, coisa que nenhum gate
+textual em AWK/grep faz, e uma meia-solucao (heuristica de aspas, heuristica de `#if`) introduziria
+falso positivo em codigo legitimo, que e a unica falha REALMENTE cara num gate. Diferente do
+lookalike prefixado, essas duas nao tem caminho ACIDENTAL: o Core tem zero `#if` hoje, e escrever o
+texto exato da invocacao dentro de uma string exige remover a chamada real de proposito. O backstop
+declarado para codigo adversarial continua sendo o PR review humano (estatuto do /jdi-issue).
+
+Nota de correcao a D-2026-07-30-the-method-refactor-8 (W-3 da REVIEW iter 3 — D-...-8 NAO e
+reescrita, esta nota e o registro append-only da correcao): a frase de containment do item 5
+daquela decisao, "`find .` podado e superconjunto de `find src`", nao e literalmente verdadeira. No
+canto `bin`/`obj` ela e FALSA: um csproj com BenchmarkDotNet dentro de `src/**/obj/` ou
+`src/**/bin/` da OLD 1 / NEW 0 (executado pelo reviewer, S4/S5). A divergencia e DELIBERADA e
+CORRETA — artefato gerado pelo restore nao e declaracao de pacote, e o proprio criterio pede a poda
+— e nenhuma protecao sobre declaracao REAL foi perdida (csproj de teste, `Directory.Packages.props`
+com CPM e `Directory.Build.targets` todos OLD 0 / NEW 1). O que estava errado era a PALAVRA
+"superconjunto": a relacao correta e "superconjunto sobre todo arquivo de declaracao REAL, com
+`bin`/`obj`/`.git` deliberadamente excluidos". O claim de containment do item 5 vale nessa forma
+corrigida; a MEDIDA e o COMANDO permanecem exatamente como D-...-8 os locked.
+
+Nao fechado nesta rodada (W-5 da REVIEW iter 3 — registrado com motivo, nao esquecido): (a) `[ Fact ]`
+com espacos nao e contado pelo passe AWK do item 5 — direcao FAIL-CLOSED (subconta: so pode derrubar
+o gate, nunca deixar regressao passar) e semantica identica a do baseline 192, que tambem nunca os
+contou; "corrigir" isso AFROUXA a medida e quebra a comparabilidade com o baseline. (b) String
+literal `"[Fact]"` sobreconta — mesma classe de E1, exige parser. (c) Ratchet do piso `-ge 193` para
+a medida atual (214) NAO e correcao de MEDIDA e sim mudanca do CRITERIO: o criterio locka o baseline
+192, e um piso apertado pelo proprio doer ja sabendo que passa e movimento de trave, nao
+endurecimento — exatamente o padrao que as iters 1-3 foram penalizadas por evitar. A janela de folga
+de 21 atributos ja e coberta pelo Gate 2 (comparacao dos 227 aprovados / 229 totais). Ratchet e
+politica ENTRE fases: roteado para `.jdi/todos.md`, para valer a partir da proxima phase.
+
+Zero linha de producao mudou por causa desta decisao — pela terceira vez, o codigo ja estava
+correto; o gate e que nao provava.
