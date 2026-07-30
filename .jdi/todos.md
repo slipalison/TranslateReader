@@ -58,6 +58,11 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `4285f25`), entao D-2 isenta as phases atuais — mas seguranca e prioridade 1 do projeto e isso
   nao tem boundary de legado.
 
+  **NOTA (2026-07-30, `the-method-refactor`):** a fase `the-method-refactor` toca
+  `ReadingManager.cs`/`FileUtility.cs` para corrigir OUTRO achado (fronteira de camada — ver
+  D-2026-07-30-the-method-refactor-3), mas explicitamente NAO mexe nas linhas 59-60/31-32 acima.
+  `epub-zip-slip` continua dona exclusiva deste item.
+
 - [UI/CODIGO] Controles que a UI promete e o codigo nao honra (achado adjacente do verify round 3
   da phase `readme` — mesma classe de defeito que a phase passou 3 rounds tirando do README, mas
   na tela):
@@ -84,6 +89,8 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `IFileUtility` (novo metodo na interface) — mudanca de seam de producao, candidata natural
   para `the-method-refactor`. So depois disso a rede de testes consegue caracterizar os dois
   branches sem violar a regra de isolamento. Ver `D-2026-07-30-regression-suite-5(1)`.
+  **RESOLVIDO em `the-method-refactor`** — ver `D-2026-07-30-the-method-refactor-3`
+  (`IFileUtility.DirectoryHasContent`).
 
 - **[TESTABILIDADE] `TranslationEngine` acopla direto a tipos concretos do LLamaSharp**
   (`LLamaWeights`, `StatelessExecutor`, `TranslationEngine.cs:20-32,98-107`), sem interface-seam
@@ -94,6 +101,8 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `StatelessExecutor` (facilitaria tanto teste quanto troca de backend mobile — overlap com a
   phase `llm-mobile`), a rede desta fase nao caracteriza esse caminho hoje; qualquer mudanca ali
   precisa de revisao manual adicional. Ver `D-2026-07-30-regression-suite-5(2)`.
+  **DEFERIDO para `llm-mobile`** — ver `D-2026-07-30-the-method-refactor-6` (nao e violacao
+  hoje; abstrair sem 2a implementacao real seria YAGNI).
 
 - **[PROCESSO/DoD] Grep de guardrail anti-multi-target e estreito demais — endurecer nas phases
   futuras.** O `Verify:` do item 5 do DoD desta phase (CONTEXT.md linha 98) e
@@ -109,3 +118,27 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `grep -qE "<TargetFrameworks|UseMaui" test/**/*.csproj && exit 1`. Sem esse reforco o gate da
   falsa sensacao de cobertura, mesma classe de defeito da regra Semgrep `translatereader-zip-slip`
   registrada em `## De \`readme\``.
+  **Aplicado em `the-method-refactor`**: os `Verify:` desta fase usam pares
+  presenca-positiva/ausencia-negativa (ex.: zero ocorrencias de `Regex\.(Replace|Match|IsMatch)\(`
+  E `>= 7` `[GeneratedRegex]`) em vez de um unico grep literal, para nao repetir a classe de
+  defeito.
+
+## De `the-method-refactor` (2026-07-30)
+
+- **[PERF/INFRA] Infraestrutura de medicao (BenchmarkDotNet, `dotnet-counters`, `dotnet-gcdump`)
+  nao existe no repo.** `.claude/rules/csharp.md` §2 exige "Measure before optimizing" para
+  qualquer ganho de memoria/CPU DECLARADO; esta fase decidiu (D-2026-07-30-the-method-refactor-2,
+  opcao a) nao criar essa infra agora e se limitar a mudancas de conformidade de regra
+  prováveis por inspecao. Se uma fase futura quiser reivindicar ganho de memoria/bateria
+  mensurado (nao so conformidade de regra), precisa desta infra primeiro — candidato a phase
+  propria ou a sub-escopo de `llm-mobile` (onde o consumo de bateria/memoria em dispositivo real
+  passa a importar de verdade).
+
+- **[AUDITORIA] Esta fase e finding-driven e NAO exaustiva** (D-2026-07-30-the-method-refactor-1).
+  3 achados de codigo foram fechados (ReadingManager/IFileUtility, TranslationManager/HtmlUtility,
+  ParsingEngine/GeneratedRegex) e 2 foram deferidos com motivo nomeado (TranslationEngine/
+  LLamaSharp -> `llm-mobile`; zip-slip -> `epub-zip-slip`). Isso NAO significa que nao existam
+  outras violacoes de CLAUDE.md/`.claude/rules/csharp.md` no Core ou no app MAUI — apenas que
+  nao foram auditadas nesta sessao (orcamento de contexto e escopo finding-driven, nao
+  rewrite amplo). Uma varredura completa do app MAUI (fora da rede de testes, D-2026-07-30-
+  regression-suite-2) continua um gap conhecido e deliberadamente aceito.

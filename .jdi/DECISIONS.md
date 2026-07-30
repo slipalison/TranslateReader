@@ -456,3 +456,86 @@ regression-suite-2 honesta na pratica (nao so no papel), esta fase NAO pode intr
 segundo test project ou multi-target o existente. `test/TranslateReader.Tests/
 TranslateReader.Tests.csproj` permanece `<TargetFramework>net10.0</TargetFramework>` unico —
 checado no DoD desta fase.
+
+D-2026-07-30-the-method-refactor-2: Duas decisoes travadas exigidas pelo brief da fase (itens 3
+e 5 do card colado via /jdi-issue). (A) Escopo restrito a `src/TranslateReader.Core` — espelha
+a fronteira que `regression-suite` ja travou (D-2026-07-30-regression-suite-2): a rede de testes
+de caracterizacao (192 atributos, PR #10 mergeado em `main`) so alcanca o Core; o app MAUI
+(`src/TranslateReader/Pages`, `PageModels`, `Platforms`, `Utilities/*Converter.cs`,
+`MauiProgram.cs`, `AppShell.xaml.cs`) permanece sem prova automatizada de comportamento. A
+restricao 3 do brief exige que a rede seja a UNICA prova de nao-regressao — tocar codigo sem
+rede nao pode ser feito nesta fase. (B) Resposta a exigencia de `.claude/rules/csharp.md` §2
+("Measure before optimizing"): **opcao (a) escolhida** — a fase se limita a mudancas de
+conformidade de regra, provaveis por inspecao estatica (sem BenchmarkDotNet/dotnet-counters/
+dotnet-gcdump), nunca otimizacao especulativa declarada como ganho de memoria/bateria sem
+medida. Introduzir infraestrutura de benchmark (opcao b) e trabalho novo, fora do estatuto
+finding-driven desta fase (D-2026-07-30-the-method-refactor-1) — registrado em `.jdi/todos.md`
+como candidato a fase futura, nao decidido aqui. O DoD desta fase verifica ambas as metades:
+diff vazio em `src/TranslateReader/` e ausencia de `BenchmarkDotNet` em qualquer `.csproj`.
+
+D-2026-07-30-the-method-refactor-3: Achado #1 fechado nesta fase — a violacao de fronteira de
+camada pre-alocada em D-2026-07-30-regression-suite-5(1)
+(`ReadingManager.ExtractImagesIfNeededAsync`, `ReadingManager.cs:53-54`, chama `Directory.Exists`/
+`Directory.GetFileSystemEntries` direto contra o filesystem, pulando `IFileUtility` — viola
+CLAUDE.md "Business Layer (Managers) -> Engines, ResourceAccess, Utilities", nunca Resources).
+Correcao locked: `IFileUtility` ganha `bool DirectoryHasContent(string directoryPath)`;
+`FileUtility` implementa (`Directory.Exists(directoryPath) && Directory.GetFileSystemEntries(
+directoryPath).Length > 0`); `ExtractImagesIfNeededAsync` passa a chamar
+`fileUtility.DirectoryHasContent(imagesDir)`. Efeito colateral que fecha a MESMA lacuna
+registrada em `.jdi/todos.md` § `regression-suite`: o branch "ja extraido, pula" passa a ser
+testavel com `IFileUtility` mockado (NSubstitute, ja usado em `ReadingManagerTests.cs`), sem I/O
+real — fecha o gap sem violar `.claude/rules/csharp.md` §6. EXCLUI explicitamente a logica de
+escrita em `ReadingManager.cs:59-60`/`FileUtility.cs:31-32` (`Path.Combine` + `WriteFileAsync`
+sem containment de path) — esse e o vetor de zip-slip, propriedade da fase `epub-zip-slip`
+(posicao 11, pendente, D-2026-07-29-epub-zip-slip-1); mesmo arquivo, linhas diferentes, sem
+overlap de comportamento alterado. `FileUtilityTests.cs` (I/O real em temp dir, padrao
+pre-existente da Utility layer) ganha caso para `DirectoryHasContent`, seguindo a mesma
+convencao ja usada nos outros metodos do arquivo.
+
+D-2026-07-30-the-method-refactor-4: Achado #2 (novo, levantado nesta sessao) —
+`TranslationManager.cs:304-341` define 4 metodos privados de manipulacao de HTML via regex
+(`ExtractParagraphs`, `ExtractTextBlocks`, `ReplaceTextBlocksInHtml`, `StripHtmlTags`, com 3
+`[GeneratedRegex]`) que duplicam a responsabilidade que a propria tabela de componentes do
+CLAUDE.md ja atribui a `HtmlUtility` ("Parsing e manipulacao de HTML para o reader (estatico)")
+— o Manager ja usa `HtmlUtility.ExtractBodyContent(html)` no mesmo arquivo, entao a divisao de
+responsabilidade esta inconsistente dentro da propria classe. Correcao locked: mover os 4
+metodos (mantendo assinatura e nomes) + os 3 `[GeneratedRegex]` para `HtmlUtility` como
+`public static`; `TranslationManager` passa a chamar `HtmlUtility.ExtractParagraphs(...)` etc.,
+igual ao padrao ja usado para `ExtractBodyContent`. Mudanca e MOVE puro, sem alteracao de
+comportamento — protegida pelas 48 ocorrencias de chamada indireta (`TranslateChapterAsync`/
+`TranslateBookAsync`/`TranslateParagraphsAsync`) ja existentes em `TranslationManagerTests.cs`.
+Nao introduz teste novo dedicado (comportamento ja caracterizado); o DoD verifica pela ausencia
+das definicoes privadas no Manager e presenca publica em `HtmlUtility`.
+
+D-2026-07-30-the-method-refactor-5: Achado #3 (novo, levantado nesta sessao, hotspot de CPU
+nomeado por inspecao — nao medicao, per D-2026-07-30-the-method-refactor-2) — `ParsingEngine.cs`
+chama `Regex.Replace`/`Regex.Match`/`Regex.IsMatch` com padrao inline literal repetidamente em
+caminho por-capitulo: `UpdateOpfTitleAsync` (1, linha 126), `InlineCssLinks` (3, linhas
+196/199/202 — regex externo + 2 checagens internas por `<link>` casado), `RewriteImagePaths` (3,
+linhas 228/232/236 — uma por atributo de imagem, por capitulo) — total 7 padroes. Viola
+`.claude/rules/csharp.md` §2.1: "Compile-time-known regex -> [GeneratedRegex] partial method,
+never new Regex(...) per call" — o padrao e conhecido em tempo de compilacao e o
+`TranslationManager` ja segue a convencao correta (`[GeneratedRegex]` para `ParagraphRegex`/
+`TextBlockRegex`/`HtmlTagRegex`) a poucos arquivos de distancia, entao a inconsistencia e local
+e nomeada. Correcao locked: `ParsingEngine` vira `partial class`; os 7 padroes viram
+`[GeneratedRegex]` partial methods. Inspection-provable (sem BenchmarkDotNet, per
+D-2026-07-30-the-method-refactor-2) — fonte gerada em compile-time elimina o lookup/compilacao
+do padrao em runtime por chamada, ganho estrutural sem necessidade de medir para provar a
+conformidade de regra. Protegida pelas 9 ocorrencias de `ExtractChapterContentAsync`/
+`RewriteImagePaths`/`CreateTranslatedEpubAsync` ja em `ParsingEngineTests.cs` (fixtures reais de
+EPUB).
+
+D-2026-07-30-the-method-refactor-6: Achado pre-alocado D-2026-07-30-regression-suite-5(2)
+(`TranslationEngine` acopla `LLamaWeights`/`StatelessExecutor` concretos, `TranslationEngine.cs:
+20-32,98-107`, sem interface-seam) fica DEFERIDO explicitamente para a fase `llm-mobile`
+(posicao 6, pendente), nao entra no escopo desta fase. Motivo nomeado: nao e violacao de
+CLAUDE.md nem de `.claude/rules/csharp.md` hoje — a propria tabela de componentes do CLAUDE.md
+define `TranslationEngine` como o Engine responsavel por "Inferencia local com LLamaSharp"; per
+The Method, Engines sao exatamente o seam de volatilidade para tecnologia de terceiro, entao
+acoplar a um unico backend concreto (Windows-only hoje, D-2026-07-29-readme-3) nao e, por si, um
+defeito de camada. Introduzir uma abstracao de fabrica em torno de `LLamaWeights`/
+`StatelessExecutor` sem uma segunda implementacao real seria abstracao especulativa (YAGNI) — so
+se justifica quando `llm-mobile` precisar trocar de backend por plataforma (Android/iOS), que e
+exatamente o escopo daquela fase. Os 2 testes de integracao `[Fact(Skip=...)]` seguem
+inalterados. Overlap consciente registrado para o planner de `llm-mobile` ler esta decisao antes
+de comecar.
