@@ -94,6 +94,11 @@ jobs:
         if: env.SONAR_TOKEN != ''
         run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=opencover" --results-directory TestResults
 
+      # Mecanismo anti-recorrencia (D-2026-07-30-sonar-zero-issues-2): com
+      # sonar.qualitygate.wait=true o scanner espera o Quality Gate do SonarCloud e falha o
+      # job se ele reprovar. Como `sonarqube` ja e check obrigatorio (pipeline.yml), qualquer
+      # PR futuro que reintroduza bug/vulnerability/code smell bloqueante em New Code trava
+      # antes do merge, em vez de so aparecer na UI do SonarCloud.
       - name: End SonarQube analysis
         if: env.SONAR_TOKEN != ''
-        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN" /d:sonar.qualitygate.wait=true
