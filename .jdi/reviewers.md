@@ -25,6 +25,9 @@ o catch-all `**/*`.
 
 ## Notas
 
+- **Modelo pinado (D-7):** este reviewer roda em **Fable 5 / reasoning xhigh**
+  (`runtime_overrides.claude.model: fable`, `effort: xhigh`). O doer continua herdando o default
+  do ambiente. Vale para todo `/jdi-verify`, inclusive `mode=dod-critic`.
 - `orchestration.mode=enhanced` em `config.json` (D-5): o `/jdi-verify` tambem dispara este
   reviewer em `mode=dod-critic` (re-check read-only das linhas Auto/PASS do gate 8).
 - Gate 4 sobe para BLOCK-on-new-files quando a phase `baseline-de-estilo` entregar

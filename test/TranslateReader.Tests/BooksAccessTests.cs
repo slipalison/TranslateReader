@@ -10,17 +10,21 @@ public class BooksAccessTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private static Book MakeBook(string title = "Livro Teste") => new()
-    {
-        Title = title,
-        Author = "Autor",
-        Publisher = "Editora",
-        Language = "pt",
-        CoverImagePath = "",
-        FilePath = "/tmp/livro.epub",
-        TotalChapters = 3,
-        DateAdded = DateTime.UtcNow
-    };
+    private static Book MakeBook(
+        string title = "Livro Teste",
+        DateTime? lastOpenedAt = null,
+        DateTime? dateAdded = null) => new()
+        {
+            Title = title,
+            Author = "Autor",
+            Publisher = "Editora",
+            Language = "pt",
+            CoverImagePath = "",
+            FilePath = "/tmp/livro.epub",
+            TotalChapters = 3,
+            DateAdded = dateAdded ?? DateTime.UtcNow,
+            LastOpenedAt = lastOpenedAt
+        };
 
     [Fact]
     public async Task SaveBookAsync_ReturnsPositiveId()
@@ -85,5 +89,32 @@ public class BooksAccessTests : IDisposable
         var exception = await Record.ExceptionAsync(() => sut.SaveChaptersAsync(chapters));
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task FetchAllBooksAsync_OrdersByLastOpenedAtDescending_WithNeverOpenedLast()
+    {
+        var sut = CreateSut();
+        var now = DateTime.UtcNow;
+        await sut.SaveBookAsync(MakeBook("Lido ontem", lastOpenedAt: now.AddDays(-1), dateAdded: now.AddDays(-3)));
+        await sut.SaveBookAsync(MakeBook("Lido agora", lastOpenedAt: now.AddHours(-1), dateAdded: now.AddDays(-2)));
+        await sut.SaveBookAsync(MakeBook("Nunca aberto", lastOpenedAt: null, dateAdded: now.AddDays(-1)));
+
+        var titles = (await sut.FetchAllBooksAsync()).Select(b => b.Title).ToList();
+
+        Assert.Equal(["Lido agora", "Lido ontem", "Nunca aberto"], titles);
+    }
+
+    [Fact]
+    public async Task FetchAllBooksAsync_OrdersNeverOpenedBooksByDateAddedDescending()
+    {
+        var sut = CreateSut();
+        var now = DateTime.UtcNow;
+        await sut.SaveBookAsync(MakeBook("Importado antes", dateAdded: now.AddDays(-2)));
+        await sut.SaveBookAsync(MakeBook("Importado depois", dateAdded: now));
+
+        var titles = (await sut.FetchAllBooksAsync()).Select(b => b.Title).ToList();
+
+        Assert.Equal(["Importado depois", "Importado antes"], titles);
     }
 }

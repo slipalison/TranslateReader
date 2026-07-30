@@ -3,7 +3,7 @@ name: jdi-reviewer-translatereader
 description: Reviewer specialist for project TranslateReader. Runs project-defined quality gates: build, test, coverage, lint, The Method layer rules, C# security/perf rules, and Definition of Done verification.
 runtime_intent:
   role: project_reviewer
-  reasoning: medium
+  reasoning: xhigh
   privileges: read+bash
 tools_canonical:
   - read
@@ -30,10 +30,12 @@ triggers:
   - "/jdi-verify"
   - "plan review"
 runtime_overrides:
-  # No model pinned anywhere: PROJECT.md § LLM config declares
-  # "Provider: nao definido — usar o default do ambiente".
-  # Every runtime inherits its own configured default model.
+  # Model PINNED for the reviewer only (D-7): Fable 5 at xhigh reasoning.
+  # The doer keeps inheriting the environment default per PROJECT.md § LLM config —
+  # the pin buys review depth, which is where a wrong call is most expensive.
   claude:
+    model: fable
+    effort: xhigh
     tools: [Read, Bash, Grep, Glob, WebSearch, WebFetch]
   copilot:
     tools: [read, grep, glob, terminal]

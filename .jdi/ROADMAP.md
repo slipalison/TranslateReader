@@ -56,6 +56,14 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** pipeline-unificada
 - **Goal:** consolidar os fluxos de push/PR num orquestrador unico `pipeline.yml` via `workflow_call` — um run graph com build, testes, CodeQL, Semgrep, SCA, secrets, Sonar, dependency-review e SBOM; `scorecard.yml` (requisito OSSF) e `release.yml` (trigger de tag) permanecem isolados; branch protection re-mapeada para os novos nomes de check
 
+### Phase 12: Rede de testes de regressao
+- **Slug:** regression-suite
+- **Goal:** fixar o comportamento observavel de hoje em testes de caracterizacao, para que qualquer alteracao futura (em especial o refactor da phase `the-method-refactor`) quebre um teste em vez de quebrar o app — cobrindo os caminhos do Core hoje sem teste, e decidindo explicitamente o que fazer com as 1516 linhas do projeto MAUI que o test project atual nao alcanca
+
+### Phase 13: Refactor The Method + memoria/CPU mobile
+- **Slug:** the-method-refactor
+- **Goal:** eliminar as violacoes concretas de The Method (CLAUDE.md) e de `.claude/rules/csharp.md` e os hotspots reais de memoria/CPU (ParsingEngine, HtmlUtility, TranslationEngine, loops de paragrafo/token, LOH), cada mudanca justificada por uma violacao nomeada e protegida pela rede da phase `regression-suite` — finding-driven, nao rewrite amplo
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

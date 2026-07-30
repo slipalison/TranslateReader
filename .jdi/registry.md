@@ -42,3 +42,7 @@ em branches paralelos nunca colidem.
   em `jdi-reviewer-translatereader.md` e `reviewers.md` — `-f` a nivel de solution falha com
   NETSDK1005 nos projetos Core/Tests (`net10.0`-only), REVIEW W-5. A linha "Build" acima reflete
   o valor no momento da geracao; o vigente e o comando com csproj explicito
+- 2026-07-30 (D-7): modelo do reviewer pinado em **Fable 5 / reasoning xhigh**
+  (`runtime_overrides.claude: {model: fable, effort: xhigh}`). Supersede a linha
+  "Modelo LLM: nenhum pinado em nenhum runtime" acima, SO para o reviewer — o doer
+  segue herdando o default do ambiente. Pedido explicito do usuario.

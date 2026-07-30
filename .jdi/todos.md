@@ -71,3 +71,41 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   - **Download de modelo nao e retomavel:** `ModelAccess` usa `FileMode.Create` (trunca) e nao
     manda header `Range`; um `.tmp` interrompido nao conta como disponivel, entao rebaixa os
     1,6 GB do zero.
+
+## De `regression-suite` (2026-07-30)
+
+- **[THE-METHOD] `ReadingManager.ExtractImagesIfNeededAsync` toca o filesystem real direto**
+  (`Directory.Exists`/`Directory.GetFileSystemEntries`, `ReadingManager.cs:50-54`) em vez de
+  passar por `IFileUtility`. Cheiro de violacao de fronteira de camada (CLAUDE.md: "Business
+  Layer (Managers) -> Engines, ResourceAccess, Utilities", nunca Resources direto). Efeito
+  colateral pratico: o branch "imagens ja extraidas, pula" fica sem teste na phase
+  `regression-suite` porque cobri-lo exigiria I/O de disco real num teste novo, proibido por
+  `.claude/rules/csharp.md` §6. Corrigir exige mover a checagem de existencia para
+  `IFileUtility` (novo metodo na interface) — mudanca de seam de producao, candidata natural
+  para `the-method-refactor`. So depois disso a rede de testes consegue caracterizar os dois
+  branches sem violar a regra de isolamento. Ver `D-2026-07-30-regression-suite-5(1)`.
+
+- **[TESTABILIDADE] `TranslationEngine` acopla direto a tipos concretos do LLamaSharp**
+  (`LLamaWeights`, `StatelessExecutor`, `TranslationEngine.cs:20-32,98-107`), sem interface-seam
+  para substituir em teste. Hoje so 5 testes unitarios reais cobrem o file (140 linhas) — o
+  resto e caminho de carregamento de modelo, exercitado so pelos 2 testes de integracao
+  `[Fact(Skip=...)]` que exigem um `.gguf` real via `LLAMASHARP_TEST_MODEL`. Se
+  `the-method-refactor` decidir abrir uma interface de fabrica em torno de `LLamaWeights`/
+  `StatelessExecutor` (facilitaria tanto teste quanto troca de backend mobile — overlap com a
+  phase `llm-mobile`), a rede desta fase nao caracteriza esse caminho hoje; qualquer mudanca ali
+  precisa de revisao manual adicional. Ver `D-2026-07-30-regression-suite-5(2)`.
+
+- **[PROCESSO/DoD] Grep de guardrail anti-multi-target e estreito demais — endurecer nas phases
+  futuras.** O `Verify:` do item 5 do DoD desta phase (CONTEXT.md linha 98) e
+  `test $(grep -c "net10.0-windows" test/TranslateReader.Tests/TranslateReader.Tests.csproj) -eq 0
+  && test $(find test -name "*.csproj" | wc -l) -eq 1`. Ele passa, e o guardrail de fato foi
+  honrado — mas o grep procura literalmente `net10.0-windows`, entao um multi-target hipotetico
+  `<TargetFrameworks>net10.0;net10.0-android</TargetFrameworks>` (ou `-ios`, ou `-maccatalyst`)
+  passaria batido. O que realmente provou a decisao (c) foi a INSPECAO: `<TargetFramework>` no
+  singular, ausencia de `UseMaui`, exatamente 1 `.csproj` sob `test/`.
+  **O DoD desta phase esta locked e nao deve ser editado** (a phase passou nele) — o item aqui e
+  para quem escrever um guardrail equivalente numa phase futura: probe tambem
+  `<TargetFrameworks` (plural) e `UseMaui`, nao so um TFM nomeado. Ex.:
+  `grep -qE "<TargetFrameworks|UseMaui" test/**/*.csproj && exit 1`. Sem esse reforco o gate da
+  falsa sensacao de cobertura, mesma classe de defeito da regra Semgrep `translatereader-zip-slip`
+  registrada em `## De \`readme\``.
