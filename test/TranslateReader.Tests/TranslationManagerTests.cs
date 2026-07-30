@@ -619,6 +619,127 @@ public class TranslationManagerTests
         await _jobAccess.Received(1).UpdateJobProgressAsync(7, 2, "Paused");
     }
 
+    [Fact]
+    public async Task PauseTranslationAsync_WithoutActiveJob_DoesNotUpdateAnyJob()
+    {
+        _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
+
+        await _sut.PauseTranslationAsync(1);
+
+        await _jobAccess.DidNotReceive().UpdateJobProgressAsync(
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task TranslateBookAsync_WhenCancelledMidLoop_PausesJobAndSkipsEpubCreation()
+    {
+        var book = new Book { Id = 1, Title = "Test Book", FilePath = "/tmp/test.epub" };
+        var chapters = new List<Chapter>
+        {
+            new() { HRef = "ch1.html", Title = "Chapter 1" },
+            new() { HRef = "ch2.html", Title = "Chapter 2" }
+        };
+        _booksAccess.FetchBookAsync(1).Returns(book);
+        _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", Arg.Any<string>(), Arg.Any<string>())
+            .Returns("<html><body><p>Hello</p></body></html>");
+        _jobAccess.FetchActiveJobAsync(1).Returns(new BookTranslationJob
+        {
+            Id = 42,
+            BookId = 1,
+            SourceLanguage = "English",
+            TargetLanguage = "Portuguese",
+            Status = "Paused",
+            LastCompletedChapterIndex = -1
+        });
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system", "user"));
+        using var cts = new CancellationTokenSource();
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                cts.Cancel();
+                return "Ola";
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, cts.Token));
+
+        await _jobAccess.Received(1).UpdateJobProgressAsync(42, 0, "Paused");
+        await _jobAccess.DidNotReceive().DeleteJobAsync(Arg.Any<int>());
+        await _parsingEngine.DidNotReceive().CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task TranslateChapterAsync_WithCancelledToken_ThrowsWhileIterating()
+    {
+        SetupBookAndChapter("<html><body><p>Hello world</p></body></html>");
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in _sut.TranslateChapterAsync(
+                1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", cts.Token))
+            {
+            }
+        });
+
+        await _translationEngine.DidNotReceive().GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TranslateParagraphsAsync_WithCancelledToken_ThrowsWhileIterating()
+    {
+        SetupBook();
+        var paragraphs = new List<VisibleParagraph> { new(0, "Hello world") };
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in _sut.TranslateParagraphsAsync(
+                1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", paragraphs, cts.Token))
+            {
+            }
+        });
+
+        await _translationEngine.DidNotReceive().GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TranslateBookAsync_HtmlEncodesTranslatedTextBeforeBuildingTheEpub()
+    {
+        const string hostileTranslation = "<script>alert(1)</script> Tom & Jerry";
+        SetupBookForTranslation(out _, out _, "<html><body><p>Hello</p></body></html>");
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(hostileTranslation);
+        SetupCacheForRebuild(1, "ch1.html", "Hello", hostileTranslation);
+        IReadOnlyDictionary<string, string>? written = null;
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns(call =>
+            {
+                written = call.Arg<IReadOnlyDictionary<string, string>>();
+                return "/dest/out.epub";
+            });
+
+        await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.NotNull(written);
+        var chapterHtml = written["ch1.html"];
+        Assert.Contains("&lt;script&gt;", chapterHtml);
+        Assert.Contains("&amp;", chapterHtml);
+        Assert.DoesNotContain("<script>", chapterHtml);
+    }
+
     private void SetupBookForTranslation(out Book book, out List<Chapter> chapters, string html)
     {
         book = new Book { Id = 1, Title = "Test Book", FilePath = "/tmp/test.epub" };
