@@ -314,3 +314,14 @@ ci-seguranca-4); (2) como rodar os testes (`dotnet test`) e a regra de cobertura
 novo/alterado pos-boundary (D-6); (3) Contributing/JDI — ponteiro pra secao "JDI — Workflow de
 Desenvolvimento" do `CLAUDE.md`, pra quem quiser contribuir; (4) licenca Apache 2.0 (fundida
 com a correcao do defeito (a)).
+
+D-7 (2026-07-30): Modelo do reviewer PINADO em **Fable 5 com reasoning `xhigh`**
+(`.jdi/agents/jdi-reviewer-translatereader.md` > `runtime_intent.reasoning: xhigh` +
+`runtime_overrides.claude: {model: fable, effort: xhigh}`). Pedido explicito do usuario na
+invocacao de /jdi-issue que criou as phases `regression-suite` e `the-method-refactor`.
+Supersede parcialmente a nota "No model pinned anywhere" que o bootstrap havia registrado com
+base em PROJECT.md > LLM config ("Provider: nao definido — usar o default do ambiente"):
+o pin vale SO para o reviewer; o doer continua herdando o default do ambiente. Racional
+registrado: o reviewer e o gate que decide BLOCKED/APPROVED e roda o `mode=dod-critic`
+(deteccao de Gate-8 Auto/PASS oco) — profundidade de raciocinio ali e mais barata que um
+defeito que passa. Sincronizado em `reviewers.md` e `registry.md`.
