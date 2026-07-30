@@ -1,116 +1,115 @@
 # Phase 13: Refactor The Method + memoria/CPU mobile — Summary  (slug: the-method-refactor)
 
 **Status:** complete | **Tasks:** 4/4, 0 blocked | **Base:** `a390eb9` (main, PR #10)
+Commits atomicos, scope `the-method-refactor`: `508933b` T-1 · `a5f7b44` T-2 · `3c5a8cf` T-3 ·
+`b9ec38a` T-4 · iter 2 `3f68deb`+`3010268` · iter 3 `446ee63`+`499194a` · iter 4 `dd0e97d`+
+`efa0605`+`1061e5c`.
 
-Commits atomicos, scope `the-method-refactor`: `508933b` T-1 `refactor` route via IFileUtility ·
-`a5f7b44` T-2 `refactor` 7 regexes -> `[GeneratedRegex]` · `3c5a8cf` T-3 `refactor` move para
-HtmlUtility · `b9ec38a` T-4 `docs` · iter 2 `3f68deb` `test` + `3010268` `docs` · iter 3 `446ee63`
-`docs` DoD 4+5 medidos por item.
+## T-1..T-3 — os 3 achados (iter 1; 1 achado = 1 commit)
 
-## T-1 — achado #1 (`508933b`)
+**T-1** `IFileUtility.DirectoryHasContent(string)` novo (7o metodo, com `<summary>`), predicado
+verbatim em `FileUtility`, `ReadingManager:53-54` roteando por ele; L59-60 e `WriteFileAsync` **nao
+tocadas** (zip-slip). `FileUtilityTests` 9->13, `ReadingManagerTests` 7->8 (skip provado com
+`DidNotReceive` em `ExtractAllImagesAsync` **e** `WriteFileAsync`, zero I/O); `.Returns(false)` em
+2 legados e MECANICO, nada deletado. **Mutacao: 3 rodadas, 2/2 previstos.**
 
-`IFileUtility` ganhou `bool DirectoryHasContent(string)` (7o metodo, com `<summary>`);
-`FileUtility` implementa o predicado original verbatim; `ReadingManager:53-54` roteia por ele.
-Linhas 59-60 e `WriteFileAsync` **nao tocadas** (zip-slip, de `epub-zip-slip`). `FileUtilityTests`
-9->13, `ReadingManagerTests` 7->8 (skip provado com `DidNotReceive` em `ExtractAllImagesAsync` **e**
-`WriteFileAsync`, zero I/O). Ajuste MECANICO: `.Returns(false)` em 2 testes legados — assercoes
-intactas, nada deletado.
-**Mutacao (3 rodadas, 2/2 previstos em cada):** (A) guard removido **e** `Length > 0`->`>= 0`;
-(B) `Exists && GetFileSystemEntries`->`GetFiles`; (C) `DirectoryHasContent => false`.
+**T-2** `public partial class ParsingEngine`, os 7 padroes **verbatim** com `RegexOptions` dentro do
+atributo (`OpfTitleRegex` era L126, `IgnoreCase|Singleline`; os outros 6 so `IgnoreCase`). Zero
+metodo extraido. **Mutacao — desvio do PLAN** (dizia "protegido por 19 testes"): so **1 dos
+7** mordia sozinho (`ImgSrcRegex`); os 2 de `<image>` so juntos; `OpfTitleRegex` + os 3 de
+`InlineCssLinks` sem cobertura. **Fechado na iter 2.**
 
-## T-2 — achado #3 (`a5f7b44`)
+**T-3** `HtmlUtility` virou `public static partial class` e recebeu os 4 metodos HTML como
+`public static` (corpo/assinatura inalterados) + os 3 regex `private static partial`;
+`TranslationManager` perdeu as 4 definicoes, os 3 regex, o `partial` e o `using` orfao. Zero teste
+novo. **Mutacao:** `=> string.Empty` -> **12** falhas (o MOVE esta no caminho vivo); mas
+`StripHtmlTags => html` sozinho -> **0** (limite honesto: fixtures sao texto plano).
 
-`public partial class ParsingEngine`; os 7 padroes transcritos **verbatim**, com o `RegexOptions`
-(4o arg de `Replace`, 3o de `Match`/`IsMatch`) movido para dentro do atributo: `OpfTitleRegex`
-(era L126, `IgnoreCase|Singleline`) e `LinkTag`/`StylesheetRel`/`StylesheetHref`/`ImgSrc`/
-`SvgImageXlinkHref`/`SvgImageHref` (L196/199/202/228/232/236, so `IgnoreCase`). Zero metodo
-extraido, zero logica alterada.
-**Mutacao — desvio do PLAN** ("protegido por 19 `ParsingEngineTests`"): so **1 dos 7** era
-discriminado sozinho — `ImgSrcRegex` -> 2 falhas; `StylesheetRelRegex` e `SvgImageHrefRegex` ->
-**0**; os 2 de `<image>` so mordiam juntos; `OpfTitleRegex` + os 3 de `InlineCssLinks` sem
-cobertura nenhuma. **Fechado na iter 2.**
+## Iters 2-3 — DoD 4 e 5 eram ocos (blockers do critic). **Zero linha de producao**
 
-## T-3 — achado #2 (`3c5a8cf`)
+**Iter 2 (D-...-7):** o `Verify:` contava `[GeneratedRegex` sem checar QUAIS patterns — o critic
+corrompeu `StylesheetRelRegex` (`stylsheet` + sem `IgnoreCase`) e saiu `exit 0`; a rede nao
+acusava. Duas metades: `ParsingEngineRegexTests.cs` (26 casos nas factories privadas por reflection
+— a API publica pede `filePath` = I/O, vedado por §6; **zero diff em producao**) e `Verify:` com
+`-eq 7`, `-eq 14` e cada atributo byte-a-byte (`grep -F`) ligado por adjacencia (`grep -A1`) a sua
+assinatura. Prova: 5 mutacoes, antigo `exit 0` / novo `exit 1` nas 5. Rede: 7 patterns
+corrompidos -> **16** falhas; `IgnoreCase` fora -> **7**; `Singleline` fora -> **1**.
 
-`HtmlUtility` virou `public static partial class` e recebeu `ExtractParagraphs`,
-`ExtractTextBlocks`, `ReplaceTextBlocksInHtml`, `StripHtmlTags` como `public static` (corpo e
-assinatura inalterados) + os 3 regex como `private static partial`. `TranslationManager` perdeu as
-4 definicoes, os 3 regex, o `partial` e o `using` orfao. Zero teste novo (D-...-4).
-**Mutacao (3 rodadas):** (A) `StripHtmlTags => html` **e** `WebUtility.HtmlEncode` removido -> 1
-falha; (B) `StripHtmlTags => html` sozinho -> **0** (limite honesto: blocos dos fixtures sao texto
-plano); (C) `=> string.Empty` -> **12** falhas — o MOVE esta no caminho vivo, nao e copia morta.
+**Iter 3 (D-...-8):** (1) orfao COMPENSADO passava (1 token trocado no call site `:196` mantem o
+agregado `-eq 14`) -> clausula NOVA por NOME (`declaracoes==1` **e** `call sites>=1`, so linha
+VIVA). (2) `find src` deixava BenchmarkDotNet no csproj de TESTE passar e `grep -rhoE` contava
+TEXTO (25 `[Fact]` comentados = 214 medidos, 189 ativos) -> varredura do repo todo sobre
+csproj/props/targets/packages.config e contagem so de atributo VIVO; piso segue `-ge 193` (corrige
+a MEDIDA, nao o limiar). Mutacao: M5 0->1; os **7** orfaos compensados 0->1 nos SETE; call
+comentado e em `/* */` 0->1; BenchmarkDotNet em teste/CPM/props 0->1; 25 attrs comentados 0->1;
+os ja pegos 1/1; repo real 0/0.
 
-## Iter 2 — DoD 4 oco (1o blocker do critic)
+## Iter 4 — rodada de warnings (`/jdi-issue`)
 
-O `Verify:` contava `[GeneratedRegex` (`-ge 7`) e nunca checava QUAIS patterns/options: o critico
-corrompeu `StylesheetRelRegex` (`stylesheet`->`stylsheet` + `IgnoreCase` fora) e saiu `exit 0`; a
-rede tambem nao acusava (medido em T-2). Entreguei as duas metades. **(1)**
-`ParsingEngineRegexTests.cs`, 26 casos sobre as factories privadas via reflection (a API publica
-pede `filePath` = I/O, vedado por §6; abrir a API so para teste vazaria detalhe no contrato) —
-**zero diff em producao**. **(2)** `Verify:` endurecido via **D-...-7** (append-only): `-eq 7`
-exato, `-eq 14` linhas dos 7 nomes, e cada linha de atributo conferida byte-a-byte (`grep -F`)
-ligada por adjacencia (`grep -A1`) a sua assinatura. **Prova:** 5 mutacoes em copia — antigo
-`exit 0` nas 5, novo `exit 1` nas 5. Rede: 7 patterns corrompidos -> **16** falhas; `IgnoreCase`
-fora dos 7 -> **7** (1 por regex, zero dos 203 antigos); `Singleline` fora -> **1**;
-contra-exemplo do critico -> **2** (antes 0). Honestidade: a 1a mutacao de `OpfTitleRegex` era
-equivalente (`[^>]*` absorve a letra) e nao derrubou nada; refeita -> 5 falhas.
+Loop ja convergido na iter 3; rodada para tentar limpar os 5 warnings. **Zero linha de producao,
+zero teste tocado.** 2 fechados, 1 em parte, 2 nao fechados com motivo.
 
-## Iter 3 — fix dos 2 blockers do DoD critic
+**W-4 `TestResults/` — FECHADO** (`dd0e97d`). Conferido antes: 0 entrada equivalente, 0 arquivo
+`TestResults` rastreado. `**/TestResults/` na secao "Build artifacts .NET",
+no estilo de `**/bin/`; `git check-ignore -v` confirma raiz **e** aninhado.
 
-**Zero linha de producao** (o codigo estava certo; o gate e que nao provava). Entregue **D-...-8**
-(append-only, supersede so os `Verify:` dos itens 4 e 5 — D-...-5 e D-...-7 **intactas**) + as 2
-linhas do CONTEXT.md; itens 1, 2 e 3 (solidos pelo critico) byte-identicos.
+**W-2/E5 (lookalike PREFIXADO) — FECHADO** (`efa0605`, **D-...-9** append-only, supersede so o
+`Verify:` do item 4; D-...-5/-7/-8 intactas). O AWK casava o nome por SUBSTRING (`index()`), entao
+`MyStylesheetRelRegex()` no call site mantinha `StylesheetRelRegex` "chamado" com o agregado 14
+intacto -> `exit 0`. Agora exige FRONTEIRA de identificador a esquerda. **Containment:** 12/13
+clausulas byte-identicas (`&&`-split); token e subconjunto de substring, e a contagem de DECLARACAO
+e identica (o literal `"partial Regex "` ja embute a fronteira; medido: pristino `d=1/c=1` nos 7
+nomes nas duas versoes, declaracao duplicada `d=2` nas duas) -> `k_novo <= k_velho`, logo NEW
+`exit 0` implica OLD `exit 0`. **Mutacao (25 mutantes em scratchpad, repo nunca mutado; OLD por sed
+de `7a4081a`):** alvo novo `MyStylesheetRelRegex()` **OLD 0 / NEW 1** e
+`CachedImgSrcRegex()` **OLD 0 / NEW 1** — nesse mutante `-eq 14` ainda le 14 e `[GeneratedRegex`
+ainda le 7, quem pega e so o AWK novo. **Zero regressao:** os 17 ja pegos seguem **1/1** (7 orfaos
+compensados, `//` `/* */` `///`, orfao simples, pattern/options corrompidos, rename consistente,
+`nameof`, declaracao duplicada, lookalike SUFIXADO). **Zero falso positivo:** pristino
+e as 3 formas legitimas de call site (membro, coluna 1, TAB) 0/0.
 
-**Blocker 1 (item 4) — orfao COMPENSADO passava:** trocar 1 token no call site
-`ParsingEngine.cs:196` (`StylesheetRelRegex`->`StylesheetHrefRegex`, lookalike) deixa o regex
-declarado e nunca chamado MANTENDO o agregado `-eq 14` -> `exit 0`, enquanto D-...-7 promete fechar
-"declarado e nunca chamado" sem qualificador. Fix: clausula NOVA (nada removido — `-eq 14` e os 7
-pares seguem) exigindo, POR NOME, `declaracoes == 1` **e** `call sites >= 1`, contando so linha
-VIVA (AWK descarta `//` e `/* */`, com estado entre linhas); nomes conformes tem de dar 7.
+**W-2/E1 (string literal) e E2 (`#if` indefinido) — NAO FECHADAS.** Exigem parsear C# e o build
+graph, fora do alcance de AWK/grep; meia-solucao heuristica introduz falso positivo em codigo
+legitimo, a falha cara num gate. Nenhuma tem caminho ACIDENTAL (Core tem zero `#if`; a string
+exige o texto exato **e** remover a chamada real). Backstop: PR review humano.
 
-**Blocker 2 (item 5) — 2 proxies errados:** (a) o criterio diz "nenhum pacote BenchmarkDotNet" mas
-o comando rodava `find src`, entao pacote no csproj de TESTE saia `exit 0` -> a busca passa a
-cobrir `*.csproj`/`*.props`/`*.targets`/`packages.config` de TODO o repo (`bin`/`obj`/`.git`
-podados), sem depender de `Directory.*.props` existir hoje; (b) `grep -rhoE` contava TEXTO, entao
-25 `[Fact]` comentados mantinham 214 com 189 ativos -> mesma varredura AWK, so atributo VIVO. Piso
-segue `-ge 193` (o criterio locka o baseline 192: corrigi a MEDIDA, nao o limiar).
+**W-3 frase de containment da D-...-8 — FECHADO** (`efa0605`, nota append-only na D-...-9; D-...-8
+**nao** reescrita). **CORRECAO:** "`find .` podado e superconjunto de `find src`" e FALSA no canto
+`bin`/`obj` (csproj com BenchmarkDotNet em `src/**/obj/` da OLD 1 / NEW 0). A divergencia e
+deliberada e correta; errada estava a PALAVRA. Correto: "superconjunto sobre todo arquivo de
+declaracao REAL, com `bin`/`obj`/`.git` excluidos". Comando e medida inalterados.
 
-**Containment:** o item 4 contem o comando anterior literalmente; no item 5 `find .` cobre
-`find src` e vivo <= texto, logo NEW `exit 0` implica OLD `exit 0` — nada afrouxado.
+**W-5 contagem viva — NAO FECHADO; ratchet roteado** (`1061e5c`). `[ Fact ]` com espacos nao conta:
+FAIL-CLOSED (subconta, so derruba o gate) e identico ao baseline 192 — "corrigir" AFROUXA a medida.
+`"[Fact]"` em string literal: mesma classe de E1. Ratchet do piso 193 -> 214 nao e correcao de
+MEDIDA e sim mudanca de CRITERIO; apertar o proprio criterio no fim da corrida, sabendo que passa,
+e movimento de trave — e a folga de 21 attrs ja e coberta pelo Gate 2 (227/229). Roteado em
+`.jdi/todos.md`.
 
-**Prova por mutacao** (clone em scratchpad, repo real nunca mutado; OLD = comando extraido por sed
-do CONTEXT.md em `bc4f1c6`). Item 4: pristino 0/0; M5 do critico **0->1**; os **7** orfaos
-compensados (1 por nome, agregado sempre 14) **0->1 nos SETE**; call site comentado com `// ` 0->1;
-call site dentro de `/* */` 0->1; orfao simples (linha deletada) 1/1; M1/M3/M4 da iter 2 1/1 (o
-endurecimento de D-...-7 sobrevive). Item 5: BenchmarkDotNet no csproj de TESTE **0->1**, em
-`Directory.Build.props` 0->1, em `Directory.Packages.props` (CPM) 0->1, no csproj de `src` 1/1; 25
-attrs `// [Fact]` **0->1** (texto 214, vivo 189); 25 em `/* */` de 1 linha 0->1; 25 em bloco
-multi-linha 0->1; 25 attrs DELETADOS 1/1. **Sem falso positivo:** repo real sem mutacao -> `exit 0`
-nos dois, vivo == texto (214 = 214).
+**W-1 wiring end-to-end — NAO FECHADO, por regra (esperado).** Exige fixture EPUB com I/O de disco,
+vedado a teste NOVO por §6; ja julgado ACEITAVEL pelo reviewer e pelo critic. Roteamento
+**conferido**: `[TESTE] ParsingEngine` em `.jdi/todos.md:146-167`, residuo em 164-167 com candidato
+de dono (phase de integracao, ou API por stream). A REVIEW cita `151-165`, faixa anterior a
+appends; conteudo la e correto.
 
-## Gates (numeros reais)
+## Gates (numeros reais, re-rodados na iter 4)
 
-- Build `TranslateReader.slnx -c Release` (4 TFMs): **0 Erro(s)**, 64 avisos — **0 no Core**
-  (todos `MVVMTK0045`, app MAUI intocado).
-- `dotnet test -c Release`: **227p / 2s / 229t**, 0 falhas. Iter 1 fechou 201/2/203; baseline da
-  fase 196/2/198; D-2 167. Zero teste deletado ou afrouxado.
-- Attrs `[Fact]`/`[Theory]`: 192 -> 197 -> **214**, todos VIVOS (medida nova = antiga em codigo
-  limpo). `dotnet format --verify-no-changes`: **11** WHITESPACE, as mesmas 11 legadas.
-- Cobertura: iters 2-3 nao alteraram producao -> agregado alterado segue **93,9%** (piso D-6).
-- **DoD 5/5 `exit 0`**, os 5 comandos extraidos LITERALMENTE do CONTEXT.md vigente e eval-ados:
-  (1) 0 + chamada presente; (2) 8 attrs; (3) 0 e 4; (4) 0 / partial / 7 / 14 / 7 pares
-  atributo<->assinatura / **7 nomes com call site VIVO**; (5) 0 arquivo de diff no app MAUI /
-  **0 BenchmarkDotNet em todo o repo** / **214 attrs vivos**.
+- Build `TranslateReader.slnx -c Release` (4 TFMs): **0 Erro(s)**, 64 avisos, **0 no Core**.
+- `dotnet test -c Release`: **227p / 2s / 229t**, 0 falhas — identico as iters 2-3 (iter 1
+  201/2/203; baseline 196/2/198; D-2 167). Zero teste deletado ou afrouxado.
+- Attrs `[Fact]`/`[Theory]`: 192 -> 197 -> **214**, todos VIVOS (vivo == textual).
+  `dotnet format --verify-no-changes`: **11** WHITESPACE, as mesmas 11 legadas.
+- Cobertura: iters 2-4 nao alteraram producao -> linhas alteradas seguem **93,88%** (piso D-6 90%).
+- **DoD 5/5 `exit 0`**, comandos extraidos LITERALMENTE do CONTEXT.md: (1) 0 + chamada; (2) 8
+  attrs; (3) 0 e 4; (4) 0 / partial / 7 / 14 / **7 nomes por TOKEN EXATO**; (5) 0 diff no app MAUI
+  / 0 BenchmarkDotNet / 214 attrs vivos.
 
 ## Arquivos, desvios, limites
 
-Iter 3: `.jdi/DECISIONS.md` + `phases/.../{CONTEXT,SUMMARY}.md`. Iter 2:
-`ParsingEngineRegexTests.cs` (novo) + `.jdi/*`. Iter 1: 5 arquivos do Core + 2 de teste. **Zero
-diff em `src/` nas iters 2-3; zero diff em `src/TranslateReader/` (app MAUI) na fase inteira.**
-Desvios: (1) protecao de T-2 superestimada pelo PLAN, medida e fechada; (2) 1 violacao legada de
-formato caiu no hunk de T-1 (12->11); (3) `<summary>` no metodo novo do contrato (§7), que os 6
-legados nao tem (D-2). **Residuo (W-1):** o wiring end-to-end de `InlineCssLinks`/
-`UpdateOpfTitleAsync` sobre EPUB real segue sem assercao (`ParsingEngine.cs:126`, 0 hits) — exige
-fixture com I/O (§6), roteado em `.jdi/todos.md`: o gate ja pega orfanamento e comentario, mas nao
-prova EXECUCAO. Fora de escopo: zip-slip, seam LLamaSharp e infra de medicao (D-...-2(B)) —
-**nenhum ganho de memoria/CPU foi MEDIDO**, so conformidade de regra; auditoria nao exaustiva.
+Iter 1: 5 do Core + 2 de teste. Iters 2-4: so `.jdi/*` + `ParsingEngineRegexTests.cs`
+(novo, iter 2) + `.gitignore` (iter 4). **Zero diff em `src/` nas iters 2-4; zero diff em
+`src/TranslateReader/` na fase inteira.** Desvios: (1) protecao de T-2 superestimada pelo PLAN,
+medida e fechada; (2) 1 violacao legada de formato caiu no hunk de T-1 (12->11); (3) `<summary>` no
+metodo novo do contrato (§7), que os 6 legados nao tem (D-2). Fora de escopo: zip-slip, seam
+LLamaSharp e infra de medicao (D-...-2(B)) — **nenhum ganho de memoria/CPU foi MEDIDO**, so
+conformidade de regra; auditoria nao exaustiva.
