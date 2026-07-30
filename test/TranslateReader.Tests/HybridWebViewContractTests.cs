@@ -193,8 +193,8 @@ public class HybridWebViewContractTests
         var js = ReadJsFile("translation.js");
 
         Assert.DoesNotContain("JSON.parse", js);
-        Assert.Contains("items[i].index", js);
-        Assert.Contains("items[i].translated", js);
+        Assert.Contains("item.index", js);
+        Assert.Contains("item.translated", js);
     }
 
     [Fact]
