@@ -84,4 +84,51 @@ public class ReadingManagerTests
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task LoadProgressAsync_ReturnsStoredProgressForRequestedBook()
+    {
+        _readingStateAccess.FetchProgressAsync(1).Returns(new ReadingProgress
+        {
+            BookId = 1,
+            ChapterHRef = "cap2.html",
+            ScrollPosition = 0.42,
+            ProgressPercentage = 37.5,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        var result = await _sut.LoadProgressAsync(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.BookId);
+        Assert.Equal("cap2.html", result.ChapterHRef);
+        Assert.Equal(0.42, result.ScrollPosition);
+        Assert.Equal(37.5, result.ProgressPercentage);
+    }
+
+    [Fact]
+    public async Task LoadChapterContentAsync_WritesEveryExtractedImageBelowTheBookImagesDirectory()
+    {
+        var booksDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var sut = new ReadingManager(_booksAccess, _readingStateAccess, _parsingEngine, _fileUtility, booksDirectory);
+        var cover = new byte[] { 1, 2, 3 };
+        var illustration = new byte[] { 4, 5 };
+        var book = new Book { Id = 7, FilePath = "/tmp/livro.epub" };
+        _booksAccess.FetchBookAsync(7).Returns(book);
+        _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(new Dictionary<string, byte[]>
+        {
+            ["cover.jpg"] = cover,
+            ["images/fig1.png"] = illustration
+        });
+        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
+            .Returns("<p>Texto</p>");
+
+        await sut.LoadChapterContentAsync(7, "cap1.html");
+
+        var imagesDir = Path.Combine(booksDirectory, "images", "7");
+        await _fileUtility.Received(2).WriteFileAsync(Arg.Any<string>(), Arg.Any<byte[]>());
+        await _fileUtility.Received(1).WriteFileAsync(Path.Combine(imagesDir, "cover.jpg"), cover);
+        await _fileUtility.Received(1).WriteFileAsync(
+            Path.Combine(imagesDir, "images" + Path.DirectorySeparatorChar + "fig1.png"), illustration);
+    }
 }
