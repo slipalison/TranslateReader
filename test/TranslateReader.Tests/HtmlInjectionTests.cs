@@ -1,8 +1,10 @@
-﻿using TranslateReader.Utilities;
+﻿using System.Reflection;
+using System.Text.RegularExpressions;
+using TranslateReader.Utilities;
 
 namespace TranslateReader.Tests;
 
-public class HtmlInjectionTests
+public partial class HtmlInjectionTests
 {
     [Fact]
     public void EmptyHtml_ShouldHaveBody()
@@ -20,9 +22,10 @@ public class HtmlInjectionTests
         var html = "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"><head><title>Test</title></head><body>Content</body></html>";
         var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
 
-        var headCount = System.Text.RegularExpressions.Regex.Matches(result, "<head", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+        var headCount = HeadTagRegex().Count(result);
         Assert.Equal(1, headCount);
-        
+
+
         Assert.Contains("Content", result);
         Assert.Contains("body", result);
         Assert.Contains("CSS", result);
@@ -39,7 +42,7 @@ public class HtmlInjectionTests
         Assert.Contains("<body", result);
         Assert.Contains("</body>", result);
         Assert.Contains("CSS", result);
-        
+
         Assert.StartsWith("<?xml", result);
     }
 
@@ -61,7 +64,7 @@ public class HtmlInjectionTests
         var html = "<body><p>Some text</p></body>";
         var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
 
-        var bodyCount = System.Text.RegularExpressions.Regex.Matches(result, "<body", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+        var bodyCount = BodyTagRegex().Count(result);
         Assert.Equal(1, bodyCount);
         Assert.Contains("<html>", result);
         Assert.Contains("<head>", result);
@@ -140,8 +143,7 @@ public class HtmlInjectionTests
         var html = "<html><head><base href=\"OEBPS/\" /><title>Test</title></head><body>Content</body></html>";
         var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
 
-        var baseCount = System.Text.RegularExpressions.Regex.Matches(
-            result, "<base", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+        var baseCount = BaseTagRegex().Count(result);
         Assert.Equal(1, baseCount);
         Assert.Contains("OEBPS/", result);
         Assert.Contains("CSS", result);
@@ -170,4 +172,150 @@ public class HtmlInjectionTests
         var result = HtmlUtility.BuildContinuousScrollHtml([]);
         Assert.Equal(string.Empty, result);
     }
+
+    [Fact]
+    public void InjectTags_HtmlTagWithoutHead_InsertsHeadRightAfterTheHtmlOpenTag()
+    {
+        var html = "<HTML lang=\"en\"><p>Text</p></HTML>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<HTML lang=\"en\">\n<head>", result);
+        Assert.Equal(1, HeadTagRegex().Count(result));
+        Assert.Contains("CSS", result);
+        Assert.Contains("base", result);
+        Assert.Contains("<p>Text</p>", result);
+    }
+
+    [Fact]
+    public void InjectTags_XmlDeclarationWithoutHtmlOrBody_WrapsInFullDocument()
+    {
+        var html = "<?xml version=\"1.0\" encoding=\"utf-8\"?><p>Text</p>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<html>", result);
+        Assert.EndsWith("\n</body>\n</html>", result);
+        Assert.Equal(1, HeadTagRegex().Count(result));
+        Assert.Equal(1, BodyTagRegex().Count(result));
+        Assert.Contains("CSS", result);
+        Assert.Contains("<p>Text</p>", result);
+    }
+
+    [Fact]
+    public void InjectTags_UppercaseXmlDeclaration_IsStillRecognizedAsADeclaration()
+    {
+        var html = "<?XML version=\"1.0\"?><p>Text</p>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<?XML version=\"1.0\"?>\n<html>", result);
+        Assert.EndsWith("\n</body>\n</html>", result);
+    }
+
+    [Fact]
+    public void InjectTags_UppercaseHeadTag_InjectsInPlaceInsteadOfFallingBack()
+    {
+        var html = "<html><HEAD><title>T</title></HEAD><body>Content</body></html>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<html><HEAD>\n<base href=\"./\" />", result);
+        Assert.Equal(1, HeadTagRegex().Count(result));
+        Assert.Contains("CSS</style>\n</HEAD>", result);
+    }
+
+    [Fact]
+    public void InjectTags_UppercaseBodyFragment_IsWrappedWithoutNestingBodies()
+    {
+        var html = "<BODY><p>Text</p></BODY>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<html>\n<head>", result);
+        Assert.EndsWith("</html>", result);
+        Assert.Equal(1, BodyTagRegex().Count(result));
+        Assert.Contains("<p>Text</p>", result);
+    }
+
+    [Fact]
+    public void InjectTags_WhitespaceHtml_DropsTheWhitespaceInsteadOfWrappingIt()
+    {
+        var result = HtmlUtility.InjectTags("   \n   ", "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.Equal(
+            "<html><head><base href=\"./\" /><style>CSS</style></head><body></body></html>",
+            result);
+    }
+
+    [Fact]
+    public void InjectTags_FragmentWithNothingToInject_IsNotWrapped()
+    {
+        var html = "<p>Text</p>";
+        var result = HtmlUtility.InjectTags(html, null, null);
+
+        Assert.Equal(html, result);
+    }
+
+    [Fact]
+    public void InjectTags_OpenHeadWithoutClosingTag_AnchorsCssRightAfterTheOpenTag()
+    {
+        var html = "<html><head><title>T</title><body>Content</body></html>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<html><head>\n<style>CSS</style>\n<base href=\"./\" />", result);
+        Assert.Contains("<title>T</title>", result);
+    }
+
+    [Fact]
+    public void InjectTags_ClosingHeadWithoutOpenTag_FallsBackWhenABaseTagIsPending()
+    {
+        var html = "<html></head><body>Content</body></html>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("<html>\n<head><base href=\"./\" /><style>CSS</style>\n</head>", result);
+        Assert.Contains("Content", result);
+    }
+
+    [Fact]
+    public void InjectTags_BodyFragmentWithTruncatedHtmlTag_IsNotWrappedAgain()
+    {
+        // `<HTML` never closes, so the full-open-tag regex misses it while the
+        // presence regex still sees it: the wrapper must not be added twice.
+        var html = "<body><p>Text</p></body>\n<HTML";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        Assert.StartsWith("\n<head>", result);
+        Assert.DoesNotContain("<html>", result);
+        Assert.DoesNotContain("</html>", result);
+    }
+
+    [Fact]
+    public void ExtractBodyContent_UppercaseBodyTag_ReturnsInnerContent()
+    {
+        var html = "<html><HEAD><title>T</title></HEAD><BODY class=\"m\"><p>Hello</p></BODY></html>";
+        var result = HtmlUtility.ExtractBodyContent(html);
+        Assert.Equal("<p>Hello</p>", result);
+    }
+
+    [Fact]
+    public void EveryHtmlUtilityRegex_IsBoundedByAMatchTimeout()
+    {
+        var factories = typeof(HtmlUtility)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(m => m.ReturnType == typeof(Regex) && m.GetParameters().Length == 0)
+            .ToList();
+
+        Assert.Equal(8, factories.Count);
+        foreach (var factory in factories)
+        {
+            var regex = factory.Invoke(null, null) as Regex;
+            Assert.NotNull(regex);
+            Assert.NotEqual(Regex.InfiniteMatchTimeout, regex.MatchTimeout);
+        }
+    }
+
+    [GeneratedRegex("<head", RegexOptions.IgnoreCase)]
+    private static partial Regex HeadTagRegex();
+
+    [GeneratedRegex("<body", RegexOptions.IgnoreCase)]
+    private static partial Regex BodyTagRegex();
+
+    [GeneratedRegex("<base", RegexOptions.IgnoreCase)]
+    private static partial Regex BaseTagRegex();
 }
