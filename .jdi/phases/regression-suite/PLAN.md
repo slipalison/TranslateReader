@@ -56,7 +56,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
     (producao, fora de escopo).
 - **Test:** `dotnet test --filter FullyQualifiedName~BookTranslationJobAccessTests`
 - **Commit:** `test(regression-suite): cover BookTranslationJobAccess pause/resume state`
-- **Status:** pending
+- **Status:** completed
 
 #### T-2: pinar ordenacao de `FetchAllBooksAsync`  (DoD 3, 6)
 - **Risco:** `ORDER BY LastOpenedAt DESC, DateAdded DESC` (`BooksAccess.cs:52`) define a ordem da
@@ -71,7 +71,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
   - Assercao de sequencia (indice ou `Assert.Equal` sobre a lista de titulos), nunca `Assert.Contains`.
 - **Test:** `dotnet test --filter FullyQualifiedName~BooksAccessTests`
 - **Commit:** `test(regression-suite): pin FetchAllBooksAsync ordering contract`
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: `ReadingManager` — progresso encontrado + loop de imagens  (DoD 4, 6)
 - **Risco:** (1) `LoadProgressAsync` so tem o caso nulo — retomada de leitura nunca verificada no
@@ -90,7 +90,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
     deliberado `D-...-5(1)`. Esta task cobre o branch OPOSTO, testavel sem seam de producao.
 - **Test:** `dotnet test --filter FullyQualifiedName~ReadingManagerTests`
 - **Commit:** `test(regression-suite): pin LoadProgressAsync hit and image extraction loop`
-- **Status:** pending
+- **Status:** completed
 
 #### T-4: pinar contratos de borda de `HtmlUtility`  (DoD 6; acima do piso, risco nomeado)
 - **Risco:** alvo declarado de phase 13 (`Regex` -> `[GeneratedRegex]`, slice -> span). Os 11 testes
@@ -105,7 +105,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
   - Contar ocorrencias com `Regex.Matches` estatico como os testes irmaos; sem `new Regex(...)`.
 - **Test:** `dotnet test --filter FullyQualifiedName~HtmlInjectionTests`
 - **Commit:** `test(regression-suite): pin HtmlUtility edge contracts`
-- **Status:** pending
+- **Status:** completed
 
 #### T-5: `TranslationManager` — cancelamento, pause sem job, encoding  (DoD 6; acima do piso)
 - **Risco:** dos 23 testes atuais NENHUM exercita cancelamento — §6 exige esse caminho, e
@@ -126,7 +126,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
     `SetupCacheForRebuild`, `SynchronousProgress` — DRY.
 - **Test:** `dotnet test --filter FullyQualifiedName~TranslationManagerTests`
 - **Commit:** `test(regression-suite): pin translation cancellation and html encoding`
-- **Status:** pending
+- **Status:** completed
 
 ## Wave 2 — gate final
 
@@ -146,7 +146,7 @@ Fixar em testes de caracterizacao o comportamento observavel de hoje, para que o
     os 2 gaps de `D-...-5` seguem abertos por decisao.
 - **Test:** `dotnet test` (suite completa, sem filtro)
 - **Commit:** `docs(regression-suite): record regression baseline metrics`
-- **Status:** pending
+- **Status:** completed
 
 ## Fora do plano, com motivo (nao e esquecimento)
 - **`ParsingEngine`** (alvo de phase 13, 18 testes): todos dependem de 3 EPUBs reais em `TestData/`.
