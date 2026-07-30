@@ -133,4 +133,41 @@ public class HtmlInjectionTests
         Assert.Contains("<p>Only one</p>", result);
         Assert.DoesNotContain("chapter-separator", result);
     }
+
+    [Fact]
+    public void InjectTags_WhenHtmlAlreadyHasBaseTag_KeepsExactlyOneBase()
+    {
+        var html = "<html><head><base href=\"OEBPS/\" /><title>Test</title></head><body>Content</body></html>";
+        var result = HtmlUtility.InjectTags(html, "<base href=\"./\" />", "<style>CSS</style>");
+
+        var baseCount = System.Text.RegularExpressions.Regex.Matches(
+            result, "<base", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+        Assert.Equal(1, baseCount);
+        Assert.Contains("OEBPS/", result);
+        Assert.Contains("CSS", result);
+    }
+
+    [Fact]
+    public void InjectTags_WithNothingToInject_ReturnsHtmlUntouched()
+    {
+        var html = "<html><head><title>Test</title></head><body>Content</body></html>";
+        var result = HtmlUtility.InjectTags(html, null, null);
+
+        Assert.Equal(html, result);
+    }
+
+    [Fact]
+    public void ExtractBodyContent_WithUnclosedBody_ReturnsEverythingAfterTheOpenTag()
+    {
+        var html = "<html><head><title>T</title></head><body class=\"main\"><p>Hello</p>";
+        var result = HtmlUtility.ExtractBodyContent(html);
+        Assert.Equal("<p>Hello</p>", result);
+    }
+
+    [Fact]
+    public void BuildContinuousScrollHtml_WithNoChapters_ReturnsEmptyString()
+    {
+        var result = HtmlUtility.BuildContinuousScrollHtml([]);
+        Assert.Equal(string.Empty, result);
+    }
 }
