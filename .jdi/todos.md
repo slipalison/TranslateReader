@@ -94,3 +94,18 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `StatelessExecutor` (facilitaria tanto teste quanto troca de backend mobile — overlap com a
   phase `llm-mobile`), a rede desta fase nao caracteriza esse caminho hoje; qualquer mudanca ali
   precisa de revisao manual adicional. Ver `D-2026-07-30-regression-suite-5(2)`.
+
+- **[PROCESSO/DoD] Grep de guardrail anti-multi-target e estreito demais — endurecer nas phases
+  futuras.** O `Verify:` do item 5 do DoD desta phase (CONTEXT.md linha 98) e
+  `test $(grep -c "net10.0-windows" test/TranslateReader.Tests/TranslateReader.Tests.csproj) -eq 0
+  && test $(find test -name "*.csproj" | wc -l) -eq 1`. Ele passa, e o guardrail de fato foi
+  honrado — mas o grep procura literalmente `net10.0-windows`, entao um multi-target hipotetico
+  `<TargetFrameworks>net10.0;net10.0-android</TargetFrameworks>` (ou `-ios`, ou `-maccatalyst`)
+  passaria batido. O que realmente provou a decisao (c) foi a INSPECAO: `<TargetFramework>` no
+  singular, ausencia de `UseMaui`, exatamente 1 `.csproj` sob `test/`.
+  **O DoD desta phase esta locked e nao deve ser editado** (a phase passou nele) — o item aqui e
+  para quem escrever um guardrail equivalente numa phase futura: probe tambem
+  `<TargetFrameworks` (plural) e `UseMaui`, nao so um TFM nomeado. Ex.:
+  `grep -qE "<TargetFrameworks|UseMaui" test/**/*.csproj && exit 1`. Sem esse reforco o gate da
+  falsa sensacao de cobertura, mesma classe de defeito da regra Semgrep `translatereader-zip-slip`
+  registrada em `## De \`readme\``.
