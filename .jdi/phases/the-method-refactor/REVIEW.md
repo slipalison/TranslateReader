@@ -2,176 +2,209 @@
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
-Reviewer: `jdi-reviewer-translatereader` (Fable 5 / xhigh, D-7) | mode=verify, iter=1 | 2026-07-30
-Escopo: `jdi/the-method-refactor` vs `main` (base `a390eb9` = merge-base real, verificado).
-Commits: `508933b` (T-1), `a5f7b44` (T-2), `3c5a8cf` (T-3), `b9ec38a` (T-4) — 1:1 com o PLAN.
+Review iter 2 (regenerado do zero, sem herdar texto da iter 1). Escopo do diff: `a390eb9` (main)
+ate `efc3e8f` na branch `jdi/the-method-refactor`. O range contem 10 commits: os 7 nomeados no
+dispatch (508933b, a5f7b44, 3c5a8cf, b9ec38a, 3f68deb, 3010268, efc3e8f) + 3 artefatos do
+orquestrador (25874fa context, b98a9be plan, 435e184 review iter 1) — consistente, nada fora do
+esperado. A iter 1 foi BLOCKED pelo DoD critic (Verify do DoD 4 oco); esta review verificou o fix
+com ataque proprio por mutacao, nao herdou aprovacao.
 
 ## Gates
 
 | Gate | Comando | Resultado real | Status |
 |---|---|---|---|
-| 1 Build | `dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` | `0 Erro(s)`, 40 avisos (todos `MVVMTK0045`, legado do app MAUI intocado), 10.3 s | PASS |
-| 2 Tests | `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj` | **201 aprovados / 2 ignorados / 203 total, 0 falhas**, ~4 s. Baseline da fase 196/2/198 (+5 = +4 `FileUtilityTests` +1 `ReadingManagerTests`); baseline D-2 167 — sem regressao. Os 2 ignorados seguem sendo os `[Fact(Skip=...)]` de `TranslationEngineTests` | PASS |
-| 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` -> Cobertura XML, intersecao das linhas ADICIONADAS no diff com linhas cobriveis (D-6: 90% em codigo novo/alterado pos-`4285f25`) | Por arquivo tocado (cobriveis alteradas): `ParsingEngine.cs` **90,9%** (10/11; unica descoberta: L126, call site de `OpfTitleRegex` — gap declarado), `ReadingManager.cs` **100%** (1/1), `TranslationManager.cs` **100%** (5/5), `FileUtility.cs` **100%** (1/1), `HtmlUtility.cs` **93,5%** (29/31; L44/L46 = guards de early-return movidos verbatim). Agregado alterado: **46/49 = 93,9%**. Agregado da solucao (contexto, nao e o gate): 75,7%. Unico `.cs` NOVO pos-boundary: `BookTranslationJobAccessTests.cs` (fase anterior, test file) | PASS |
-| 4 Lint | `dotnet format --verify-no-changes` (escopo SOLUCAO, `core.longpaths=true`) | **11 violacoes WHITESPACE**, todas legadas: `ThemeEngine.cs(12,24)(14,11)`, `ReaderPage.xaml.cs(122,103)(124,72)`, `HtmlInjectionTests.cs(25,1)(42,1)`, `ThemeEngineTests.cs(12,33)`, `TranslationManagerTests.cs(528,21)(528,33)(528,61)(529,31)`. Baseline era 12; `ReadingManager.cs(55,1)` foi limpa no hunk de T-1. **Zero violacao nos 8 arquivos tocados** | WARN (legado, D-2) |
-| 5 Security/Layer | Bateria 5.1-5.17 (greps + julgamento manual, detalhado abaixo) | 5.1 Client->Access/Engine: vazio. 5.2 storage tech em `Contracts/Access`: vazio; `Contracts/Utilities`: vazio (contrato novo limpo). 5.3 Manager->Manager: 4 hits, todos `: I<Proprio>Manager` (implementacao propria — ok). 5.10 sync-over-async: vazio. 5.10b `catch OCE`: `TranslationManager.cs:61` faz `throw;` (rethrow correto); 3 swallows restantes sao legado do app MAUI intocado. 5.12 static mutavel: 1 hit = baseline legado (`TranslationEngine.cs:16`). 5.11 eventos: subscribe=5/unsubscribe=4 = baseline do bootstrap, 0 `+=` novos. 5.14 `new Regex(`: vazio; `Substring/ToLower==` em Engines+Utilities: vazio. 5.15 catch vazio: 5 hits, todos legado app MAUI. 5.16 TODO sem ticket: vazio. 5.6 zip: 2 hits baseline em `ParsingEngine` (vetor real e propriedade da phase `epub-zip-slip`; linhas 59-60/31-32 NAO tocadas — confirmado no diff). 5.7 XXE: vazio. 5.9 secrets/PII: vazio | PASS (warns legados pre-existentes) |
-| 6 Consistency | `git log --name-only a390eb9..HEAD` x PLAN `files_modified`; subjects x D-4 | Match 1:1 exato: T-1=`508933b` (5 arquivos), T-2=`a5f7b44` (1), T-3=`3c5a8cf` (2), T-4=`b9ec38a` (docs). Conventional commits com scope `the-method-refactor`, tipos `refactor`/`docs` apropriados (nao tudo `feat`). T-2/T-3 sem teste novo por decisao locked (D-...-4/5) — consistente com acceptance do PLAN | PASS |
-| 7 UI live | — | SKIPPED permanente (`has_frontend=false`, app MAUI nativo) | SKIPPED |
-| 8 DoD | 5 `Verify:` do CONTEXT.md rodados LITERALMENTE (bash) | **5/5 Auto `exit=0`**, 0 Manual. Medidas cruas: 7 `[GeneratedRegex]` em `ParsingEngine`, exatamente 4 `public static` dos 4 nomes em `HtmlUtility`, 8 attrs em `ReadingManagerTests`, 13 em `FileUtilityTests`, 197 attrs totais, 0 arquivos de `src/TranslateReader/` no diff, 0 csproj com BenchmarkDotNet. PROJECT.md nao tem secao DoD (fonte unica = CONTEXT.md; INCONCLUSIVE exigiria ausencia em AMBOS) | PASS |
-
-## Auditoria cetica (pontos exigidos pelo dispatch)
-
-**(a) Os 7 regex de `ParsingEngine` — risco #1 da fase: CONFIRMADO preservado, padrao a padrao.**
-Diff `a390eb9..HEAD` inspecionado ocorrencia por ocorrencia. Os 7 patterns sao byte-identicos aos
-inline antigos e o `RegexOptions` migrou para dentro do atributo em TODOS: `OpfTitleRegex`
-`IgnoreCase|Singleline` (era 4o arg do `Replace`), `LinkTagRegex` `IgnoreCase` (era 4o arg, apos o
-MatchEvaluator), `StylesheetRelRegex`/`StylesheetHrefRegex` `IgnoreCase` (era 3o arg de
-`IsMatch`/`Match`), `ImgSrcRegex`/`SvgImageXlinkHrefRegex`/`SvgImageHrefRegex` `IgnoreCase` (era 4o
-arg). Replacement strings e evaluators intactos. Nenhum option perdido. Nuance registrada em W-5.
-
-**(b) MOVE dos 4 metodos HTML: CONFIRMADO MOVE puro, linha a linha.**
-`git diff a5f7b44 3c5a8cf`: corpos de `ExtractParagraphs`/`ExtractTextBlocks`/
-`ReplaceTextBlocksInHtml`/`StripHtmlTags` byte-identicos (unica mudanca: `private`->`public`);
-os 3 `[GeneratedRegex]` (`ParagraphRegex`, `TextBlockRegex`, `HtmlTagRegex`) com pattern e options
-identicos; 4 call sites roteados por `HtmlUtility.X(...)` (L140/L185/L188/L217); `TranslationManager`
-perdeu `partial` e o using orfao; `HtmlUtility` virou `public static partial class`. Grep confirma
-zero residuo de `Regex`/definicao privada no Manager. Sem colisao de nomes. Utility continua
-passando no teste da maquina de cappuccino (manipulacao generica de HTML, sem regra de traducao).
-
-**(c) Gap de discriminacao dos regex (1 de 7): ACEITAVEL para esta fase — vira W-1, nao blocker.**
-O claim do doer e coerente com a evidencia de cobertura que eu mesma medi: L126 (`OpfTitleRegex`)
-tem **0 hits** (nunca executa — indiscriminavel por definicao); em `InlineCssLinks` o caminho feliz
-executa (L193/196/199 cobertas) mas os early-returns L197/201/206 nao — execucao sem assercao, exatamente
-o que faz mutacao de `StylesheetRelRegex` passar em silencio. Julgamento: (1) a prova de equivalencia
-locked para esta fase e inspecao (D-...-2 (B)), e eu a refiz independentemente no item (a) —
-transcricao verbatim confirmada; (2) fechar o gap exigiria fixture nova com I/O de disco em teste
-novo, proibido por `.claude/rules/csharp.md` §6, ou refactor da API para stream (fora do estatuto
-finding-driven); (3) o gap foi MEDIDO por mutacao, confessado na SUMMARY (corrigindo a
-superestimativa do PLAN) e registrado em `.jdi/todos.md` com caminho de saida nomeado. Esconder
-teria sido blocker; medir e declarar e o comportamento certo.
-
-**(d) Probes do DoD provam o criterio, nao so exit 0.**
-DoD 3: `-eq 4` exato pega tanto ausencia quanto duplicacao acidental, pareado com `-eq 0` dos
-`private static` no Manager; o loophole restante (mover sem rotear) e fechado por build+testes
-(Gates 1-2). DoD 5: `git merge-base main HEAD` resolve para `a390eb9` (verificado — fork point
-real), e o diff de `src/TranslateReader/` e genuinamente vazio (0 arquivos, cruzado com
-`git diff --stat`). DoD 4: par presenca-positiva (`>=7 [GeneratedRegex]`, `partial class`) /
-ausencia-negativa (`Regex.(Replace|Match|IsMatch)( == 0`), com `new Regex(` vazio no gate 5.14
-fechando a rota de bypass. DoD 1/2: `grep -q` poderia casar comentario, mas os arquivos foram
-LIDOS — a chamada e real e as assercoes `DidNotReceive` sao load-bearing. Fraqueza teorica
-registrada (nao ocorreu aqui): probes no formato `test $(cmd | wc -l) -eq 0` dao falso PASS se a
-ref/comando falhar com stdout vazio — licao ja catalogada em todos.md `[PROCESSO/DoD]`, reforco
-para phases futuras: validar a ref antes do count.
-
-**(e) `IFileUtility` com 7o metodo: OK.** Continua **1 contrato so** (dentro do "max 2 por
-servico"); `bool DirectoryHasContent(string directoryPath)` e comportamental, com `<summary>`
-(csharp.md §7), e **nao vaza tecnologia de storage** — grep de `Sqlite|System.IO|Directory.|File.`
-em `Contracts/Utilities/` vazio; `Directory.*` existe so na implementacao (`FileUtility.cs:42-43`).
-O estouro do "3-5 ideal" fica em W-3 (ja aceito no CONTEXT > Notes).
-
-**(f) Cobertura de codigo ALTERADO, por arquivo:** ver Gate 3 — 90,9% / 100% / 100% / 100% /
-93,5%, agregado 93,9%, piso 90% respeitado em todos.
+| 1 Build | `dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` | **0 Erro(s)**, 40 avisos (todos `MVVMTK0045` em `ReaderPageModel.cs`, app MAUI legado com zero diff na fase), 8,2s | PASS |
+| 2 Tests | `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj` | **227 aprovados / 2 ignorados / 229 total, 0 falhas** (4s). Baselines superados: 167 (D-2), 196p/2s (inicio da fase), 201p (iter 1). Os 2 skips sao os `TranslationEngineTests` de integracao GGUF pre-existentes, inalterados | PASS |
+| 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` + parse do Cobertura (`TestResults/f434d1e1-*/coverage.cobertura.xml`) | Agregado **82,15%** (contexto apenas — dominado por legado isento D-2). Arquivos NOVOS pos-`4285f25`: 2, ambos de TESTE (`BookTranslationJobAccessTests.cs`, `ParsingEngineRegexTests.cs`) — nao aparecem no report por definicao; zero arquivo novo de producao. Escopo new/changed (D-6, 90%): media dos 5 arquivos de producao alterados = **93,9%** (ReadingManager 100 / FileUtility 100 / TranslationManager 100 / HtmlUtility 89,42 / ParsingEngine 80,19 — os dois ultimos puxados por metodos LEGADOS sem hit). Por LINHA alterada pela fase: descobertas apenas `ParsingEngine.cs:126` (W-1) e `HtmlUtility.cs:44,46` (W-5); as 7 declaracoes `[GeneratedRegex]` (L322-341) e os call sites de `InlineCssLinks`/`RewriteImagePaths` tem hits > 0 | PASS |
+| 4 Lint | `dotnet format --verify-no-changes` (solucao) | exit 2, **11 `error WHITESPACE`** — ThemeEngine.cs(12,14), ReaderPage.xaml.cs(122,124), HtmlInjectionTests.cs(25,42), ThemeEngineTests.cs(12), TranslationManagerTests.cs(528x3,529). **Mesmas 11 legadas da iter 1; zero em `ParsingEngineRegexTests.cs`** | WARN (legado, D-2) |
+| 5 Security/Layer | 17 greps 5.1-5.17 (saida integral abaixo em Warnings/notas) | 5.1 Client->Access/Engine: **0 hits**. 5.2 storage em contrato: **0**. 5.3 Manager->Manager: so auto-interface (`: IXManager`), **0 cruzado**. 5.6 zip: baseline `ParsingEngine.cs:93,115` (escrita em entry de archive proprio, sem extract-to-path; vetor real e de `epub-zip-slip`, intocado). 5.7 XXE: **0**. 5.8 WebView: 10 hits `ReaderPage.xaml.cs` legado, zero diff na fase. 5.9 secrets/PII em log: **0**. 5.10 sync-over-async: **0**; `catch (OperationCanceledException)` em `TranslationManager.cs:61` **faz `throw;`** (L64, persiste "Paused" antes — conforme §1); os 3 swallows de OCE restantes sao app MAUI legado. 5.11 eventos: subscribe=5 unsubscribe=4 — **igual ao baseline do bootstrap**, nenhum `+=` novo. 5.12 static mutavel: so o baseline `TranslationEngine.cs:16`. 5.15 catch vazio: 5 hits, todos app legado. 5.15b Result pattern: **0**. 5.16 TODO: **0**. 5.17 mock de concreto: **0**; I/O real so nos 4 arquivos de teste pre-existentes (padrao estabelecido) — `ParsingEngineRegexTests.cs` tem **zero I/O e zero mock** | PASS |
+| 6 Consistency | `git show --name-only` por commit + `git log --pretty=%s` | Arquivos por commit batem 1:1 com `files_modified` do PLAN (T-1: 5 arquivos, T-2: 1, T-3: 2, T-4: docs; iter 2: teste novo + `.jdi/`). Conventional Commits com scope `the-method-refactor` nos 10; tipos adequados (`refactor`/`test`/`docs`, nao tudo `feat`) — D-4. 1 achado = 1 commit atomico, producao+teste juntos em T-1 | PASS |
+| 7 UI Validation | — | SKIPPED (has_frontend=false, cliente MAUI nativo) | SKIPPED |
+| 8 DoD | 5 `Verify:` extraidos por sed do CONTEXT.md e executados **literalmente** via eval | **5/5 exit 0**. PROJECT.md nao tem secao `## Definition of Done` (brownfield) — itens vem so do CONTEXT.md. 0 itens manuais (dod=auto_only) | PASS |
 
 ## Blockers
 
-_(nenhum)_
+Nenhum.
 
 ## Warnings
 
-- **W-1 [teste/regressao futura]** `src/TranslateReader.Core/Business/Engines/ParsingEngine.cs:321-341` —
-  4 dos 7 `[GeneratedRegex]` (`OpfTitleRegex`, `LinkTagRegex`, `StylesheetRelRegex`,
-  `StylesheetHrefRegex`) nao sao discriminados por teste algum, e os 2 de `<image>` so mordem
-  juntos (medido por mutacao pelo doer, coerente com a cobertura que eu medi: `ParsingEngine.cs:126`
-  0 hits; early-returns de `InlineCssLinks` L197/201/206 descobertos). Regra em tensao:
-  `.claude/rules/csharp.md` §6 (caminhos de falha cobertos) vs §6 (proibicao de I/O de disco em
-  teste novo) — a segunda vence nesta fase (D-...-2 (B)). Registrado em `.jdi/todos.md` § `[TESTE]`;
-  proxima regressao nesses 4 padroes passa em silencio ate a phase de integracao/stream-API.
-- **W-2 [regra vs decisao locked]** `test/TranslateReader.Tests/FileUtilityTests.cs:102-134` — os 4
-  testes novos de `DirectoryHasContent` fazem I/O real em temp dir, em tensao literal com
-  `.claude/rules/csharp.md` §6 ("no disk in unit tests" pos-boundary). Aceito porque: exigido
-  textualmente pelo DoD 2 do CONTEXT, locked em D-2026-07-30-the-method-refactor-3, padrao
-  pre-existente do arquivo, e `FileUtility` E o wrapper de filesystem — mocka-lo testaria nada.
-  Desvio documentado, nao precedente geral.
-- **W-3 [contrato acima do ideal]** `src/TranslateReader.Core/Contracts/Utilities/IFileUtility.cs:13` —
-  7a operacao no contrato, acima do "3-5 operacoes por contrato (ideal)" de CLAUDE.md; segue 1
-  contrato unico. Aceito no CONTEXT > Notes; se um 8o metodo aparecer, considerar split.
-- **W-4 [lint legado]** 11 violacoes WHITESPACE legadas (lista no Gate 4), isentas por D-2; melhora
-  de 12 -> 11. Vira BLOCK-on-new-files quando `baseline-de-estilo` entregar `.editorconfig`.
-- **W-5 [informativo, sem acao]** Os 7 regex migrados trocam o case-folding de cultura CORRENTE
-  (`Regex` estatico + `IgnoreCase`) para INVARIANTE (default de `[GeneratedRegex]` sem
-  `cultureName`). Observavel apenas em culturas tipo tr-TR/az, e na direcao de MAIOR robustez para
-  tags/atributos HTML — alinhado ao espirito de csharp.md §2.1 (ordinal para tags). Mesmo default
-  ja usado pelos `[GeneratedRegex]` pre-existentes de `TranslationManager`/`HtmlUtility`.
+- **W-1 (herdada da iter 1, parcial — segue aberta):** o wiring end-to-end de
+  `InlineCssLinks`/`UpdateOpfTitleAsync` sobre EPUB real continua sem assercao —
+  `src/TranslateReader.Core/Business/Engines/ParsingEngine.cs:126` com **hits=0 medidos** no
+  Cobertura (metodo `UpdateOpfTitleAsync` inteiro 0%, `CreateTranslatedEpubAsync` 0% — ambos
+  legados pre-boundary, ja sem cobertura antes da fase). Fechar exigiria fixture EPUB com I/O de
+  disco, proibido em teste novo por `.claude/rules/csharp.md` §6 e recusado por precedente
+  (`regression-suite` SUMMARY > Lacuna 4). Registrado em `.jdi/todos.md`. Ver ponto (g).
+- **W-2 (nova, achado deste review):** o `Verify:` endurecido do DoD 4 ainda tem 1 furo residual,
+  provado por mutacao propria (M5): trocar o call site `StylesheetRelRegex().IsMatch` por
+  `StylesheetHrefRegex().IsMatch` orfana um regex COMPENSANDO a contagem (`-eq 14` se mantem) e o
+  comando sai `exit 0`; a rede de testes tambem nao acusa (os 26 casos testam os regexes isolados,
+  e a medicao da iter 1 mostrou `StylesheetRelRegex` sozinho -> 0 falhas). A clausula de D-7
+  "fechando o caso regex declarado e nunca chamado" vale so para orfanamento SIMPLES (contagem cai
+  -> pega, provado em M4); orfanamento compensado escapa. NAO e hollow-pass do criterio — o
+  criterio do DoD 4 fala de identidade de pattern/options e ligacao atributo<->nome, e isso o
+  comando prova integralmente; o que escapa e regressao de COMPORTAMENTO de call site, que e
+  exatamente o residuo W-1 visto por outro angulo. Fechar W-1 (fixture end-to-end em fase futura)
+  fecha isso junto. Cita: `.jdi/DECISIONS.md` D-2026-07-30-the-method-refactor-7;
+  `ParsingEngine.cs:196`.
+- **W-3:** `dotnet format` — 11 violacoes WHITESPACE legadas (mesmo conjunto da iter 1, lista no
+  Gate 4). D-2 isenta; vira BLOCK-on-new apos a fase `baseline-de-estilo`. Zero violacao nova.
+- **W-4 (workspace, ponto h):** `TestResults/` esta untracked e **nao esta no `.gitignore`**
+  (grep por `test|trx|coverage` no `.gitignore` = 0 hits). Nenhum arquivo dela vazou para commit
+  algum (`git log --all --name-only -- 'TestResults/*'` = vazio), mas um `git add .` futuro
+  arrastaria XMLs de cobertura para o repo. Recomendacao: adicionar `TestResults/` ao
+  `.gitignore` num commit de hygiene futuro (fora do escopo desta review, que e read-only).
+- **W-5 (informativa):** `src/TranslateReader.Core/Utilities/HtmlUtility.cs:44,46` — os 2 guard
+  branches de `ReplaceTextBlocksInHtml` (bloco whitespace-only; `translations` esgotadas) foram
+  movidos sem cobertura, igual ao estado na origem (`TranslationManager`) — limite honesto ja
+  declarado na SUMMARY (mutacao B de T-3). Bloco movido: 37/39 linhas cobertas (94,9%).
 
-### Baseline legado pre-existente (inalterado por esta fase, ja conhecido — nao conta como warning novo)
+Notas legadas (baseline D-2, sem mudanca na fase, nao contam como warning novo): swallows de OCE e
+`catch { }` no app MAUI (`LibraryPageModel.cs:183`, `ReaderPageModel.cs:222`,
+`ReaderPage.xaml.cs:308,326,434`), desbalanco de eventos 5/4, static mutavel
+`TranslationEngine.cs:16`.
 
-`catch (OperationCanceledException) { }` em `LibraryPageModel.cs:183`, `ReaderPageModel.cs:222`,
-`ReaderPage.xaml.cs:308` + `catch { }` em `ReaderPage.xaml.cs:326,434` (app MAUI, zero diff nesta
-fase); desequilibrio de eventos 5 `+=` / 4 `-=` (baseline do bootstrap); 1 static mutavel legado
-(`TranslationEngine.cs:16`); zip-slip em `ReadingManager.cs:59-60`/`FileUtility.cs:31-32` —
-propriedade exclusiva da phase `epub-zip-slip` (D-2026-07-29-epub-zip-slip-1), confirmado nao
-tocado no diff.
+## Veredito dos pontos (a)-(h) do dispatch
+
+**(a) `ParsingEngineRegexTests.cs` por reflection — design de teste: ACEITO.**
+(i) *Rename silencioso:* NAO passa vazio. `Pattern(name)` tem null-guard explicito
+(`ParsingEngineRegexTests.cs:15-16`) — `GetMethod` nulo lanca `InvalidOperationException` e as 26
+execucoes falham com mensagem nomeada. Rede dupla: a mutacao M4 (rename `SvgImageHrefRegex` ->
+`SvgImageHrefRx`) tambem derruba o Verify do DoD 4 (`exit 1`, contagem 14 cai e par
+atributo<->assinatura some). Rename e RUIDOSO nos dois gates.
+(ii) *Acoplamento a membro privado:* pesado contra as alternativas, e o menor mal — expor as
+factories na API do Engine vazaria detalhe de implementacao no contrato (The Method) e seria
+superficie especulativa (YAGNI, sem 2o consumidor); teste via API publica exige `filePath` real =
+I/O de disco, vedado a teste novo por §6 e por precedente locked. Reflection manteve **zero diff
+em producao** (provado no ponto e). §6 nao e violado: sem rede, sem disco, sem SQLite, sem mock de
+concreto (nao ha mock algum). Registro: se algum dia edicao de producao entrar em escopo,
+`InternalsVisibleTo` + factories `internal` seria a rota mais limpa que reflection — fica como
+opcao, nao como pendencia.
+(iii) *Comportamento vs existencia:* os 26 casos assertam COMPORTAMENTO — match E no-match por
+regex, valor de grupo capturado (`Groups[1]`/`Groups[2]`), templates de replace (`$1New$3`,
+inclusive o template exato usado em `ParsingEngine.cs:126`), case folding com InlineData uppercase
+para **cada um dos 7** (derrubar `IgnoreCase` de qualquer um falha >= 1 caso), `Singleline` (titulo
+com `\n`), lazy quantifier (2 `<dc:title>` substituidos separadamente) e delimitacao (`<linkage`,
+`<image src`, `<img href`, href vazio, `rel="stylesheets"`). Nenhum caso e assercao de mera
+existencia. Executados de verdade: 227p inclui os 26.
+
+**(b) `Verify:` novo do DoD 4 — CONFIRMADO com 1 residuo (W-2).** Rodado literalmente (extraido do
+CONTEXT.md por sed, eval): `exit 0` com contagens reais 0 regex estaticos / 7 attrs exatos / 14
+linhas de nome / 7 pares atributo<->assinatura. Atacado com 5 mutacoes proprias em copia no
+scratchpad (`attack_dod4.sh`, repo intocado), comando velho (extraido de `b9ec38a`) vs novo:
+
+| Mutacao | OLD | NEW |
+|---|---|---|
+| P0 pristino (sanidade) | exit 0 | exit 0 |
+| M1 contra-exemplo do critico (`stylsheet` + sem `IgnoreCase`) | **exit 0** | **exit 1** |
+| M2 patterns trocados entre `StylesheetRel` e `StylesheetHref` | exit 0 | exit 1 |
+| M3 `Singleline` removido de `OpfTitleRegex` | exit 0 | exit 1 |
+| M4 factory renomeada (`SvgImageHrefRegex` -> `SvgImageHrefRx`) | exit 0 | exit 1 |
+| M5 orfao compensado (call site Rel->Href, contagem mantida) | exit 0 | **exit 0** |
+
+O blocker da iter 1 esta objetivamente fechado (M1: OLD passava, NEW derruba). M5 e o furo
+residual — classificado WARN e nao BLOCKER porque nao e hollow-pass do criterio locked (patterns e
+ligacao seguem provados; o que escapa e wiring de call site, residuo W-1 ja declarado e roteado).
+
+**(c) Caminho JDI-legal — CONFIRMADO.** `git diff b9ec38a HEAD -- .jdi/DECISIONS.md`: **1 hunk,
+36 linhas `+`, 0 linhas `-`**, posicao `@@ -539,3 +539,39 @@` = append puro no fim do arquivo
+(577 linhas). D-...-5 intocada (zero delecao no arquivo inteiro). A linha nova do
+`## Definition of Done` implementa exatamente as 4 propriedades que D-...-7 autoriza — (1) zero
+`Regex.(Replace|Match|IsMatch)(`; (2) `public partial class`; (3) `-eq 7` EXATO (endurecido vs
+`-ge 7`); (4) `-eq 14` + 7 pares `grep -A1 -F` literais — e o comando antigo esta contido no novo
+(nenhuma clausula afrouxada).
+
+**(d) Outros 4 itens do DoD intactos — CONFIRMADO.** `git diff b9ec38a HEAD -- CONTEXT.md`:
+**1 hunk unico** (7+/3-), restrito ao bloco do item 4 (achado #3). Itens 1, 2, 3 e 5 byte-identicos.
+
+**(e) Zero producao na iter 2 — CONFIRMADO.** `git diff 3f68deb^ HEAD --stat -- src/` = saida
+vazia. Iter 2 = `ParsingEngineRegexTests.cs` (novo, +182) + `.jdi/*`.
+
+**(f) Zero regressao de teste — CONFIRMADO.** `git diff b9ec38a HEAD -- test/`: **0 linhas
+removidas** (unico change = arquivo novo, 182 insercoes). Nenhum `[Fact(Skip=...)]` novo (os 2
+skips do repo sao os GGUF pre-existentes em `TranslationEngineTests.cs:56,69`). Nenhuma assercao
+alterada. Attrs 197 -> 214 (+17 do arquivo novo: 9 `[Fact]` + 8 `[Theory]` = 26 casos).
+
+**(g) Residuo W-1 parcial — ACEITAVEL COMO WARNING.** `ParsingEngine.cs:126` hits=0 confirmado no
+Cobertura desta review. Tres razoes para nao ser blocker: (1) o metodo era legado JA sem cobertura
+antes da fase — a fase nao piorou nada, apenas trocou a forma da chamada, e a SEMANTICA do regex
+daquela linha agora tem 5 assercoes dedicadas (inclusive o template `$1{titulo}$3`); (2) fechar
+exige I/O vedado por regra locked (§6) com precedente de recusa registrado — exigir aqui
+contradiria decisao do projeto; (3) o risco residual esta nomeado, registrado em `.jdi/todos.md` e
+delimitado (W-2 mostra o vetor exato). Continua warning ate uma fase decidir criar fixture
+end-to-end deliberadamente.
+
+**(h) Workspace — WARN (W-4).** `TestResults/` untracked, **fora do `.gitignore`**, e **nenhum**
+arquivo dela em commit algum do historico (`git log --all` vazio). Sem vazamento hoje; risco de
+`git add .` futuro. Alem dela, o unico item de workspace e a delecao proposital do REVIEW.md da
+iter 1 (regenerado por este arquivo).
 
 ## DoD Checklist (gate 8)
 
 | # | Criterion | Source | Type | Status | Evidence |
 |---|---|---|---|---|---|
-| 1 | `IFileUtility.DirectoryHasContent` existe; `ReadingManager` roteia por ele; zero `Directory.(Exists\|GetFileSystemEntries)` no Manager | CONTEXT | Auto | PASS | exit=0; chamada real em `ReadingManager.cs:53`, contrato + impl presentes |
-| 2 | Gap regression-suite-5(1) fechado: teste mockado do branch "ja extraido" + caso real em `FileUtilityTests` | CONTEXT | Auto | PASS | exit=0; 8 attrs em `ReadingManagerTests` (skip provado com `DidNotReceive` duplo), 13 em `FileUtilityTests` |
-| 3 | 4 metodos HTML fora do `TranslationManager`, publicos/estaticos em `HtmlUtility` | CONTEXT | Auto | PASS | exit=0; 0 `private static` dos nomes no Manager, **exatamente 4** `public static` em `HtmlUtility` |
-| 4 | `ParsingEngine` partial + 7 `[GeneratedRegex]` + zero `Regex.Replace/Match/IsMatch` estaticos | CONTEXT | Auto | PASS | exit=0; contagens reais 0 / presente / 7 |
-| 5 | Guardrail: zero diff em `src/TranslateReader/`, zero BenchmarkDotNet, attrs >= 193 | CONTEXT | Auto | PASS | exit=0; 0 arquivos / 0 csproj / 197 attrs |
+| 1 | Achado #1: `IFileUtility.DirectoryHasContent` + `ReadingManager` roteia por ele | CONTEXT | Auto | PASS | exit 0 — metodo no contrato e na impl; 0 `Directory.(Exists\|GetFileSystemEntries)` no Manager; chamada `fileUtility.DirectoryHasContent` presente |
+| 2 | Gap regression-suite-5(1): teste mockado do branch "ja extraido" + caso real em FileUtilityTests | CONTEXT | Auto | PASS | exit 0 — `DirectoryHasContent` citado nos 2 arquivos; `ReadingManagerTests` com 8 attrs (>= 8) |
+| 3 | Achado #2: 4 metodos HTML saem do Manager, entram `public static` em `HtmlUtility` | CONTEXT | Auto | PASS | exit 0 — 0 definicoes privadas restantes; exatamente 4 `public static` |
+| 4 | Achado #3: 7 `[GeneratedRegex]` com pattern/options byte-identicos ligados ao nome, zero regex estatico (Verify endurecido por D-...-7) | CONTEXT | Auto | PASS | exit 0 — 0 / partial presente / 7 exatos / 14 nomes / 7 pares literais; gate validado por mutacao propria (tabela no ponto b): pega M1-M4, residuo M5 = W-2 |
+| 5 | Guardrail: zero diff app MAUI, zero BenchmarkDotNet, attrs >= 193 | CONTEXT | Auto | PASS | exit 0 — 0 arquivos de diff em `src/TranslateReader/`; 0 csproj com BenchmarkDotNet; 214 attrs |
 
 **Totals:** 5 items | Auto: 5 (5 PASS, 0 FAIL) | Manual: 0 pending
 
-Nota: `.jdi/PROJECT.md` nao contem secao `## Definition of Done`; o DoD desta fase vem
-integralmente do CONTEXT.md (INCONCLUSIVE exigiria ausencia em ambos — nao e o caso).
-
-## Deferred to PR review (itens humanos do CONTEXT — fora do verdict automatico)
-
-- Leitura humana: o MOVE do achado #2 manteve nomes/estilo coerentes com `HtmlUtility` existente
-  (julgamento subjetivo; a evidencia objetiva — corpos identicos, mesmo padrao de chamada de
-  `ExtractBodyContent` — esta no item (b) acima).
-- Revalidar o deferimento do seam `TranslationEngine`/LLamaSharp (D-...-6, YAGNI) quando
-  `llm-mobile` comecar.
-- Confirmar que a auditoria finding-driven (3 fechados, 2 deferidos) nao deixou violacao obvia
-  adicional no Core — varredura exaustiva nao foi escopo.
+(PROJECT.md nao declara secao `## Definition of Done` — brownfield; itens exclusivamente do
+CONTEXT.md, `dod=auto_only`.)
 
 ## Recommendation
 
-Aprovar e seguir para `/jdi-ship the-method-refactor`. Os 3 achados foram fechados exatamente como
-locked (MOVE/ROUTE verbatim, sem mudanca de logica — verificado por inspecao independente, nao por
-confianca na SUMMARY), a rede nao regrediu (201/2/203 vs 196/2/198) e o codigo alterado esta acima
-do piso de 90%. Os warnings sao de rastreamento (W-1 e o unico com risco real futuro e ja esta em
-`.jdi/todos.md`); nenhum exige retrabalho nesta fase. Recomendo que a phase de integracao futura
-(ou `epub-zip-slip`, que ja vai criar fixtures de EPUB malicioso) absorva assercoes para
-`InlineCssLinks`/`UpdateOpfTitleAsync` — fechar W-1 no mesmo esforco de fixture.
-
-**Verdict:** APPROVED_WITH_WARNINGS
+Blocker da iter 1 fechado com prova objetiva e verificado adversarialmente por este review — o fix
+e real, nao cosmetico: o contra-exemplo exato do critico agora derruba o gate, e o par
+teste-semantico + gate-textual cobre pattern, options, ligacao nome<->atributo e rename. Nenhum
+gate 1-8 bloqueia; 0 itens manuais. Recomendo **ship**. Para fases futuras, tres encaminhamentos
+ja roteados: (1) fixture end-to-end de `CreateTranslatedEpubAsync`/`InlineCssLinks` fecharia W-1 e
+W-2 de uma vez (decisao deliberada de I/O em fase propria); (2) `TestResults/` no `.gitignore`
+(W-4, 1 linha); (3) as 11 WHITESPACE morrem na fase `baseline-de-estilo` (W-3).
 
 ## DoD Critic (enhanced — forcado por /jdi-issue)
 
-Re-exame read-only das 5 linhas `Type=Auto` com `Status=PASS`. O critico so pode tornar o veredito
-mais estrito, nunca mais frouxo. Resultado: 4 de 5 linhas com PASS genuino (artefato inspecionado
-independentemente do `Verify:`, com backstop de mutacao nas linhas 1-3 e precondicoes de `merge-base`
-resolvidas na linha 5). Uma linha oca com prova objetiva:
+Re-ataque das 5 linhas `Type=Auto`/`PASS` (o critico so pode endurecer o veredito). Linhas 1, 2 e 3
+confirmadas SOLIDAS por inspecao independente + contra-exemplos executados: o `-ge 8` do item 2 e
+escopado a `ReadingManagerTests.cs` (7 attrs em `a390eb9`, 8 hoje — deletar o teste do branch derruba
+o gate; os +17 attrs novos vivem em outro arquivo e nao inflam a medida), e o item 3 pega o leftover
+realista (`private static ...` residual -> exit 1). Duas linhas caem:
 
-- DoD row «Achado #3: `ParsingEngine` vira `partial class`, os 7 padroes regex inline viram
-  `[GeneratedRegex]`, zero `Regex.Replace/Match/IsMatch` estaticos restantes»: **hollow=true,
-  objective=true**. O `Verify:` conta `[GeneratedRegex` >= 7 e nunca checa QUAIS patterns/options —
-  ao contrario do DoD 3, que nomeia os 4 metodos. Contra-exemplo EXECUTADO (copia em scratchpad, repo
-  intocado): pattern de `StylesheetRelRegex` corrompido (`stylesheet` -> `stylsheet`) E
-  `RegexOptions.IgnoreCase` removido — exatamente a armadilha de migracao que o PLAN nomeou como risco
-  #1 — e o `Verify:` literal do DoD 4 saiu com `exit 0`. A rede de testes nao fecha o furo: o proprio
-  doer mediu (`SUMMARY` T-2) que `StylesheetRelRegex`, `OpfTitleRegex`, `LinkTagRegex` e
-  `StylesheetHrefRegex` sozinhos produzem **0** falhas; a cobertura confirma `ParsingEngine.cs:126`
-  com 0 hits e os early-returns de `InlineCssLinks` descobertos. Ou seja: `Verify:` verde + 203 testes
-  verdes coexistem com codigo comportamentalmente errado em 4 dos 7 padroes. O que provou a
-  conformidade de fato foi a inspecao manual byte-a-byte do reviewer (item (a) acima) — prova que vive
-  FORA do gate automatizado, e portanto nao sobrevive a proxima phase.
+- DoD row «Achado #3: `ParsingEngine` ... 7 `[GeneratedRegex]` com pattern/options byte-identicos
+  ligados ao nome (Verify endurecido por D-...-7)»: **hollow=true, objective=true**. Contra-exemplo
+  M5 executado em copia: trocar UM token no call site `ParsingEngine.cs:196`
+  (`StylesheetRelRegex` -> `StylesheetHrefRegex`, nomes lookalike adjacentes — slip plausivel num
+  refactor, nao evasao deliberada) sai **exit 0** com `StylesheetRelRegex` declarado e nunca chamado;
+  o orfao SIMPLES (M6) sai exit 1. Enquadramento: e furo DO CRITERIO, nao wiring fora dele —
+  `D-2026-07-30-the-method-refactor-7` (`DECISIONS.md:563-568`) locka textualmente que a clausula
+  `-eq 14` fecha "regex declarado e nunca chamado" e que "orfanar um regex derruba o gate", sem
+  qualificador; o comando entrega essa promessa so para o orfao simples. A causa e a mesma classe do
+  blocker da iter 1: `-eq 14` mede contagem agregada conveniente em vez da propriedade por-nome
+  ("cada uma das 7 factories tem >= 1 call site" = 7 checks). A rede pareada nao compensa POR
+  CONSTRUCAO: os 26 casos de `ParsingEngineRegexTests.cs:13-18` invocam as factories direto por
+  reflection (nunca passam pelo wiring de producao) e `ParsingEngineTests` tem ZERO referencia a
+  `stylesheet`/`css`/`<link` (grep = 0 hits) — M5 passa o `Verify:` E a suite inteira.
+  O resto do endurecimento de D-7 e solido e foi confirmado: os pares `-A1 -F` byte-exatos amarram
+  pattern+options ao nome certo, pattern trocado entre factories quebra o par, rename quebra
+  `-eq 14` + par + o null-guard de `ParsingEngineRegexTests.cs:15-16` (o teste por reflection lanca,
+  nao passa vazio).
 
-Mesma classe de defeito ja catalogada em `.jdi/todos.md` (`[PROCESSO/DoD]` e a regra Semgrep
-`translatereader-zip-slip` que nunca podia disparar no caminho real): o gate mede um proxy conveniente
-em vez da propriedade real.
+- DoD row «Guardrail agregado: zero diff em `src/TranslateReader/`, nenhum pacote BenchmarkDotNet,
+  contagem `[Fact]`/`[Theory]` nao regride do baseline 192»: **hollow=true, objective=true**. Duas
+  clausulas nao provam o que o criterio afirma, ambas executadas em copia:
+  (1) o criterio diz "nenhum pacote BenchmarkDotNet" sem escopo, mas o comando roda `find src` — com
+  `<PackageReference Include="BenchmarkDotNet"/>` em `test/TranslateReader.Tests/
+  TranslateReader.Tests.csproj` (o lugar NATURAL de infra de benchmark, exatamente o que
+  `D-...-2(B)` quer barrar) a clausula sai **exit 0**, e nenhum outro gate greppa BenchmarkDotNet.
+  (2) o criterio diz "a contagem nao regride", mas `grep -rhoE` conta TEXTO, incluindo comentario:
+  comentando 25 atributos reais (`// [Fact]`) a contagem medida permanece 214 e a clausula sai
+  **exit 0** com atributos ativos = 189 < 192 — regressao real passa o guardrail (e passa o gate 2
+  tambem, cujo piso locked e 167). Sustentam-se: `git merge-base main HEAD` resolve (a390eb9) e a
+  clausula de diff do app MAUI compara base contra working tree (pega commitado e nao-commitado).
+
+Ambos os furos sao a mesma familia ja catalogada em `.jdi/todos.md` (`[PROCESSO/DoD]`): o gate mede
+um proxy agregado conveniente em vez da propriedade por-item.
 
 **Verdict:** BLOCKED
