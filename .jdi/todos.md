@@ -165,3 +165,18 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   end-to-end de `InlineCssLinks`/`UpdateOpfTitleAsync` (o padrao certo chamado no lugar certo,
   sobre um EPUB real) segue sem assercao — isso sim exige fixture com I/O. O que morreu foi a
   classe de defeito "pattern/options corrompidos passam em silencio".
+
+- **[PROCESSO/DoD] Ratchet do piso de atributos de teste: subir o limiar ao FECHAR cada phase, nao
+  no meio dela.** O item 5 do DoD de `the-method-refactor` mede `[Fact]`/`[Theory]` VIVOS com piso
+  `-ge 193` (baseline 192 + 1) enquanto a medida real ao fim da phase e **214** — 21 atributos de
+  folga, janela em que uma regressao passaria o DoD 5 (o Gate 2 do reviewer, que compara 227
+  aprovados / 229 totais, cobre essa janela hoje). Subir o piso e tentador, mas quem esta DENTRO da
+  phase ja sabe que passa: apertar o proprio criterio no fim da corrida e movimento de trave, nao
+  endurecimento — recusado na iter 4, ver `D-2026-07-30-the-method-refactor-9` (secao "Nao fechado
+  nesta rodada"). O lugar certo e o `/jdi-ship`/`/jdi-discuss` da PROXIMA phase: ao abrir a phase
+  seguinte, o piso do guardrail nasce igual a medida fechada da anterior (214 -> `-ge 215` na
+  primeira mudanca de teste). Mesma classe do item `[PROCESSO/DoD]` de `regression-suite` acima:
+  criterio de DoD se endurece na virada, com o numero ja publicado, nunca retroativamente.
+  Residuos de MEDIDA conhecidos e deliberadamente mantidos: `[ Fact ]` com espacos nao conta
+  (fail-closed, subconta, consistente com o baseline 192) e `"[Fact]"` em string literal conta
+  (sobreconta, so alcancavel de proposito) — fechar qualquer um dos dois exige parsear C#.
