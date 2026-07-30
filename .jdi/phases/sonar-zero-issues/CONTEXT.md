@@ -40,9 +40,10 @@ cada issue termina em fix, exclusao ou waiver auditavel, nunca silenciada sem re
 ## Definition of Done
 
 ### Auto-verifiable
-- [ ] `dotnet-install.ps1` removido; sem referencia residual no repo (exceto historico git).
-      **Verify:** `test ! -e dotnet-install.ps1 && test -z "$(grep -rl 'dotnet-install\.ps1' --exclude-dir=.git . 2>/dev/null)"`
-      **Source:** CONTEXT (D-...-1)
+- [ ] `dotnet-install.ps1` removido; nenhum arquivo RASTREADO fora de `.jdi/` (registro de
+      auditoria append-only) o referencia. Historico git e `.jdi/` fora do universo por design.
+      **Verify:** `test ! -e dotnet-install.ps1 && test -z "$(git grep -l 'dotnet-install\.ps1' -- . ':(exclude).jdi' 2>/dev/null)"`
+      **Source:** CONTEXT (D-...-1, `Verify:` superseded por D-2026-07-30-sonar-zero-issues-7)
 
 - [ ] `HtmlUtility.cs`: as 7 chamadas estaticas `Regex.Match/IsMatch` (S6444+SYSLIB1045) viram
       `[GeneratedRegex]` com `matchTimeoutMilliseconds`; `TextBlockRegex` (SYSLIB1044) tem pragma

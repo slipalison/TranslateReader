@@ -809,3 +809,50 @@ issues" desta fase e valido para o que o Sonar de fato escaneia (Core C# + JS/HT
 para o repo inteiro. Fechar isso exigiria um job Sonar rodando em `windows-latest` com workload MAUI
 — infraestrutura de CI nova, fora do escopo desta fase (issues + mecanismo sobre o que ja e
 escaneado), nao decidido aqui.
+
+D-2026-07-30-sonar-zero-issues-7: O `Verify:` do item 1 do Definition of Done desta fase
+(CONTEXT.md) fica SUPERSEDED pelo comando registrado no proprio CONTEXT.md sob esta decisao. Ela
+NAO reescreve D-2026-07-30-sonar-zero-issues-1 (append-only): o QUE deve ser feito segue
+identico — `dotnet-install.ps1` REMOVIDO do repo e a permissao stale de
+`.claude/settings.local.json:38` removida no MESMO commit. Muda so COMO o DoD prova isso.
+
+Furo (auto-derrota, medido antes de qualquer edicao): o comando vigente era
+`test ! -e dotnet-install.ps1 && test -z "$(grep -rl 'dotnet-install\.ps1' --exclude-dir=.git . 2>/dev/null)"`.
+`grep -r` varre TODO byte do working tree, entao ele bate em tres classes de arquivo que a phase
+nao pode e nao deve limpar:
+(a) o proprio registro de auditoria — `.jdi/DECISIONS.md:735,739` (a D-...-1 CITA o nome do
+    arquivo por design) e `.jdi/phases/sonar-zero-issues/CONTEXT.md:9,43,44` (o proprio item do
+    DoD contem a string que ele proibe — o gate se auto-derrota por construcao);
+(b) `.jdi/phases/sonar-zero-issues/PLAN.md` (7 ocorrencias, mesma natureza de registro);
+(c) `.idea/.idea.TranslateReader/.idea/workspace.xml` — untracked e gitignorado
+    (`.gitignore:29`), estado local de IDE de UMA maquina; nenhum commit desta phase o alcanca,
+    e o DoD passaria ou reprovaria conforme a maquina que rodasse o comando.
+Consequencia: o comando antigo saia `exit 1` mesmo com a phase 100% entregue — gate impossivel de
+satisfazer, que e a forma degenerada do defeito ja catalogado em `.jdi/todos.md` `[PROCESSO/DoD]`
+(o gate mede um PROXY, aqui o proxy "nenhum byte do repo menciona a string", em vez da propriedade
+real).
+
+Propriedade REAL locked: **(1) o arquivo nao existe mais no working tree E (2) nenhum arquivo
+RASTREADO pelo git fora de `.jdi/` o referencia.** `.jdi/` e excluido por ser registro de
+auditoria append-only cuja funcao E citar o nome; arquivo untracked/ignorado e excluido porque
+nao e conteudo do repo. Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`test ! -e dotnet-install.ps1 && test -z "$(git grep -l 'dotnet-install\.ps1' -- . ':(exclude).jdi' 2>/dev/null)"`
+
+Nenhuma protecao afrouxada em relacao ao que o criterio queria dizer: a clausula `test ! -e` fica
+BYTE-IDENTICA, e a segunda clausula continua exigindo ZERO referencia — o que muda e o universo
+varrido, que passa a ser exatamente o universo que a phase controla (arquivos rastreados, fora do
+registro de auditoria). O caso concreto que motivou a clausula em D-...-1 — a permissao stale em
+`.claude/settings.local.json:38`, arquivo RASTREADO (D-2026-07-28-ci-seguranca-2) — continua
+integralmente coberto: `git grep` o enxerga, e o gate reprova se ela voltar.
+
+Prova por mutacao nos DOIS sentidos (executada, repo real):
+- estado ANTES da entrega (arquivo presente + permissao presente): NEW `exit 1`. OLD tambem
+  `exit 1`, mas por motivo errado (bateria em `.jdi/` e `.idea/`, nao no defeito).
+- estado DEPOIS da entrega (arquivo deletado + permissao removida): NEW `exit 0`; OLD `exit 1`
+  (auto-derrota — bate em `.jdi/DECISIONS.md`, `CONTEXT.md`, `PLAN.md`, `.idea/workspace.xml`).
+- mutante realista M1 — arquivo deletado mas a linha de permissao de
+  `.claude/settings.local.json` READICIONADA (regressao exata que D-...-1 quer barrar):
+  NEW `exit 1`.
+- mutante M2 — permissao removida mas `dotnet-install.ps1` restaurado: NEW `exit 1` (pega pelas
+  duas clausulas).
+- falso positivo — no repo entregue, sem mutacao, NEW `exit 0`.
