@@ -52,11 +52,11 @@ public class TranslationManager(
         var chapters = await parsingEngine.ExtractChaptersAsync(book.FilePath);
         var job = await GetOrCreateJobAsync(bookId, sourceLanguage, targetLanguage);
         var startChapterIndex = job.LastCompletedChapterIndex + 1;
+        var run = new TranslationRun(book, sourceLanguage, targetLanguage, progress);
 
         try
         {
-            await TranslateChaptersWithCacheAsync(
-                book, chapters, job, startChapterIndex, sourceLanguage, targetLanguage, progress, ct);
+            await TranslateChaptersWithCacheAsync(run, chapters, job, startChapterIndex, ct);
         }
         catch (OperationCanceledException)
         {
@@ -103,39 +103,22 @@ public class TranslationManager(
         return job;
     }
 
-    private async Task TranslateChaptersWithCacheAsync(
-        Book book,
-        IReadOnlyList<Chapter> chapters,
-        BookTranslationJob job,
-        int startChapterIndex,
-        string sourceLanguage,
-        string targetLanguage,
-        IProgress<BookTranslationProgress>? progress,
-        CancellationToken ct)
-    {
-        for (var chapterIdx = startChapterIndex; chapterIdx < chapters.Count; chapterIdx++)
-        {
-            ct.ThrowIfCancellationRequested();
-            var chapter = chapters[chapterIdx];
-            await TranslateSingleChapterAsync(
-                book, chapter, chapterIdx, chapters.Count,
-                sourceLanguage, targetLanguage, progress, ct);
-
-            job.LastCompletedChapterIndex = chapterIdx;
-            await bookTranslationJobAccess.UpdateJobProgressAsync(job.Id, chapterIdx, "InProgress");
-        }
-    }
+    /// Groups the values that stay constant for a whole book translation, so the per-chapter
+    /// helpers below stay inside the 7-parameter budget (S107).
+    private sealed record TranslationRun(
+        Book Book,
+        string SourceLanguage,
+        string TargetLanguage,
+        IProgress<BookTranslationProgress>? Progress);
 
     private async Task TranslateSingleChapterAsync(
-        Book book,
+        TranslationRun run,
         Chapter chapter,
         int chapterIdx,
         int totalChapters,
-        string sourceLanguage,
-        string targetLanguage,
-        IProgress<BookTranslationProgress>? progress,
         CancellationToken ct)
     {
+        var book = run.Book;
         var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapter.HRef, string.Empty);
         var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
 
@@ -143,13 +126,13 @@ public class TranslationManager(
         {
             ct.ThrowIfCancellationRequested();
             var original = textBlocks[paraIdx];
-            var hash = ComputeHash(original, sourceLanguage, targetLanguage);
+            var hash = ComputeHash(original, run.SourceLanguage, run.TargetLanguage);
 
             var cached = await translationCacheAccess.FetchTranslationAsync(book.Id, chapter.HRef, hash);
             if (cached is null)
             {
                 var (systemMessage, userMessage) = promptUtility.BuildTranslationMessages(
-                    original, sourceLanguage, targetLanguage, book.Title, chapter.Title, null);
+                    original, run.SourceLanguage, run.TargetLanguage, book.Title, chapter.Title, null);
                 var maxTokens = original.Length * MaxTokenMultiplier;
                 var translated = await translationEngine.GenerateAsync(
                     systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
@@ -157,7 +140,25 @@ public class TranslationManager(
                     book.Id, chapter.HRef, hash, CleanTranslationOutput(translated));
             }
 
-            ReportChapterProgress(progress, chapterIdx, totalChapters, paraIdx + 1, textBlocks.Count);
+            ReportChapterProgress(run.Progress, chapterIdx, totalChapters, paraIdx + 1, textBlocks.Count);
+        }
+    }
+
+    private async Task TranslateChaptersWithCacheAsync(
+        TranslationRun run,
+        IReadOnlyList<Chapter> chapters,
+        BookTranslationJob job,
+        int startChapterIndex,
+        CancellationToken ct)
+    {
+        for (var chapterIdx = startChapterIndex; chapterIdx < chapters.Count; chapterIdx++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var chapter = chapters[chapterIdx];
+            await TranslateSingleChapterAsync(run, chapter, chapterIdx, chapters.Count, ct);
+
+            job.LastCompletedChapterIndex = chapterIdx;
+            await bookTranslationJobAccess.UpdateJobProgressAsync(job.Id, chapterIdx, "InProgress");
         }
     }
 
@@ -179,13 +180,13 @@ public class TranslationManager(
         string targetLanguage)
     {
         var translatedChapters = new Dictionary<string, string>();
-        foreach (var chapter in chapters)
+        foreach (var href in chapters.Select(chapter => chapter.HRef))
         {
-            var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapter.HRef, string.Empty);
+            var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, href, string.Empty);
             var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
             var translations = await FetchTranslationsFromCacheAsync(
-                book.Id, chapter.HRef, textBlocks, sourceLanguage, targetLanguage);
-            translatedChapters[chapter.HRef] = HtmlUtility.ReplaceTextBlocksInHtml(html, translations);
+                book.Id, href, textBlocks, sourceLanguage, targetLanguage);
+            translatedChapters[href] = HtmlUtility.ReplaceTextBlocksInHtml(html, translations);
         }
         return translatedChapters;
     }
