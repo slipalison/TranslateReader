@@ -325,3 +325,55 @@ o pin vale SO para o reviewer; o doer continua herdando o default do ambiente. R
 registrado: o reviewer e o gate que decide BLOCKED/APPROVED e roda o `mode=dod-critic`
 (deteccao de Gate-8 Auto/PASS oco) — profundidade de raciocinio ali e mais barata que um
 defeito que passa. Sincronizado em `reviewers.md` e `registry.md`.
+
+D-2026-07-30-regression-suite-1: Phase 'Rede de testes de regressao' (slug: regression-suite)
+adicionada via /jdi-issue (card colado: "com base no The Method, crie testes que garanta que as
+funcionalidades sempre funcione da mesma forma independente das alteracoes sem quebrar o
+funcionamento do aplicativo. E no termino, refatore todo o projeto com base no The Method e nas
+boas praticas de desenvolvimento, lembrese que e um aplicativo e devemos economizar em consumo de
+memoria e processamento, pois em um sistema android ou IOS iriamos consumir toda a memoria do
+dispositivo e consumir toda a bateria do usuario e isso e uma experiencia inaceitavel").
+Reason: o card contem DOIS entregaveis sequenciais e o proprio texto fixa a ordem ("E no
+termino, refatore") — dividido em duas phases, `regression-suite` (esta) e `the-method-refactor`
+(D-2026-07-30-the-method-refactor-1). Decisao de escopo confirmada pelo usuario nesta invocacao:
+encadear ate o PR SOMENTE esta phase; o refactor roda depois, com a rede ja mergeada em `main`
+protegendo-o e ja verde no CI.
+ACHADO ESTRUTURAL que o card nao previu e que define o escopo desta phase:
+`test/TranslateReader.Tests` tem `<TargetFramework>net10.0</TargetFramework>` e um unico
+`ProjectReference` para `src/TranslateReader.Core`. O projeto MAUI (`src/TranslateReader`,
+1516 linhas) portanto NAO tem caminho de teste algum hoje — `ReaderPageModel` (303 linhas),
+`LibraryPageModel` (236), `ReaderPage.xaml.cs` (488) e `SettingsOverlay.xaml.cs` (221) estao
+com zero cobertura e sao estruturalmente inalcancaveis: `LibraryPageModel` importa
+`CommunityToolkit.Maui.Extensions` e `ReaderPageModel` usa `[QueryProperty]` do Shell, entao
+testa-los exige um test project com TFM de MAUI (`net10.0-windows...`), que so roda em Windows
+e sai do job `test` do CI (ubuntu-latest, D-2026-07-28-ci-seguranca-5). A phase DEVE decidir
+explicitamente entre (a) segundo test project multi-TFM rodando so no job `build` do Windows,
+(b) extrair a logica testavel dos PageModels para onde o test project atual alcance sem violar
+The Method, ou (c) registrar a lacuna como aceita e limitar a rede ao Core — a escolha entra
+no CONTEXT.md como decisao locked, nao pode ficar implicita, porque e exatamente a massa de
+codigo que o refactor da phase seguinte vai tocar.
+Baseline a preservar: 167 testes (D-2), hoje 169 atributos [Fact]/[Theory] em 17 arquivos.
+Codigo de teste novo e pos-boundary `4285f25`, entao vale o gate de 90% (D-6).
+
+D-2026-07-30-the-method-refactor-1: Phase 'Refactor The Method + memoria/CPU mobile'
+(slug: the-method-refactor) adicionada via /jdi-issue, mesma card de
+D-2026-07-30-regression-suite-1. Reason: segunda metade do card ("refatore todo o projeto com
+base no The Method e nas boas praticas... economizar em consumo de memoria e processamento").
+Escopo locked como **finding-driven, nao rewrite amplo** — confirmado pelo usuario nesta
+invocacao. Justificativa registrada: PROJECT.md > Code Design ja atesta aderencia estrutural
+total (4 Manager, 3 Engine, 6 Access, 3 Utility, naming 100%), entao "refatorar todo o projeto"
+sem violacao apontada produziria um diff de 71 arquivos sem defeito nomeado, humanamente
+irrevisavel, e tocaria as 1516 linhas do projeto MAUI justamente onde a rede de testes nao
+alcanca (ver achado estrutural em D-2026-07-30-regression-suite-1). Em vez disso: auditoria
+primeiro, e cada mudanca precisa de (1) uma violacao nomeada de CLAUDE.md ou de
+`.claude/rules/csharp.md`, ou um hotspot de memoria/CPU medido, e (2) um teste da phase
+`regression-suite` provando que o comportamento observavel nao mudou. Alvos de performance
+declarados pelo card (mobile: memoria e bateria) mapeiam nos hot paths que
+`.claude/rules/csharp.md` ja nomeia: ParsingEngine, HtmlUtility, TranslationEngine, loops de
+capitulo/paragrafo/token, loops de linha do SQLite, e o limite de LOH (>= 85.000 bytes).
+DEPENDENCIA: nao comecar antes de `regression-suite` estar mergeada em `main` — a rede e a
+unica prova de que o refactor nao alterou comportamento. Nota: `.claude/rules/csharp.md` §2
+exige "Measure before optimizing (BenchmarkDotNet, dotnet-counters, dotnet-gcdump)"; nao ha
+infra de benchmark no repo hoje, entao a phase deve decidir se cria essa infra ou se limita as
+mudancas as que sao conformidade de regra (provavel por inspecao) em vez de otimizacao
+especulativa — ganho de bateria/memoria nao pode ser DECLARADO sem medida.
