@@ -136,6 +136,36 @@ confirmacao direta de que essas 4 branches nao eram exercitadas por ninguem ante
 | rodada 1, 3 alvos disjuntos: status do catch de `TranslateBookAsync` Paused -> Cancelled; guarda `job is not null` invertida em `PauseTranslationAsync`; `WebUtility.HtmlEncode` removido de `ReplaceTextBlocksInHtml` | WhenCancelledMidLoop_PausesJobAndSkipsEpubCreation, PauseTranslationAsync_WithoutActiveJob_DoesNotUpdateAnyJob, HtmlEncodesTranslatedTextBeforeBuildingTheEpub (+ o legado PauseTranslationAsync_UpdatesJobStatus, esperado: guarda invertida quebra os dois lados) |
 | rodada 2: remover `ct.ThrowIfCancellationRequested()` SO dentro de `TranslateChapterAsync` e `TranslateParagraphsAsync` | TranslateChapterAsync_WithCancelledToken_ThrowsWhileIterating, TranslateParagraphsAsync_WithCancelledToken_ThrowsWhileIterating |
 
+### Rodada de correcao de warnings — assercao secundaria dos 2 testes de cancelamento
+
+Contexto: os dois testes de cancelamento das APIs de streaming
+(`TranslateChapterAsync_WithCancelledToken_ThrowsWhileIterating` e
+`TranslateParagraphsAsync_WithCancelledToken_ThrowsWhileIterating`) deixavam
+`FetchTranslationAsync` sem configuracao no substituto. Como o auto-value de `Task<string?>` no
+NSubstitute e `string.Empty` (nao null) e o `TranslationManager` le resultado nao-nulo como CACHE
+HIT, a assercao secundaria `_translationEngine.DidNotReceive().GenerateAsync(...)` passava por
+motivo ERRADO: a engine nunca era chamada por causa do falso cache hit, nao por causa do
+cancelamento. Sem falso verde (a assercao primaria `ThrowsAnyAsync<OperationCanceledException>`
+discriminava, porque `ThrowIfCancellationRequested` em `TranslationManager.cs:226/:274` antecede o
+fetch de cache em `:231/:279`), mas a assercao secundaria nao carregava peso nenhum.
+
+Correcao: `_cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>())
+.Returns((string?)null)` explicito nos dois testes — o mesmo remedio ja documentado em
+"Achado desta execucao".
+
+Prova por mutacao (3 rodadas, `git checkout -- src/` entre cada uma, **nenhuma mutacao commitada**):
+
+| # | Mutacao em `src/TranslateReader.Core/Business/Managers/TranslationManager.cs` | Teste usado | Resultado medido |
+|---|---|---|---|
+| A | remover `ct.ThrowIfCancellationRequested()` dos loops de `TranslateChapterAsync` e `TranslateParagraphsAsync` | corrigido | **2 falhas / 2** — `Assert.ThrowsAny() Failure: No exception was thrown` (assercao primaria morde) |
+| B | mover `ct.ThrowIfCancellationRequested()` para DEPOIS da chamada a `GenerateAsync` (OCE continua sendo lancada, mas a engine roda antes) | corrigido | **2 falhas / 2** — `ReceivedCallsException: Expected to receive no calls ... Actually received 1 matching call: GenerateAsync(...)`. A assercao SECUNDARIA e quem falha: ela agora e load-bearing |
+| C | mesma mutacao B, com o codigo de teste ANTERIOR a correcao (cache sem stub) | pre-correcao | a engine **nunca** e chamada mesmo sem checagem de cancelamento antes dela — o falso cache hit curto-circuita o loop; a assercao secundaria e satisfeita pelo `string.Empty`, nao pelo cancelamento. **Vacuidade comprovada** |
+
+B vs C e a prova direta: sob a MESMA mutacao de producao, o teste corrigido observa a engine sendo
+chamada (assercao secundaria falha) e o teste anterior nao observa nada (assercao secundaria
+continuaria valida). Depois de restaurar `src/`: suite completa verde, `git diff --name-only
+299f150..HEAD -- src/` vazio, `git diff -- src/` vazio.
+
 ## Lacunas registradas (decisao, nao esquecimento)
 
 1. **O `ORDER BY UpdatedAt DESC` de `FetchActiveJobAsync` (T-1) segue NAO pinado.** Com 2 jobs ativos o
@@ -166,3 +196,8 @@ auto-value de string e `string.Empty`, que o `TranslationManager` le como CACHE 
 chamada a engine. O teste de cancelamento de `TranslateBookAsync` precisou de
 `_cacheAccess.FetchTranslationAsync(...).Returns((string?)null)` explicito — sem isso ele passava
 vazio (falso verde), porque a engine nunca era chamada e o cancelamento nunca era disparado.
+
+A armadilha reapareceu de forma mais sutil nos dois testes de cancelamento das APIs de streaming: la
+ela nao produzia falso verde (a assercao primaria discriminava), mas esvaziava a assercao secundaria
+`DidNotReceive().GenerateAsync(...)`. Regra pratica: **em qualquer teste deste arquivo que asserta
+que a engine NAO foi chamada, o stub de cache tem que ser explicito** — o auto-value nunca serve.

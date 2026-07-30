@@ -679,6 +679,8 @@ public class TranslationManagerTests
     public async Task TranslateChapterAsync_WithCancelledToken_ThrowsWhileIterating()
     {
         SetupBookAndChapter("<html><body><p>Hello world</p></body></html>");
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
@@ -698,6 +700,8 @@ public class TranslationManagerTests
     public async Task TranslateParagraphsAsync_WithCancelledToken_ThrowsWhileIterating()
     {
         SetupBook();
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
         var paragraphs = new List<VisibleParagraph> { new(0, "Hello world") };
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
