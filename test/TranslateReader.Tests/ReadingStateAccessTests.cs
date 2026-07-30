@@ -8,7 +8,11 @@ public class ReadingStateAccessTests : IDisposable
     private readonly InMemoryDatabase _db = new();
     private ReadingStateAccess CreateSut() => new(_db.ConnectionString, initializeOnStartup: true);
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        _db.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public async Task FetchProgressAsync_ReturnsNullWhenNoneExists()

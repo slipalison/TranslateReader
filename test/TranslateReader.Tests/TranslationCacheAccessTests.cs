@@ -7,7 +7,11 @@ public class TranslationCacheAccessTests : IDisposable
     private readonly InMemoryDatabase _db = new();
     private TranslationCacheAccess CreateSut() => new(_db.ConnectionString, initializeOnStartup: true);
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        _db.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public async Task FetchTranslationAsync_ReturnsNullWhenNotCached()

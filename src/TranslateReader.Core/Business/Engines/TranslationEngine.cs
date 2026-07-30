@@ -8,7 +8,7 @@ using TranslateReader.Contracts.Engines;
 
 namespace TranslateReader.Business.Engines;
 
-public class TranslationEngine : ITranslationEngine
+public sealed class TranslationEngine : ITranslationEngine
 {
     private LLamaWeights? _weights;
     private ModelParams? _modelParams;
@@ -86,6 +86,7 @@ public class TranslationEngine : ITranslationEngine
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         if (_disposed)
             return;
 

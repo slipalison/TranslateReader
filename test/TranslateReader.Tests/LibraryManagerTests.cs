@@ -172,6 +172,6 @@ public class LibraryManagerTests
 
         await _translationCacheAccess.Received(1).RemoveTranslationsForBookAsync(5);
         await _readingStateAccess.Received(1).RemoveStateForBookAsync(5);
-        await _fileUtility.Received(1).DeleteDirectoryAsync(Arg.Is<string>(p => p.Contains("images") && p.Contains("5")));
+        await _fileUtility.Received(1).DeleteDirectoryAsync(Arg.Is<string>(p => p.Contains("images") && p.Contains('5')));
     }
 }
