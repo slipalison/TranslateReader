@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using TranslateReader.Contracts.Access;
 using TranslateReader.Models;
@@ -6,6 +7,8 @@ namespace TranslateReader.Access;
 
 public class ReadingStateAccess(string connectionString) : IReadingStateAccess
 {
+    private const string BookIdParameter = "$bookId";
+
     private readonly string _connectionString = connectionString;
 
     public ReadingStateAccess(string connectionString, bool initializeOnStartup) : this(connectionString)
@@ -46,7 +49,7 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
         await connection.OpenAsync();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM ReadingProgress WHERE BookId = $bookId";
-        command.Parameters.AddWithValue("$bookId", bookId);
+        command.Parameters.AddWithValue(BookIdParameter, bookId);
         using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
             return null;
@@ -67,7 +70,7 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
                 ProgressPercentage = excluded.ProgressPercentage,
                 UpdatedAt = excluded.UpdatedAt
             """;
-        command.Parameters.AddWithValue("$bookId", progress.BookId);
+        command.Parameters.AddWithValue(BookIdParameter, progress.BookId);
         command.Parameters.AddWithValue("$href", progress.ChapterHRef);
         command.Parameters.AddWithValue("$scroll", progress.ScrollPosition);
         command.Parameters.AddWithValue("$pct", progress.ProgressPercentage);
@@ -81,7 +84,7 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
         await connection.OpenAsync();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM Bookmarks WHERE BookId = $bookId ORDER BY CreatedAt";
-        command.Parameters.AddWithValue("$bookId", bookId);
+        command.Parameters.AddWithValue(BookIdParameter, bookId);
         var bookmarks = new List<Bookmark>();
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -98,7 +101,7 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
             INSERT INTO Bookmarks (BookId, ChapterHRef, Position, Label, CreatedAt)
             VALUES ($bookId, $href, $pos, $label, $created)
             """;
-        command.Parameters.AddWithValue("$bookId", bookmark.BookId);
+        command.Parameters.AddWithValue(BookIdParameter, bookmark.BookId);
         command.Parameters.AddWithValue("$href", bookmark.ChapterHRef);
         command.Parameters.AddWithValue("$pos", bookmark.Position);
         command.Parameters.AddWithValue("$label", bookmark.Label);
@@ -123,12 +126,12 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
 
         using var deleteProgress = connection.CreateCommand();
         deleteProgress.CommandText = "DELETE FROM ReadingProgress WHERE BookId = $bookId";
-        deleteProgress.Parameters.AddWithValue("$bookId", bookId);
+        deleteProgress.Parameters.AddWithValue(BookIdParameter, bookId);
         await deleteProgress.ExecuteNonQueryAsync();
 
         using var deleteBookmarks = connection.CreateCommand();
         deleteBookmarks.CommandText = "DELETE FROM Bookmarks WHERE BookId = $bookId";
-        deleteBookmarks.Parameters.AddWithValue("$bookId", bookId);
+        deleteBookmarks.Parameters.AddWithValue(BookIdParameter, bookId);
         await deleteBookmarks.ExecuteNonQueryAsync();
     }
 
@@ -139,7 +142,7 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
         ChapterHRef = reader.GetString(2),
         ScrollPosition = reader.GetDouble(3),
         ProgressPercentage = reader.GetDouble(4),
-        UpdatedAt = DateTime.Parse(reader.GetString(5))
+        UpdatedAt = DateTime.Parse(reader.GetString(5), CultureInfo.InvariantCulture)
     };
 
     private static Bookmark MapBookmark(SqliteDataReader reader) => new()
@@ -149,6 +152,6 @@ public class ReadingStateAccess(string connectionString) : IReadingStateAccess
         ChapterHRef = reader.GetString(2),
         Position = reader.GetDouble(3),
         Label = reader.GetString(4),
-        CreatedAt = DateTime.Parse(reader.GetString(5))
+        CreatedAt = DateTime.Parse(reader.GetString(5), CultureInfo.InvariantCulture)
     };
 }

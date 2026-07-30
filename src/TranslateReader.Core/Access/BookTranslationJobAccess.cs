@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using TranslateReader.Contracts.Access;
 using TranslateReader.Models;
@@ -60,8 +61,8 @@ public class BookTranslationJobAccess(string connectionString) : IBookTranslatio
             TargetLanguage = reader.GetString(3),
             Status = reader.GetString(4),
             LastCompletedChapterIndex = reader.GetInt32(5),
-            CreatedAt = DateTime.Parse(reader.GetString(6)),
-            UpdatedAt = DateTime.Parse(reader.GetString(7))
+            CreatedAt = DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+            UpdatedAt = DateTime.Parse(reader.GetString(7), CultureInfo.InvariantCulture)
         };
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using TranslateReader.Contracts.Access;
 using TranslateReader.Models;
@@ -97,7 +98,7 @@ public class BooksAccess(string connectionString) : IBooksAccess
     {
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        using var transaction = connection.BeginTransaction();
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
         foreach (var chapter in chapters)
         {
             using var command = connection.CreateCommand();
@@ -135,7 +136,7 @@ public class BooksAccess(string connectionString) : IBooksAccess
         CoverImagePath = reader.GetString(5),
         FilePath = reader.GetString(6),
         TotalChapters = reader.GetInt32(7),
-        DateAdded = DateTime.Parse(reader.GetString(8)),
-        LastOpenedAt = reader.IsDBNull(9) ? null : DateTime.Parse(reader.GetString(9))
+        DateAdded = DateTime.Parse(reader.GetString(8), CultureInfo.InvariantCulture),
+        LastOpenedAt = reader.IsDBNull(9) ? null : DateTime.Parse(reader.GetString(9), CultureInfo.InvariantCulture)
     };
 }
