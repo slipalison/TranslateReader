@@ -575,3 +575,65 @@ NOVO da `exit 1` nas 5. Complemento (nao substituto): a mesma iter entrega
 COMPORTAMENTO (26 casos, reflection sobre as factories privadas, sem I/O de disco — §6 respeitada,
 zero diff em producao). Os dois juntos cobrem o que nenhum cobre sozinho: o teste prova semantica
 de casamento, o `Verify:` prova que o texto que gera essa semantica nao mudou.
+
+D-2026-07-30-the-method-refactor-8: Os `Verify:` dos itens 4 e 5 do Definition of Done desta fase
+(CONTEXT.md) ficam SUPERSEDED pelos comandos registrados no proprio CONTEXT.md sob esta decisao.
+Ela NAO reescreve D-2026-07-30-the-method-refactor-5 nem -7 (append-only): o QUE deve ser feito
+continua igual, e o endurecimento de identidade pattern/options entregue por D-...-7 continua
+valendo integralmente — seu comando esta contido LITERALMENTE dentro do comando novo. O que muda e
+so COMO o DoD prova as duas propriedades que o DoD critic (iter 2, segmento `## DoD Critic` de
+REVIEW.md) derrubou com contra-exemplo EXECUTADO.
+
+Furo 1 (item 4, achado #3): a promessa textual de D-...-7 — a clausula `-eq 14` fecha "regex
+declarado e nunca chamado", sem qualificador — so valia para orfanamento SIMPLES. Contra-exemplo
+M5 do critico: trocar UM token no call site `ParsingEngine.cs:196` (`StylesheetRelRegex` ->
+`StylesheetHrefRegex`, nomes lookalike adjacentes, slip plausivel de refactor) deixa
+`StylesheetRelRegex` declarado e nunca chamado COMPENSANDO a contagem agregada (segue 14) e o
+comando sai `exit 0`. E furo DO CRITERIO, nao wiring fora dele. A rede de testes nao compensa por
+construcao: os 26 casos de `ParsingEngineRegexTests.cs` invocam as factories por reflection (nunca
+passam pelo wiring de producao) e `ParsingEngineTests` tem zero referencia a `stylesheet`/`css`/
+`<link`. Causa raiz, mesma familia ja catalogada em `.jdi/todos.md` `[PROCESSO/DoD]`: o gate media
+um proxy AGREGADO conveniente em vez da propriedade POR ITEM.
+Correcao locked (clausula NOVA acrescentada; nenhuma clausula antiga removida ou afrouxada — o
+`-eq 14` e os 7 pares `grep -A1 -F` permanecem): para CADA um dos 7 nomes exige-se
+`declaracoes == 1` E `call sites >= 1`, e o numero de nomes que satisfazem AS DUAS condicoes tem
+de ser EXATAMENTE 7. A varredura e feita em AWK que remove comentario de linha (`//`) e de bloco
+(`/* */`, com estado entre linhas) antes de contar — comentar um call site nao o mantem vivo.
+
+Furo 2 (item 5, guardrail agregado): duas clausulas mediam proxy errado.
+(a) o criterio diz "nenhum pacote BenchmarkDotNet" sem escopo, mas o comando rodava `find src`:
+`<PackageReference Include="BenchmarkDotNet"/>` em `test/TranslateReader.Tests/
+TranslateReader.Tests.csproj` — o lugar NATURAL de infra de benchmark, exatamente o que
+D-2026-07-30-the-method-refactor-2(B) barra — saia `exit 0`, e nenhum outro gate greppa
+BenchmarkDotNet. Correcao locked: a busca cobre TODO arquivo capaz de declarar pacote em qualquer
+lugar do repo (`*.csproj`, `*.props`, `*.targets`, `packages.config`, com `bin`/`obj`/`.git`
+podados), sem depender de `Directory.Build.props`/`Directory.Packages.props` existirem hoje (nao
+existem).
+(b) o criterio diz "a contagem `[Fact]`/`[Theory]` nao regride", mas `grep -rhoE` conta TEXTO:
+comentando 25 atributos reais (`// [Fact]`) a medida permanecia 214 e o comando saia `exit 0` com
+189 atributos ATIVOS — regressao real passava. Correcao locked: conta-se so atributo VIVO, pela
+mesma varredura AWK que descarta comentario de linha e de bloco. O piso continua `-ge 193`: o
+criterio locka o baseline 192 e esta decisao corrige a MEDIDA, nao o limiar.
+
+Containment formal (nenhuma clausula afrouxada): no item 4 o comando anterior esta contido
+literalmente no novo; no item 5, `find .` podado e superconjunto de `find src`, e contagem VIVA <=
+contagem TEXTUAL — logo, nas duas clausulas, NEW `exit 0` implica OLD `exit 0`.
+
+Prova por mutacao (clone em scratchpad, repo real nunca mutado; OLD = comando vigente extraido por
+sed de `CONTEXT.md` em `bc4f1c6`, NEW = comando desta decisao):
+- item 4 — pristino OLD 0 / NEW 0; M5 do critico OLD 0 / NEW 1; os 7 orfaos COMPENSADOS (um por
+  nome, call site trocado por outro nome, agregado sempre 14) OLD 0 / NEW 1 nos SETE; call site
+  comentado com `// ` OLD 0 / NEW 1; call site dentro de bloco `/* */` OLD 0 / NEW 1; orfao
+  SIMPLES (linha deletada) OLD 1 / NEW 1; e as mutacoes da iter 2 (pattern corrompido + sem
+  `IgnoreCase`, options trocado, factory renomeada) OLD 1 / NEW 1 — o endurecimento de D-...-7
+  sobrevive intacto.
+- item 5 — BenchmarkDotNet no csproj de TESTE OLD 0 / NEW 1; em `Directory.Build.props` OLD 0 /
+  NEW 1; em `Directory.Packages.props` (CPM) OLD 0 / NEW 1; no csproj de `src` OLD 1 / NEW 1;
+  25 atributos comentados `// [Fact]` OLD 0 / NEW 1 (texto 214, vivo 189); 25 em `/* */` de uma
+  linha OLD 0 / NEW 1; 25 em bloco `/* */` multi-linha OLD 0 / NEW 1; 25 atributos DELETADOS
+  OLD 1 / NEW 1.
+- falso positivo — no repo real sem mutacao os dois comandos saem `exit 0`, e a contagem VIVA e
+  identica a TEXTUAL (214 = 214): em codigo limpo a medida nova nao muda o numero.
+
+Zero linha de producao mudou por causa desta decisao — o codigo ja estava correto; o gate e que
+nao provava.

@@ -69,16 +69,26 @@ regra) e protegida pela rede de 192 testes de `regression-suite` (mergeada em `m
       **Source:** CONTEXT
 - [ ] Achado #3: `ParsingEngine` vira `partial class`, os 7 padroes regex inline viram
       `[GeneratedRegex]` com pattern e `RegexOptions` byte-identicos aos inline originais e
-      ligados ao mesmo nome de metodo, zero `Regex.Replace/Match/IsMatch` estaticos restantes
-      **Verify:** `F=src/TranslateReader.Core/Business/Engines/ParsingEngine.cs; test $(grep -cE "Regex\.(Replace|Match|IsMatch)\(" $F) -eq 0 && grep -q "public partial class ParsingEngine" $F && test $(grep -c "\[GeneratedRegex" $F) -eq 7 && test $(grep -cE "(OpfTitle|LinkTag|StylesheetRel|StylesheetHref|ImgSrc|SvgImageXlinkHref|SvgImageHref)Regex\(\)" $F) -eq 14 && test $(grep -A1 -F '[GeneratedRegex(@"(<dc:title[^>]*>)(.*?)(</dc:title>)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]' $F | grep -cF 'partial Regex OpfTitleRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"<link\b([^>]*?)/?>", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex LinkTagRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"\brel\s*=\s*""stylesheet""", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex StylesheetRelRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"\bhref\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex StylesheetHrefRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<img\b[^>]*?\bsrc\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex ImgSrcRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<image\b[^>]*?\bxlink:href\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex SvgImageXlinkHrefRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<image\b[^>]*?\bhref\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex SvgImageHrefRegex()') -eq 1`
-      **Source:** CONTEXT — `Verify:` SUPERSEDED por D-2026-07-30-the-method-refactor-7 (a
-      versao original contava ocorrencias e saia `exit 0` com pattern corrompido e
-      `IgnoreCase` removido; contra-exemplo executado pelo DoD critic em REVIEW.md).
-      Prova de comportamento pareada: `test/TranslateReader.Tests/ParsingEngineRegexTests.cs`
+      ligados ao mesmo nome de metodo, zero `Regex.Replace/Match/IsMatch` estaticos restantes e
+      nenhuma das 7 factories orfa — cada nome com declaracao unica E >= 1 call site VIVO
+      (comentario nao conta como chamada)
+      **Verify:** `F=src/TranslateReader.Core/Business/Engines/ParsingEngine.cs; test $(grep -cE "Regex\.(Replace|Match|IsMatch)\(" $F) -eq 0 && grep -q "public partial class ParsingEngine" $F && test $(grep -c "\[GeneratedRegex" $F) -eq 7 && test $(grep -cE "(OpfTitle|LinkTag|StylesheetRel|StylesheetHref|ImgSrc|SvgImageXlinkHref|SvgImageHref)Regex\(\)" $F) -eq 14 && test $(awk 'BEGIN{split("OpfTitle LinkTag StylesheetRel StylesheetHref ImgSrc SvgImageXlinkHref SvgImageHref",N," ")} {l=$0; if(b){i=index(l,"*/"); if(i){l=substr(l,i+2); b=0} else next} sub(/\/\/.*/,"",l); while(i=index(l,"/*")){r=substr(l,i+2); j=index(r,"*/"); if(j){l=substr(l,1,i-1) substr(r,j+2)} else {l=substr(l,1,i-1); b=1; break}} for(n=1;n<=7;n++){t=N[n] "Regex()"; if(index(l,t)){if(index(l,"partial Regex " t)) d[n]++; else c[n]++}}} END{k=0; for(n=1;n<=7;n++) if(d[n]==1 && c[n]>=1) k++; print k}' $F) -eq 7 && test $(grep -A1 -F '[GeneratedRegex(@"(<dc:title[^>]*>)(.*?)(</dc:title>)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]' $F | grep -cF 'partial Regex OpfTitleRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"<link\b([^>]*?)/?>", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex LinkTagRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"\brel\s*=\s*""stylesheet""", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex StylesheetRelRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"\bhref\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex StylesheetHrefRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<img\b[^>]*?\bsrc\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex ImgSrcRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<image\b[^>]*?\bxlink:href\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex SvgImageXlinkHrefRegex()') -eq 1 && test $(grep -A1 -F '[GeneratedRegex(@"(<image\b[^>]*?\bhref\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]' $F | grep -cF 'partial Regex SvgImageHrefRegex()') -eq 1`
+      **Source:** CONTEXT — `Verify:` SUPERSEDED duas vezes, sempre por contra-exemplo EXECUTADO
+      pelo DoD critic (REVIEW.md): por D-2026-07-30-the-method-refactor-7 (a 1a versao contava
+      ocorrencias e saia `exit 0` com pattern corrompido e `IgnoreCase` removido) e por
+      D-2026-07-30-the-method-refactor-8 (a 2a media a contagem AGREGADA `-eq 14` e saia `exit 0`
+      com regex orfanado de forma COMPENSADA — call site `ParsingEngine.cs:196` trocado por nome
+      lookalike; agora a checagem e POR NOME e descarta comentario). Prova de comportamento
+      pareada: `test/TranslateReader.Tests/ParsingEngineRegexTests.cs`
 - [ ] Guardrail agregado: zero diff em `src/TranslateReader/` (app MAUI), nenhum pacote
-      BenchmarkDotNet, contagem total `[Fact]`/`[Theory]` nao regride do baseline 192
-      **Verify:** `test $(git diff --name-only $(git merge-base main HEAD) -- src/TranslateReader/ | wc -l) -eq 0 && test $(find src -name "*.csproj" -exec grep -l "BenchmarkDotNet" {} \; | wc -l) -eq 0 && test $(grep -rhoE "\[Fact\]|\[Theory\]" test/TranslateReader.Tests --include=*.cs | wc -l) -ge 193`
-      **Source:** CONTEXT
+      BenchmarkDotNet declarado em QUALQUER csproj/props/targets/packages.config do repo
+      (inclusive `test/`), contagem total de `[Fact]`/`[Theory]` VIVOS (nao comentados) nao
+      regride do baseline 192
+      **Verify:** `test $(git diff --name-only $(git merge-base main HEAD) -- src/TranslateReader/ | wc -l) -eq 0 && test $(find . -type d \( -name bin -o -name obj -o -name .git \) -prune -o -type f \( -name "*.csproj" -o -name "*.props" -o -name "*.targets" -o -name "packages.config" \) -exec grep -l "BenchmarkDotNet" {} \; | wc -l) -eq 0 && test $(awk 'FNR==1{b=0} {l=$0; if(b){i=index(l,"*/"); if(i){l=substr(l,i+2); b=0} else next} sub(/\/\/.*/,"",l); while(i=index(l,"/*")){r=substr(l,i+2); j=index(r,"*/"); if(j){l=substr(l,1,i-1) substr(r,j+2)} else {l=substr(l,1,i-1); b=1; break}} while(match(l,/\[Fact\]|\[Theory\]/)){k++; l=substr(l,RSTART+RLENGTH)}} END{print k+0}' $(find test/TranslateReader.Tests -name "*.cs")) -ge 193`
+      **Source:** CONTEXT — `Verify:` SUPERSEDED por D-2026-07-30-the-method-refactor-8 (a versao
+      original buscava pacote so em `find src`, e BenchmarkDotNet no csproj de TESTE saia
+      `exit 0`; e contava atributo por TEXTO, entao 25 `[Fact]` comentados mantinham a medida em
+      214 com 189 ativos — ambos contra-exemplos executados pelo DoD critic em REVIEW.md)
 
 ### Manual
 - _(none — dod=auto_only; itens humanos foram para `## Deferred to PR review`)_
