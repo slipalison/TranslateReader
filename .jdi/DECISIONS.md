@@ -377,3 +377,82 @@ exige "Measure before optimizing (BenchmarkDotNet, dotnet-counters, dotnet-gcdum
 infra de benchmark no repo hoje, entao a phase deve decidir se cria essa infra ou se limita as
 mudancas as que sao conformidade de regra (provavel por inspecao) em vez de otimizacao
 especulativa — ganho de bateria/memoria nao pode ser DECLARADO sem medida.
+
+D-2026-07-30-regression-suite-2: Decisao central da fase (opcao exigida pelo achado estrutural
+de D-2026-07-30-regression-suite-1) — **opcao (c) escolhida**: aceitar a lacuna do projeto MAUI
+e limitar a rede desta fase a `src/TranslateReader.Core`, catalogando explicitamente o que fica
+desprotegido. Decidido em modo `auto` (sem interacao), racional registrado:
+- Opcao (a) (2o test project multi-TFM em `net10.0-windows10.0.19041.0`) exige infraestrutura
+  nova inexistente hoje — csproj novo, referencia a `CommunityToolkit.Maui`/`.Extensions`, e um
+  jeito de satisfazer `[QueryProperty]` (Shell) sem Shell vivo. Construir isso e trabalho
+  formatado como producao (novo projeto, novos seams de DI) — risco real de virar o refactor que
+  esta fase esta proibida de fazer (D-2026-07-30-regression-suite-1: "encadear ate o PR SOMENTE
+  esta phase"). Alem disso, so rodaria no job `build` (windows-latest) do CI — o job `test`
+  (ubuntu-latest, D-2026-07-28-ci-seguranca-5) nao tem workload MAUI, e esse job nunca foi
+  escopado para rodar `dotnet test` (so `dotnet build -f net10.0-windows...`).
+- Opcao (b) (extrair logica testavel dos PageModels) e refactor comportamental por definicao —
+  ja esta explicitamente alocada em `the-method-refactor` (D-2026-07-30-the-method-refactor-1),
+  que por sua vez DEPENDE desta fase estar mergeada primeiro. Faze-la aqui inverteria a
+  dependencia que o usuario ja travou.
+- Opcao (c): cruzando com os alvos que `the-method-refactor` ja declara (D-2026-07-30-
+  the-method-refactor-1: ParsingEngine, HtmlUtility, TranslationEngine, loops de capitulo/
+  paragrafo/token, loops de linha do SQLite, limite de LOH) — todos vivem em
+  `TranslateReader.Core`, alcancaveis hoje pelo test project `net10.0` existente. Os arquivos
+  App-layer citados no achado estrutural (`ReaderPage.xaml.cs` 488, `ReaderPageModel.cs` 303,
+  `LibraryPageModel.cs` 236, `SettingsOverlay.xaml.cs` 221 — 1248 das 1516 linhas do app MAUI)
+  ficam **fora** desta rede.
+Inventario explicito do que fica desprotegido (registrado tambem em `.jdi/todos.md`): se uma
+fase futura tocar `ReaderPage.xaml.cs`, `ReaderPageModel.cs`, `LibraryPageModel.cs`,
+`SettingsOverlay.xaml.cs`, `Pages/Controls/TranslateBookPopup.xaml.cs`, `MauiProgram.cs`,
+`AppShell.xaml.cs` ou `Utilities/*Converter.cs`, nenhum teste automatizado deste repo pega uma
+regressao de comportamento ali — so revisao manual, ate uma fase fechar essa lacuna
+deliberadamente.
+
+D-2026-07-30-regression-suite-3: Dentro do Core, a lacuna objetiva de maior valor e
+`BookTranslationJobAccess.cs` (107 linhas, 4 metodos publicos: `FetchActiveJobAsync`,
+`SaveJobAsync`, `UpdateJobProgressAsync`, `DeleteJobAsync` — persiste o estado de pause/resume
+da traducao de livro completo, a capacidade de destaque do produto per `PROJECT.md`). Hoje tem
+ZERO teste dedicado — confirmado: nao esta entre os 16 arquivos de `test/TranslateReader.Tests`;
+`grep BookTranslationJob` so bate em `TranslationManagerTests.cs` via interface substituida
+(`ITranslationManager`), nunca contra a classe real. As 5 classes `*Access` irmas ja tem arquivo
+de teste dedicado seguindo um padrao estabelecido e reusavel (`InMemoryDatabase.cs` + construtor
+`(connectionString, initializeOnStartup: true)`). Esta fase cria `BookTranslationJobAccessTests.cs`
+seguindo exatamente esse padrao — nao inventa infraestrutura de teste nova.
+
+D-2026-07-30-regression-suite-4: Dois gaps adicionais, mais estreitos, fecham dentro do Core:
+(1) o contrato de ordenacao de `BooksAccess.FetchAllBooksAsync`
+(`ORDER BY LastOpenedAt DESC, DateAdded DESC` — livros abertos recentemente aparecem primeiro na
+estante) nao tem teste nenhum provando a ordem, so uma asserção de contagem
+(`BooksAccessTests.cs:57-60`, `Assert.Equal(2, books.Count)`); um refactor futuro dessa query
+pode quebrar a ordem da estante em silencio e nada acusaria. (2) `ReadingManager.LoadProgressAsync`
+so tem o caso nulo testado (`ReadingManagerTests.cs:78-86`); o caso de progresso encontrado nunca
+foi caracterizado — gap de 1 linha, fechavel so com mock (sem I/O de disco).
+
+D-2026-07-30-regression-suite-5: Dois gaps reais adicionais ficam DELIBERADAMENTE fora desta
+fase, cada um por um motivo tecnico nomeado — nao sao descartados em silencio, viram achado
+registrado para `the-method-refactor`:
+(1) O branch "ja extraido, pula" de `ReadingManager.ExtractImagesIfNeededAsync`
+(`ReadingManager.cs:50-54`) checa `Directory.Exists`/`Directory.GetFileSystemEntries` direto
+contra o filesystem real, em vez de passar por `IFileUtility` — ja e por si so um cheiro de
+violacao de fronteira de camada de The Method (Business Layer tocando Resource direto; CLAUDE.md:
+"Business Layer (Managers) -> Engines, ResourceAccess, Utilities", nunca Resources). Testar esse
+branch hoje exigiria I/O de disco real num teste NOVO, o que `.claude/rules/csharp.md` §6 proibe
+("Isolated: no network/disk/real SQLite in unit tests") para qualquer teste escrito depois do
+boundary `4285f25`. Fechar a lacuna exige mudanca de seam na producao (rotear a checagem de
+existencia por `IFileUtility`) — isso e trabalho de refactor, fora do escopo desta fase pelo
+proprio estatuto dela (D-2026-07-30-regression-suite-1). Registrado como achado nomeado para
+`the-method-refactor` em `.jdi/todos.md`.
+(2) O caminho de carregamento de modelo do `TranslationEngine`
+(`InitializeAsync`/`CreateExecutor`, `TranslationEngine.cs:20-32,98-107`) envolve tipos concretos
+do LLamaSharp (`LLamaWeights`, `StatelessExecutor`) sem nenhuma interface-seam para substituir; os
+2 testes `[Trait("Category","Integration")][Fact(Skip=...)]` ja existentes em
+`TranslationEngineTests.cs` sao o unico jeito de exercitar carregamento real de modelo (precisam
+de fixture GGUF, opt-in via `LLAMASHARP_TEST_MODEL`), e ficam inalterados por esta fase. Estender
+a cobertura unitaria aqui exigiria introduzir uma abstracao sobre o LLamaSharp — mudanca de seam
+de producao, trabalho de refactor, fora de escopo.
+
+D-2026-07-30-regression-suite-6 (guardrail): para manter a decisao de D-2026-07-30-
+regression-suite-2 honesta na pratica (nao so no papel), esta fase NAO pode introduzir um
+segundo test project ou multi-target o existente. `test/TranslateReader.Tests/
+TranslateReader.Tests.csproj` permanece `<TargetFramework>net10.0</TargetFramework>` unico —
+checado no DoD desta fase.
