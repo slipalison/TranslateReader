@@ -49,10 +49,10 @@ public class ReadingManager(
 
     private async Task ExtractImagesIfNeededAsync(string epubPath, string imagesDir)
     {
-        // Se o diretório já existe e não está vazio, assumimos que as imagens já foram extraídas.
-        if (Directory.Exists(imagesDir) && Directory.GetFileSystemEntries(imagesDir).Length > 0)
+        // A non-empty images directory means this book was already extracted.
+        if (fileUtility.DirectoryHasContent(imagesDir))
             return;
-        
+
         var images = await parsingEngine.ExtractAllImagesAsync(epubPath);
         foreach (var (relativePath, content) in images)
         {
