@@ -724,3 +724,11 @@ politica ENTRE fases: roteado para `.jdi/todos.md`, para valer a partir da proxi
 
 Zero linha de producao mudou por causa desta decisao — pela terceira vez, o codigo ja estava
 correto; o gate e que nao provava.
+
+D-2026-07-30-sonar-zero-issues-0 (registro de phase): phase `sonar-zero-issues` registrada na
+posicao 14 do ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-30 —
+"analise todas as issues que foram levantadas pelo sonarqube que estao na branch main, e resolva
+todas elas, crie mecanismo que evite que esses tipos e issues voltem a acontecer no futuro"
+(texto colado, sem URL de tracker). Baseline medido na API do SonarCloud no momento do registro
+(`branch=main`, apos o merge do PR #11 / `6132078`): 113 issues abertas, 2 bugs, 7 vulnerabilities,
+104 code smells, 0 security hotspots, coverage 72,7%, ncloc 4.074, sqale_index 401min.
