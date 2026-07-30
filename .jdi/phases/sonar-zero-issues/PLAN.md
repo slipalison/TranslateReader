@@ -51,7 +51,7 @@ wave 4 ativa o gate bloqueante.
     a linha de permissao -> exit != 0.
 - **Dependencies:** none
 - **Test:** N/A (sem `.cs`). Gate = o `Verify:` corrigido + a matriz de mutacao.
-- **Status:** pending
+- **Status:** completed
 
 #### T-2: WebView JS — `.dataset`, `for-of`, `Number.parseInt`, optional chaining → DoD 3
 - **Specialist:** jdi-doer-translatereader
@@ -69,7 +69,7 @@ wave 4 ativa o gate bloqueante.
     Deferred to PR review — a task NAO pode inventar um gate que finja prova funcional.
 - **Dependencies:** none
 - **Test:** nenhum (sem harness JS). Gate = `Verify:` do DoD item 3 (identidade textual).
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: `index.html` — 2 BUGs + waivers multicriteria em `sonarqube.yml` → DoD 7
 - **Specialist:** jdi-doer-translatereader
@@ -86,7 +86,7 @@ wave 4 ativa o gate bloqueante.
 - **Dependencies:** none
 - **Test:** `HybridWebViewContractTests` (20 testes) e o unico que le assets do wwwroot — rodar
   para garantir que nada quebrou; nao ha (nem se inventa) assert sobre `<title>`/`lang`.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 — utility + hygiene de teste
 
@@ -113,7 +113,7 @@ wave 4 ativa o gate bloqueante.
   e `BuildContinuousScrollHtml` (3) — cobre L11/L90/L111. Para L126/130/134/139
   (`BuildFallbackHtml`) o doer DEVE confirmar que cada branch (sem `<head>`, so `<body>`, so
   `<?xml`, nenhum) e atingida; branch descoberta ganha caso novo de `InjectTags` no mesmo arquivo.
-- **Status:** pending
+- **Status:** completed
 
 #### T-5: dispose pattern (S3881/CA1816) + hygiene do projeto de teste → DoD 5, DoD 6
 - **Specialist:** jdi-doer-translatereader
@@ -137,7 +137,7 @@ wave 4 ativa o gate bloqueante.
 - **Dependencies:** none
 - **Test (D-6):** `sealed`/`SuppressFinalize` provados pelos 7 `TranslationEngineTests` existentes
   (inclui `Dispose`/`ObjectDisposedException`). O resto e o proprio projeto de teste.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3 — producao com risco de comportamento real
 
@@ -180,7 +180,7 @@ wave 4 ativa o gate bloqueante.
     culture-independent nesse runtime), o doer registra isso no SUMMARY e cita os round-trips
     existentes — o proibido e afirmar cobertura sem a matriz.
   - S1192: sem mudanca de comportamento; rede = os 7 `ReadingStateAccessTests`.
-- **Status:** pending
+- **Status:** completed
 
 #### T-7: `TranslationManager` — S107 (8 params) e S3267 → DoD 9
 - **Specialist:** jdi-doer-translatereader
@@ -198,7 +198,7 @@ wave 4 ativa o gate bloqueante.
   `CreateTranslatedEpubAsync` (que passam por `RebuildAllTranslatedChaptersAsync`). Refactor
   puramente interno: se algum teste precisar mudar, isso e sinal de mudanca de comportamento e
   reprova.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4 — ativa o gate bloqueante (por ultimo, de proposito)
 
@@ -217,7 +217,7 @@ wave 4 ativa o gate bloqueante.
     O resultado remoto so existe apos push+CI e ja esta em Deferred to PR review (D-...-6).
 - **Dependencies:** T-1..T-7 (ordem de risco + serializacao em `sonarqube.yml` com T-3)
 - **Test:** N/A. Gate = `Verify:` do DoD item 10 + CI verde no PR.
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Tasks: 8, cobrindo os 10 itens do DoD. Mapa: 1->T-1 | 2->T-4 | 3->T-2 | 4->T-4 | 5->T-5 |
