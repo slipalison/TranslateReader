@@ -732,3 +732,80 @@ todas elas, crie mecanismo que evite que esses tipos e issues voltem a acontecer
 (texto colado, sem URL de tracker). Baseline medido na API do SonarCloud no momento do registro
 (`branch=main`, apos o merge do PR #11 / `6132078`): 113 issues abertas, 2 bugs, 7 vulnerabilities,
 104 code smells, 0 security hotspots, coverage 72,7%, ncloc 4.074, sqale_index 401min.
+D-2026-07-30-sonar-zero-issues-1: `dotnet-install.ps1` (41/113 issues, 36%, regras
+`powershelldre:*`) e REMOVIDO do repo — opcao (b) das 3 do brief, nao (a) exclusao via
+`sonar.exclusions` nem (c) corrigir codigo de terceiro. Evidencia: script vendored da Microsoft
+(1573 linhas, commitado no legado `c86569e`), zero referencia em `src/`, `test/` ou qualquer
+workflow (`grep -r "dotnet-install.ps1"` no repo inteiro so bate no proprio arquivo e numa
+entrada de permissao Bash em `.claude/settings.local.json:38`), publicamente re-obtenivel em
+`dotnet.microsoft.com/download/dotnet/scripts`. Excluir via `sonar.exclusions` manteria 1573
+linhas mortas no repo so para o Sonar ignorar; corrigir 41 issues de estilo PowerShell em codigo
+de terceiro nao gera valor e diverge do upstream. A linha de permissao stale em
+`.claude/settings.local.json` e removida junto (mesmo commit) — arquivo rastreado pelo git
+(D-2026-07-28-ci-seguranca-2), nao gitignorado.
+
+D-2026-07-30-sonar-zero-issues-2 (mecanismo anti-recorrencia + fronteira com `baseline-de-estilo`):
+o mecanismo desta fase e `sonar.qualitygate.wait=true` adicionado ao passo `dotnet-sonarscanner end`
+em `.github/workflows/sonarqube.yml` — o scanner passa a falhar o job `sonarqube` (chamado por
+`pipeline.yml:54`, ja check obrigatorio) se o Quality Gate do SonarCloud reprovar. O gate "Sonar way"
+padrao mede New Code (rating de Reliability/Security/Maintainability = A), entao qualquer PR futuro
+que reintroduza um bug/vulnerability/code smell bloqueante do tipo aqui resolvido derruba o pipeline
+antes do merge — e a trava que o card pede ("evite que esses tipos... voltem a acontecer").
+Fronteira com a phase `baseline-de-estilo` (posicao 1, pendente, goal "editorconfig, gitattributes e
+analyzers configurados na raiz"): aquela phase e generica e local (Roslyn analyzers/editorconfig,
+independe de rede/Sonar); esta fase e especifica do SonarQube e roda so em CI. Nao ha sobreposicao —
+`baseline-de-estilo` continua dona integral do escopo dela, nada migrado.
+
+D-2026-07-30-sonar-zero-issues-3 (taxonomia de resolucao, aplicada a todas as 113 issues): toda
+issue termina em exatamente 1 de 3 estados, cada um com mecanismo auditavel em git (nunca so na UI
+do SonarCloud): (a) FIX no codigo — maioria dos casos; (b) EXCLUSAO por `sonar.issue.ignore.
+multicriteria` (rule+resourceKey) adicionado aos args do `begin` em `sonarqube.yml` — usado para
+`Web:S7926` e `css:S4667` em `index.html` (ver D-...-4 abaixo), decisao deliberada sobre codigo
+correto, nao defeito; (c) WAIVER via `#pragma warning disable <ID>`/`restore` no ponto exato, com
+comentario citando a razao e este documento — usado para `SYSLIB1044` (`HtmlUtility.TextBlockRegex`,
+backreference `\1` que o source generator nao otimiza, ja investigado no PR #11: mudar o pattern
+mudaria comportamento) e para `xUnit1004` (os 2 `[Fact(Skip=...)]` de integracao do LLamaSharp em
+`TranslationEngineTests.cs`, deliberados por D-2026-07-30-regression-suite-5(2) — desskipar quebra
+CI sem fixture `.gguf`). Nenhuma issue fica "resolvida" so por decisao verbal nao rastreavel no repo.
+
+D-2026-07-30-sonar-zero-issues-4 (`user-scalable=no` MANTIDO — waiver, nao fix por reflexo do
+linter): `index.html:5` continua com `user-scalable=no`. Argumento: o modo Paginated do reader
+(`paginated.js`) depende de viewport fixo para o calculo de coluna/pagina — pinch-zoom ativo quebra
+o snap de pagina, uma feature central do produto. WCAG 2.1 SC 1.4.4 (Resize text) exige ALGUM
+mecanismo de ampliacao ate 200%, nao especificamente pinch-zoom no WebView — o app ja oferece
+tipografia configuravel (PROJECT.md > Stack: "temas Light/Dark/Sepia e tipografia configuravel"),
+mecanismo equivalente e ja existente. Precedente de produto: leitores dedicados (Kindle, Apple
+Books) tambem desabilitam pinch-zoom na tela de leitura e oferecem controle de fonte em vez disso.
+Suprimido via `sonar.issue.ignore.multicriteria` (rule=`Web:S7926`, resourceKey=`**/index.html`),
+mecanismo (b) da D-...-3. O mesmo mecanismo suprime `css:S4667` ("Empty source") na tag
+`<style id="reader-theme"></style>` de `index.html:6` — vazia por design, populada em runtime via
+JS ao trocar de tema (ThemeEngine gera o CSS, injetado via bridge), nao um estilo esquecido.
+
+D-2026-07-30-sonar-zero-issues-5 (fronteira D-2/D-6 aplicada): esta fase E a "phase explicita"
+exigida por D-2 para tocar `ParsingEngine.cs`, `BooksAccess.cs`, `SettingsAccess.cs`,
+`ReadingStateAccess.cs`, `BookTranslationJobAccess.cs`, `TranslationManager.cs` e `HtmlUtility.cs`
+(todos legados, pre-`4285f25`). Nenhuma mudanca planejada introduz caminho de codigo sem teste: toda
+linha tocada ja e exercitada por suites existentes (`ParsingEngineTests.cs` com fixtures reais de
+EPUB; `*AccessTests.cs` via `InMemoryDatabase`; `TranslationManagerTests.cs`, 48 ocorrencias
+indiretas per D-2026-07-30-the-method-refactor-4) — D-6 (90% em codigo alterado) e satisfeito pela
+cobertura ja existente sobre comportamento preservado, sem infra de teste nova. Excecao nomeada: os
+3 arquivos JS do WebView (`translation.js`, `scroll.js`, `bridge.js`) NAO tem harness de teste
+automatizado no repo (nenhum runner JS configurado, fora do escopo de qualquer `.csproj`) — D-6 nao
+se aplica estruturalmente a eles; a confirmacao FUNCIONAL de que zoom/scroll/traducao continuam
+corretos apos a migracao mecanica de API vai para `## Deferred to PR review` do CONTEXT.md, por ser
+inerentemente humana (visual/interativa).
+
+D-2026-07-30-sonar-zero-issues-6 (idempotencia do "0 issues" + limite do mecanismo): os `Verify:`
+do DoD desta fase provam propriedades LOCAIS e reproduziveis (grep de identidade por arquivo/regra,
+sem rede) — nao dependem de um scan real do SonarCloud, que so existe apos push+CI. A confirmacao
+de que o Quality Gate real fica verde na branch/PR fica em `## Deferred to PR review`. LIMITE
+estrutural do mecanismo (achado nesta sessao, registrado tambem em `.jdi/todos.md`):
+`.github/workflows/sonarqube.yml` roda `dotnet build src/TranslateReader.Core/
+TranslateReader.Core.csproj` e `dotnet test test/TranslateReader.Tests/...` entre o `begin`/`end`
+do scanner — NUNCA compila `src/TranslateReader` (o head MAUI). O analisador C# do Sonar (Roslyn-
+based) so ve o que e compilado nessa janela; logo `PageModels/`, `Pages/*.xaml.cs`, `Platforms/`,
+`Utilities/*Converter.cs` e `MauiProgram.cs` sao estruturalmente invisiveis ao Sonar hoje — "0
+issues" desta fase e valido para o que o Sonar de fato escaneia (Core C# + JS/HTML/PowerShell), nao
+para o repo inteiro. Fechar isso exigiria um job Sonar rodando em `windows-latest` com workload MAUI
+— infraestrutura de CI nova, fora do escopo desta fase (issues + mecanismo sobre o que ja e
+escaneado), nao decidido aqui.

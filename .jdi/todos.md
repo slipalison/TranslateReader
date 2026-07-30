@@ -180,3 +180,24 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   Residuos de MEDIDA conhecidos e deliberadamente mantidos: `[ Fact ]` com espacos nao conta
   (fail-closed, subconta, consistente com o baseline 192) e `"[Fact]"` em string literal conta
   (sobreconta, so alcancavel de proposito) — fechar qualquer um dos dois exige parsear C#.
+
+## De `sonar-zero-issues` (2026-07-30)
+
+- **[CI/COBERTURA-DE-SCAN] O job Sonar nao compila o projeto App (`src/TranslateReader`) —
+  "0 issues" e cego pro head MAUI.** `.github/workflows/sonarqube.yml` roda `dotnet build
+  src/TranslateReader.Core/TranslateReader.Core.csproj -c Release` e `dotnet test
+  test/TranslateReader.Tests/TranslateReader.Tests.csproj` entre o `begin`/`end` do
+  `dotnet-sonarscanner` — nunca compila `src/TranslateReader.csproj` (o head MAUI, TFM
+  `net10.0-windows10.0.19041.0`). O analisador C#/Roslyn do Sonar so enxerga o que e compilado
+  nessa janela: `PageModels/*.cs`, `Pages/*.xaml.cs`, `Platforms/**/*.cs`,
+  `Utilities/*Converter.cs` e `MauiProgram.cs`/`AppShell.xaml.cs` (as mesmas 1516 linhas que
+  `D-2026-07-30-regression-suite-2` ja registrou como fora da rede de testes) sao
+  ESTRUTURALMENTE invisiveis ao Sonar hoje — nao aparecem nas 113 issues do inventario porque
+  nunca foram escaneadas, nao porque estao limpas. O mecanismo `sonar.qualitygate.wait=true`
+  desta fase (D-2026-07-30-sonar-zero-issues-2/6) protege exatamente o que o job ja escaneia
+  (Core C# + JS/HTML/CSS/PowerShell) — nao estende a cobertura de scan. Fechar isso exige um job
+  Sonar novo em `windows-latest` com workload MAUI instalado (o job `build` do CI ja roda
+  Windows por outro motivo — D-2026-07-28-ci-seguranca-5 — mas nunca rodou `dotnet-sonarscanner`
+  em cima dele), somando tempo de execucao e complexidade real de CI — candidato a phase propria
+  ou extensao de `pipeline-unificada`/`cobertura-e-ci`, nao decidido nem iniciado aqui. Ver
+  `D-2026-07-30-sonar-zero-issues-6`.
