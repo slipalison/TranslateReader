@@ -98,4 +98,38 @@ public class FileUtilityTests : IDisposable
         var sut = new FileUtility();
         await sut.DeleteDirectoryAsync(dir);
     }
+
+    [Fact]
+    public void DirectoryHasContent_ReturnsTrueForDirectoryContainingAFile()
+    {
+        var dir = Path.Combine(_tempDir, "com_arquivo");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "cover.jpg"), "x");
+
+        Assert.True(_sut.DirectoryHasContent(dir));
+    }
+
+    [Fact]
+    public void DirectoryHasContent_ReturnsTrueForDirectoryContainingOnlyASubdirectory()
+    {
+        var dir = Path.Combine(_tempDir, "so_subpasta");
+        Directory.CreateDirectory(Path.Combine(dir, "images"));
+
+        Assert.True(_sut.DirectoryHasContent(dir));
+    }
+
+    [Fact]
+    public void DirectoryHasContent_ReturnsFalseForEmptyDirectory()
+    {
+        var dir = Path.Combine(_tempDir, "vazio");
+        Directory.CreateDirectory(dir);
+
+        Assert.False(_sut.DirectoryHasContent(dir));
+    }
+
+    [Fact]
+    public void DirectoryHasContent_ReturnsFalseForMissingDirectory()
+    {
+        Assert.False(_sut.DirectoryHasContent(Path.Combine(_tempDir, "nao_existe")));
+    }
 }

@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace TranslateReader.Utilities;
 
-public static class HtmlUtility
+public static partial class HtmlUtility
 {
     public static string ExtractBodyContent(string html)
     {
@@ -14,6 +14,45 @@ public static class HtmlUtility
         if (bodyEndIndex < 0) return html[(bodyStart.Index + bodyStart.Length)..];
         return html[(bodyStart.Index + bodyStart.Length)..bodyEndIndex];
     }
+
+    public static List<string> ExtractParagraphs(string bodyContent)
+    {
+        var matches = ParagraphRegex().Matches(bodyContent);
+        return matches
+            .Select(m => StripHtmlTags(m.Groups[1].Value).Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
+    }
+
+    public static List<string> ExtractTextBlocks(string bodyContent)
+    {
+        var matches = TextBlockRegex().Matches(bodyContent);
+        return matches
+            .Select(m => StripHtmlTags(m.Groups[2].Value).Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
+    }
+
+    public static string ReplaceTextBlocksInHtml(string html, IReadOnlyList<string> translations)
+    {
+        var index = 0;
+        return TextBlockRegex().Replace(html, match =>
+        {
+            var innerHtml = match.Groups[2].Value;
+            var text = StripHtmlTags(innerHtml).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return match.Value;
+            if (index >= translations.Count)
+                return match.Value;
+            var translated = System.Net.WebUtility.HtmlEncode(translations[index++]);
+            var tag = match.Groups[1].Value;
+            var openTag = match.Value[..(match.Value.IndexOf('>') + 1)];
+            return $"{openTag}{translated}</{tag}>";
+        });
+    }
+
+    public static string StripHtmlTags(string html) =>
+        HtmlTagRegex().Replace(html, string.Empty);
 
     public static string BuildContinuousScrollHtml(
         IReadOnlyList<(string href, string bodyContent)> chapters)
@@ -104,4 +143,13 @@ public static class HtmlUtility
 
         return $"<html><head>{headContent}</head><body>{html}</body></html>";
     }
+
+    [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex ParagraphRegex();
+
+    [GeneratedRegex(@"<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex TextBlockRegex();
+
+    [GeneratedRegex(@"<[^>]+>")]
+    private static partial Regex HtmlTagRegex();
 }

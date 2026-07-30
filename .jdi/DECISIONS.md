@@ -456,3 +456,271 @@ regression-suite-2 honesta na pratica (nao so no papel), esta fase NAO pode intr
 segundo test project ou multi-target o existente. `test/TranslateReader.Tests/
 TranslateReader.Tests.csproj` permanece `<TargetFramework>net10.0</TargetFramework>` unico —
 checado no DoD desta fase.
+
+D-2026-07-30-the-method-refactor-2: Duas decisoes travadas exigidas pelo brief da fase (itens 3
+e 5 do card colado via /jdi-issue). (A) Escopo restrito a `src/TranslateReader.Core` — espelha
+a fronteira que `regression-suite` ja travou (D-2026-07-30-regression-suite-2): a rede de testes
+de caracterizacao (192 atributos, PR #10 mergeado em `main`) so alcanca o Core; o app MAUI
+(`src/TranslateReader/Pages`, `PageModels`, `Platforms`, `Utilities/*Converter.cs`,
+`MauiProgram.cs`, `AppShell.xaml.cs`) permanece sem prova automatizada de comportamento. A
+restricao 3 do brief exige que a rede seja a UNICA prova de nao-regressao — tocar codigo sem
+rede nao pode ser feito nesta fase. (B) Resposta a exigencia de `.claude/rules/csharp.md` §2
+("Measure before optimizing"): **opcao (a) escolhida** — a fase se limita a mudancas de
+conformidade de regra, provaveis por inspecao estatica (sem BenchmarkDotNet/dotnet-counters/
+dotnet-gcdump), nunca otimizacao especulativa declarada como ganho de memoria/bateria sem
+medida. Introduzir infraestrutura de benchmark (opcao b) e trabalho novo, fora do estatuto
+finding-driven desta fase (D-2026-07-30-the-method-refactor-1) — registrado em `.jdi/todos.md`
+como candidato a fase futura, nao decidido aqui. O DoD desta fase verifica ambas as metades:
+diff vazio em `src/TranslateReader/` e ausencia de `BenchmarkDotNet` em qualquer `.csproj`.
+
+D-2026-07-30-the-method-refactor-3: Achado #1 fechado nesta fase — a violacao de fronteira de
+camada pre-alocada em D-2026-07-30-regression-suite-5(1)
+(`ReadingManager.ExtractImagesIfNeededAsync`, `ReadingManager.cs:53-54`, chama `Directory.Exists`/
+`Directory.GetFileSystemEntries` direto contra o filesystem, pulando `IFileUtility` — viola
+CLAUDE.md "Business Layer (Managers) -> Engines, ResourceAccess, Utilities", nunca Resources).
+Correcao locked: `IFileUtility` ganha `bool DirectoryHasContent(string directoryPath)`;
+`FileUtility` implementa (`Directory.Exists(directoryPath) && Directory.GetFileSystemEntries(
+directoryPath).Length > 0`); `ExtractImagesIfNeededAsync` passa a chamar
+`fileUtility.DirectoryHasContent(imagesDir)`. Efeito colateral que fecha a MESMA lacuna
+registrada em `.jdi/todos.md` § `regression-suite`: o branch "ja extraido, pula" passa a ser
+testavel com `IFileUtility` mockado (NSubstitute, ja usado em `ReadingManagerTests.cs`), sem I/O
+real — fecha o gap sem violar `.claude/rules/csharp.md` §6. EXCLUI explicitamente a logica de
+escrita em `ReadingManager.cs:59-60`/`FileUtility.cs:31-32` (`Path.Combine` + `WriteFileAsync`
+sem containment de path) — esse e o vetor de zip-slip, propriedade da fase `epub-zip-slip`
+(posicao 11, pendente, D-2026-07-29-epub-zip-slip-1); mesmo arquivo, linhas diferentes, sem
+overlap de comportamento alterado. `FileUtilityTests.cs` (I/O real em temp dir, padrao
+pre-existente da Utility layer) ganha caso para `DirectoryHasContent`, seguindo a mesma
+convencao ja usada nos outros metodos do arquivo.
+
+D-2026-07-30-the-method-refactor-4: Achado #2 (novo, levantado nesta sessao) —
+`TranslationManager.cs:304-341` define 4 metodos privados de manipulacao de HTML via regex
+(`ExtractParagraphs`, `ExtractTextBlocks`, `ReplaceTextBlocksInHtml`, `StripHtmlTags`, com 3
+`[GeneratedRegex]`) que duplicam a responsabilidade que a propria tabela de componentes do
+CLAUDE.md ja atribui a `HtmlUtility` ("Parsing e manipulacao de HTML para o reader (estatico)")
+— o Manager ja usa `HtmlUtility.ExtractBodyContent(html)` no mesmo arquivo, entao a divisao de
+responsabilidade esta inconsistente dentro da propria classe. Correcao locked: mover os 4
+metodos (mantendo assinatura e nomes) + os 3 `[GeneratedRegex]` para `HtmlUtility` como
+`public static`; `TranslationManager` passa a chamar `HtmlUtility.ExtractParagraphs(...)` etc.,
+igual ao padrao ja usado para `ExtractBodyContent`. Mudanca e MOVE puro, sem alteracao de
+comportamento — protegida pelas 48 ocorrencias de chamada indireta (`TranslateChapterAsync`/
+`TranslateBookAsync`/`TranslateParagraphsAsync`) ja existentes em `TranslationManagerTests.cs`.
+Nao introduz teste novo dedicado (comportamento ja caracterizado); o DoD verifica pela ausencia
+das definicoes privadas no Manager e presenca publica em `HtmlUtility`.
+
+D-2026-07-30-the-method-refactor-5: Achado #3 (novo, levantado nesta sessao, hotspot de CPU
+nomeado por inspecao — nao medicao, per D-2026-07-30-the-method-refactor-2) — `ParsingEngine.cs`
+chama `Regex.Replace`/`Regex.Match`/`Regex.IsMatch` com padrao inline literal repetidamente em
+caminho por-capitulo: `UpdateOpfTitleAsync` (1, linha 126), `InlineCssLinks` (3, linhas
+196/199/202 — regex externo + 2 checagens internas por `<link>` casado), `RewriteImagePaths` (3,
+linhas 228/232/236 — uma por atributo de imagem, por capitulo) — total 7 padroes. Viola
+`.claude/rules/csharp.md` §2.1: "Compile-time-known regex -> [GeneratedRegex] partial method,
+never new Regex(...) per call" — o padrao e conhecido em tempo de compilacao e o
+`TranslationManager` ja segue a convencao correta (`[GeneratedRegex]` para `ParagraphRegex`/
+`TextBlockRegex`/`HtmlTagRegex`) a poucos arquivos de distancia, entao a inconsistencia e local
+e nomeada. Correcao locked: `ParsingEngine` vira `partial class`; os 7 padroes viram
+`[GeneratedRegex]` partial methods. Inspection-provable (sem BenchmarkDotNet, per
+D-2026-07-30-the-method-refactor-2) — fonte gerada em compile-time elimina o lookup/compilacao
+do padrao em runtime por chamada, ganho estrutural sem necessidade de medir para provar a
+conformidade de regra. Protegida pelas 9 ocorrencias de `ExtractChapterContentAsync`/
+`RewriteImagePaths`/`CreateTranslatedEpubAsync` ja em `ParsingEngineTests.cs` (fixtures reais de
+EPUB).
+
+D-2026-07-30-the-method-refactor-6: Achado pre-alocado D-2026-07-30-regression-suite-5(2)
+(`TranslationEngine` acopla `LLamaWeights`/`StatelessExecutor` concretos, `TranslationEngine.cs:
+20-32,98-107`, sem interface-seam) fica DEFERIDO explicitamente para a fase `llm-mobile`
+(posicao 6, pendente), nao entra no escopo desta fase. Motivo nomeado: nao e violacao de
+CLAUDE.md nem de `.claude/rules/csharp.md` hoje — a propria tabela de componentes do CLAUDE.md
+define `TranslationEngine` como o Engine responsavel por "Inferencia local com LLamaSharp"; per
+The Method, Engines sao exatamente o seam de volatilidade para tecnologia de terceiro, entao
+acoplar a um unico backend concreto (Windows-only hoje, D-2026-07-29-readme-3) nao e, por si, um
+defeito de camada. Introduzir uma abstracao de fabrica em torno de `LLamaWeights`/
+`StatelessExecutor` sem uma segunda implementacao real seria abstracao especulativa (YAGNI) — so
+se justifica quando `llm-mobile` precisar trocar de backend por plataforma (Android/iOS), que e
+exatamente o escopo daquela fase. Os 2 testes de integracao `[Fact(Skip=...)]` seguem
+inalterados. Overlap consciente registrado para o planner de `llm-mobile` ler esta decisao antes
+de comecar.
+
+D-2026-07-30-the-method-refactor-7: O `Verify:` do item 4 do Definition of Done desta fase
+(CONTEXT.md, achado #3) fica SUPERSEDED pelo comando endurecido registrado abaixo. Motivo, com
+contra-exemplo executado: o DoD critic (iter 1, read-only, segmento `## DoD Critic` de REVIEW.md)
+provou que o `Verify:` original — `test $(grep -cE "Regex\.(Replace|Match|IsMatch)\(" F) -eq 0 &&
+grep -q "public partial class ParsingEngine" F && test $(grep -c "\[GeneratedRegex" F) -ge 7` —
+mede CONTAGEM, nunca IDENTIDADE: numa copia de `ParsingEngine.cs` com o pattern de
+`StylesheetRelRegex` corrompido (`stylesheet` -> `stylsheet`) E `RegexOptions.IgnoreCase` removido
+— exatamente a armadilha de migracao que o PLAN nomeou como risco #1 — o comando literal saiu
+`exit 0`. A rede de testes tambem nao fechava o furo (medido na T-2: `StylesheetRelRegex`,
+`OpfTitleRegex`, `LinkTagRegex` e `StylesheetHrefRegex` sozinhos produziam 0 falhas), entao a
+unica prova de conformidade real era a inspecao manual byte-a-byte do reviewer — prova que vive
+FORA do gate e nao sobrevive a proxima phase. Um `Verify:` que passa trivialmente e pior que
+nenhum (`.jdi/todos.md` `[PROCESSO/DoD]`, mesma classe de defeito da regra Semgrep
+`translatereader-zip-slip`). Esta decisao NAO reescreve nenhuma decisao anterior (append-only):
+D-2026-07-30-the-method-refactor-5 continua valendo integralmente no QUE deve ser feito (7 padroes
+inline -> `[GeneratedRegex]`, classe `partial`); o que muda e apenas COMO o DoD prova isso.
+
+Novo criterio locked (4 propriedades, todas verificaveis por comando, nenhuma afrouxada em relacao
+a versao anterior — o comando antigo esta contido no novo): (1) zero `Regex.(Replace|Match|IsMatch)(`
+estatico no arquivo; (2) `public partial class ParsingEngine` presente; (3) EXATAMENTE 7
+`[GeneratedRegex` (antes `>= 7`); (4) NOVO — para cada um dos 7, a linha de atributo conferida por
+literal exato (`grep -F`, pattern E `RegexOptions` byte-a-byte) e ligada por adjacencia (`grep -A1`)
+a assinatura `partial Regex <Nome>()` correspondente, mais `-eq 14` ocorrencias de linha dos 7 nomes
+(7 declaracoes + 7 call sites, fechando o caso "regex declarado e nunca chamado"). Efeito: alterar
+um unico caractere de qualquer pattern, remover um `RegexOptions.IgnoreCase`/`Singleline`, trocar
+dois patterns de metodo ou orfanar um regex derruba o gate.
+
+Prova por mutacao do proprio gate (5 mutacoes, copia em scratchpad, repo intocado): `stylsheet` +
+sem `IgnoreCase` (o contra-exemplo do critico), so o pattern, so o `IgnoreCase`, `src`->`scr` em
+`ImgSrcRegex`, e `IgnoreCase` removido de `ImgSrcRegex` — o comando ANTIGO da `exit 0` nas 5, o
+NOVO da `exit 1` nas 5. Complemento (nao substituto): a mesma iter entrega
+`test/TranslateReader.Tests/ParsingEngineRegexTests.cs`, que fecha a propriedade pelo lado do
+COMPORTAMENTO (26 casos, reflection sobre as factories privadas, sem I/O de disco — §6 respeitada,
+zero diff em producao). Os dois juntos cobrem o que nenhum cobre sozinho: o teste prova semantica
+de casamento, o `Verify:` prova que o texto que gera essa semantica nao mudou.
+
+D-2026-07-30-the-method-refactor-8: Os `Verify:` dos itens 4 e 5 do Definition of Done desta fase
+(CONTEXT.md) ficam SUPERSEDED pelos comandos registrados no proprio CONTEXT.md sob esta decisao.
+Ela NAO reescreve D-2026-07-30-the-method-refactor-5 nem -7 (append-only): o QUE deve ser feito
+continua igual, e o endurecimento de identidade pattern/options entregue por D-...-7 continua
+valendo integralmente — seu comando esta contido LITERALMENTE dentro do comando novo. O que muda e
+so COMO o DoD prova as duas propriedades que o DoD critic (iter 2, segmento `## DoD Critic` de
+REVIEW.md) derrubou com contra-exemplo EXECUTADO.
+
+Furo 1 (item 4, achado #3): a promessa textual de D-...-7 — a clausula `-eq 14` fecha "regex
+declarado e nunca chamado", sem qualificador — so valia para orfanamento SIMPLES. Contra-exemplo
+M5 do critico: trocar UM token no call site `ParsingEngine.cs:196` (`StylesheetRelRegex` ->
+`StylesheetHrefRegex`, nomes lookalike adjacentes, slip plausivel de refactor) deixa
+`StylesheetRelRegex` declarado e nunca chamado COMPENSANDO a contagem agregada (segue 14) e o
+comando sai `exit 0`. E furo DO CRITERIO, nao wiring fora dele. A rede de testes nao compensa por
+construcao: os 26 casos de `ParsingEngineRegexTests.cs` invocam as factories por reflection (nunca
+passam pelo wiring de producao) e `ParsingEngineTests` tem zero referencia a `stylesheet`/`css`/
+`<link`. Causa raiz, mesma familia ja catalogada em `.jdi/todos.md` `[PROCESSO/DoD]`: o gate media
+um proxy AGREGADO conveniente em vez da propriedade POR ITEM.
+Correcao locked (clausula NOVA acrescentada; nenhuma clausula antiga removida ou afrouxada — o
+`-eq 14` e os 7 pares `grep -A1 -F` permanecem): para CADA um dos 7 nomes exige-se
+`declaracoes == 1` E `call sites >= 1`, e o numero de nomes que satisfazem AS DUAS condicoes tem
+de ser EXATAMENTE 7. A varredura e feita em AWK que remove comentario de linha (`//`) e de bloco
+(`/* */`, com estado entre linhas) antes de contar — comentar um call site nao o mantem vivo.
+
+Furo 2 (item 5, guardrail agregado): duas clausulas mediam proxy errado.
+(a) o criterio diz "nenhum pacote BenchmarkDotNet" sem escopo, mas o comando rodava `find src`:
+`<PackageReference Include="BenchmarkDotNet"/>` em `test/TranslateReader.Tests/
+TranslateReader.Tests.csproj` — o lugar NATURAL de infra de benchmark, exatamente o que
+D-2026-07-30-the-method-refactor-2(B) barra — saia `exit 0`, e nenhum outro gate greppa
+BenchmarkDotNet. Correcao locked: a busca cobre TODO arquivo capaz de declarar pacote em qualquer
+lugar do repo (`*.csproj`, `*.props`, `*.targets`, `packages.config`, com `bin`/`obj`/`.git`
+podados), sem depender de `Directory.Build.props`/`Directory.Packages.props` existirem hoje (nao
+existem).
+(b) o criterio diz "a contagem `[Fact]`/`[Theory]` nao regride", mas `grep -rhoE` conta TEXTO:
+comentando 25 atributos reais (`// [Fact]`) a medida permanecia 214 e o comando saia `exit 0` com
+189 atributos ATIVOS — regressao real passava. Correcao locked: conta-se so atributo VIVO, pela
+mesma varredura AWK que descarta comentario de linha e de bloco. O piso continua `-ge 193`: o
+criterio locka o baseline 192 e esta decisao corrige a MEDIDA, nao o limiar.
+
+Containment formal (nenhuma clausula afrouxada): no item 4 o comando anterior esta contido
+literalmente no novo; no item 5, `find .` podado e superconjunto de `find src`, e contagem VIVA <=
+contagem TEXTUAL — logo, nas duas clausulas, NEW `exit 0` implica OLD `exit 0`.
+
+Prova por mutacao (clone em scratchpad, repo real nunca mutado; OLD = comando vigente extraido por
+sed de `CONTEXT.md` em `bc4f1c6`, NEW = comando desta decisao):
+- item 4 — pristino OLD 0 / NEW 0; M5 do critico OLD 0 / NEW 1; os 7 orfaos COMPENSADOS (um por
+  nome, call site trocado por outro nome, agregado sempre 14) OLD 0 / NEW 1 nos SETE; call site
+  comentado com `// ` OLD 0 / NEW 1; call site dentro de bloco `/* */` OLD 0 / NEW 1; orfao
+  SIMPLES (linha deletada) OLD 1 / NEW 1; e as mutacoes da iter 2 (pattern corrompido + sem
+  `IgnoreCase`, options trocado, factory renomeada) OLD 1 / NEW 1 — o endurecimento de D-...-7
+  sobrevive intacto.
+- item 5 — BenchmarkDotNet no csproj de TESTE OLD 0 / NEW 1; em `Directory.Build.props` OLD 0 /
+  NEW 1; em `Directory.Packages.props` (CPM) OLD 0 / NEW 1; no csproj de `src` OLD 1 / NEW 1;
+  25 atributos comentados `// [Fact]` OLD 0 / NEW 1 (texto 214, vivo 189); 25 em `/* */` de uma
+  linha OLD 0 / NEW 1; 25 em bloco `/* */` multi-linha OLD 0 / NEW 1; 25 atributos DELETADOS
+  OLD 1 / NEW 1.
+- falso positivo — no repo real sem mutacao os dois comandos saem `exit 0`, e a contagem VIVA e
+  identica a TEXTUAL (214 = 214): em codigo limpo a medida nova nao muda o numero.
+
+Zero linha de producao mudou por causa desta decisao — o codigo ja estava correto; o gate e que
+nao provava.
+
+D-2026-07-30-the-method-refactor-9: O `Verify:` do item 4 do Definition of Done desta fase
+(CONTEXT.md) fica SUPERSEDED pelo comando registrado no proprio CONTEXT.md sob esta decisao. Ela
+NAO reescreve D-2026-07-30-the-method-refactor-5, -7 nem -8 (append-only): o QUE deve ser feito
+segue igual, o endurecimento de identidade pattern/options entregue por D-...-7 e a checagem POR
+NOME com descarte de comentario entregue por D-...-8 seguem valendo integralmente. Muda UMA coisa:
+como o passe AWK reconhece o nome da factory dentro de uma linha viva.
+
+Furo (W-2/E5 da REVIEW iter 3, evasao EXECUTADA pelo reviewer): o passe AWK locked por D-...-8
+testava o call site com `index(l, "<Nome>Regex()")` — casamento por SUBSTRING. Um call site trocado
+por nome lookalike PREFIXADO (`ParsingEngine.cs:196`: `StylesheetRelRegex()` ->
+`MyStylesheetRelRegex()`) CONTEM a string `StylesheetRelRegex()` como sufixo, entao a factory real
+ficava DECLARADA E NUNCA CHAMADA e o gate saia `exit 0`. E a mesma familia do furo que D-...-8
+fechou (orfao compensado), pela via do prefixo em vez da via da contagem agregada — e a mais
+proxima de slip acidental das tres evasoes catalogadas em W-2, porque nao depende de nenhuma
+construcao exotica de linguagem, so de um nome derivado.
+
+Correcao locked (nenhuma clausula removida ou afrouxada; 12 das 13 clausulas ficam BYTE-IDENTICAS,
+so o passe AWK muda): o reconhecimento do nome passa a exigir FRONTEIRA DE IDENTIFICADOR a
+esquerda — a ocorrencia so conta se estiver no inicio da linha ou precedida por caractere fora de
+`[A-Za-z0-9_]`. A fronteira a direita ja existia (o token inclui `()`). Implementacao: o
+`if(index(l,t))` vira varredura de TODAS as ocorrencias de `t` na linha, aceitando a primeira que
+tenha fronteira valida.
+
+Containment formal (NEW `exit 0` implica OLD `exit 0` — provado, nao alegado):
+- 12/13 clausulas identicas por comparacao literal de substring (`&&`-split); so a clausula do AWK
+  difere.
+- No AWK, o conjunto de linhas casadas por TOKEN e subconjunto das casadas por SUBSTRING, logo
+  `c_novo[n] <= c_velho[n]` para todo nome.
+- As DECLARACOES sao identicas nas duas versoes: a classificacao usa `index(l,"partial Regex " t)`,
+  literal que ja embute um espaco antes do nome — toda declaracao reconhecida pela versao velha tem
+  fronteira valida e e reconhecida igual pela nova. Medido: no arquivo pristino as duas versoes dao
+  `d=1 / c=1` nos 7 nomes; no mutante de declaracao duplicada as duas dao `d=2`.
+- Logo `k_novo <= k_velho`, e como o gate exige `k == 7`, nao existe estado de codigo em que a
+  versao nova passe e a velha reprove. Nenhuma protecao antiga foi perdida.
+
+Prova por mutacao nos DOIS sentidos (25 mutantes, harness em scratchpad, repo real nunca mutado;
+OLD = comando vigente extraido por sed do CONTEXT.md em `7a4081a`):
+- alvo novo — call site com lookalike PREFIXADO: `MyStylesheetRelRegex()` OLD 0 / NEW 1, e
+  `CachedImgSrcRegex()` (2o nome, para nao provar em cima de um caso unico) OLD 0 / NEW 1. Nesse
+  mutante o agregado `-eq 14` ainda le 14 e `[GeneratedRegex` ainda le 7: quem pega e
+  exclusivamente o passe AWK novo.
+- zero regressao — os 17 mutantes que a versao anterior ja pegava continuam pegos (OLD 1 / NEW 1):
+  os 7 orfaos COMPENSADOS (um por nome), call site comentado com `//`, dentro de bloco `/* */`
+  multi-linha, dentro de `///`, orfao SIMPLES (linha deletada), pattern corrompido + `IgnoreCase`
+  removido (M1 da iter 2), `IgnoreCase` removido de `ImgSrcRegex`, rename consistente decl+call,
+  `nameof(...)` sem parenteses, declaracao duplicada, e lookalike SUFIXADO.
+- zero falso positivo novo — pristino OLD 0 / NEW 0, e as tres formas legitimas de call site que
+  uma fronteira mal feita quebraria seguem 0/0: acesso por membro
+  (`ParsingEngine.StylesheetRelRegex()`, fronteira `.`), chamada na coluna 1 (fronteira = inicio de
+  linha) e chamada indentada com TAB.
+
+Fora de escopo desta decisao (registrado, NAO fechado): as evasoes E1 (call site substituido por
+string literal com o texto exato da invocacao) e E2 (call site vivo so sob `#if SIMBOLO_INDEFINIDO`)
+continuam `exit 0`. Fecha-las exige, respectivamente, remover string literals do texto e resolver
+diretiva de compilacao condicional — ou seja, parsear C# e o build graph, coisa que nenhum gate
+textual em AWK/grep faz, e uma meia-solucao (heuristica de aspas, heuristica de `#if`) introduziria
+falso positivo em codigo legitimo, que e a unica falha REALMENTE cara num gate. Diferente do
+lookalike prefixado, essas duas nao tem caminho ACIDENTAL: o Core tem zero `#if` hoje, e escrever o
+texto exato da invocacao dentro de uma string exige remover a chamada real de proposito. O backstop
+declarado para codigo adversarial continua sendo o PR review humano (estatuto do /jdi-issue).
+
+Nota de correcao a D-2026-07-30-the-method-refactor-8 (W-3 da REVIEW iter 3 — D-...-8 NAO e
+reescrita, esta nota e o registro append-only da correcao): a frase de containment do item 5
+daquela decisao, "`find .` podado e superconjunto de `find src`", nao e literalmente verdadeira. No
+canto `bin`/`obj` ela e FALSA: um csproj com BenchmarkDotNet dentro de `src/**/obj/` ou
+`src/**/bin/` da OLD 1 / NEW 0 (executado pelo reviewer, S4/S5). A divergencia e DELIBERADA e
+CORRETA — artefato gerado pelo restore nao e declaracao de pacote, e o proprio criterio pede a poda
+— e nenhuma protecao sobre declaracao REAL foi perdida (csproj de teste, `Directory.Packages.props`
+com CPM e `Directory.Build.targets` todos OLD 0 / NEW 1). O que estava errado era a PALAVRA
+"superconjunto": a relacao correta e "superconjunto sobre todo arquivo de declaracao REAL, com
+`bin`/`obj`/`.git` deliberadamente excluidos". O claim de containment do item 5 vale nessa forma
+corrigida; a MEDIDA e o COMANDO permanecem exatamente como D-...-8 os locked.
+
+Nao fechado nesta rodada (W-5 da REVIEW iter 3 — registrado com motivo, nao esquecido): (a) `[ Fact ]`
+com espacos nao e contado pelo passe AWK do item 5 — direcao FAIL-CLOSED (subconta: so pode derrubar
+o gate, nunca deixar regressao passar) e semantica identica a do baseline 192, que tambem nunca os
+contou; "corrigir" isso AFROUXA a medida e quebra a comparabilidade com o baseline. (b) String
+literal `"[Fact]"` sobreconta — mesma classe de E1, exige parser. (c) Ratchet do piso `-ge 193` para
+a medida atual (214) NAO e correcao de MEDIDA e sim mudanca do CRITERIO: o criterio locka o baseline
+192, e um piso apertado pelo proprio doer ja sabendo que passa e movimento de trave, nao
+endurecimento — exatamente o padrao que as iters 1-3 foram penalizadas por evitar. A janela de folga
+de 21 atributos ja e coberta pelo Gate 2 (comparacao dos 227 aprovados / 229 totais). Ratchet e
+politica ENTRE fases: roteado para `.jdi/todos.md`, para valer a partir da proxima phase.
+
+Zero linha de producao mudou por causa desta decisao — pela terceira vez, o codigo ja estava
+correto; o gate e que nao provava.

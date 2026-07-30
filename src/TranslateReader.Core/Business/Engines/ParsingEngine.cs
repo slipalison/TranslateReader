@@ -12,7 +12,7 @@ using TranslateReader.Utilities;
 
 namespace TranslateReader.Business.Engines;
 
-public class ParsingEngine : IParsingEngine
+public partial class ParsingEngine : IParsingEngine
 {
     public async Task<Book> ExtractMetadataAsync(string filePath)
     {
@@ -123,10 +123,7 @@ public class ParsingEngine : IParsingEngine
             content = await reader.ReadToEndAsync();
 
         var escapedTitle = System.Net.WebUtility.HtmlEncode(newTitle);
-        content = Regex.Replace(content,
-            @"(<dc:title[^>]*>)(.*?)(</dc:title>)",
-            $"$1{escapedTitle}$3",
-            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        content = OpfTitleRegex().Replace(content, $"$1{escapedTitle}$3");
 
         using var stream = opfEntry.Open();
         stream.SetLength(0);
@@ -193,13 +190,13 @@ public class ParsingEngine : IParsingEngine
     {
         var chapterDir = GetDirectoryPath(chapterFilePath);
 
-        return Regex.Replace(html, @"<link\b([^>]*?)/?>", match =>
+        return LinkTagRegex().Replace(html, match =>
         {
             var attrs = match.Groups[1].Value;
-            if (!Regex.IsMatch(attrs, @"\brel\s*=\s*""stylesheet""", RegexOptions.IgnoreCase))
+            if (!StylesheetRelRegex().IsMatch(attrs))
                 return match.Value;
 
-            var hrefMatch = Regex.Match(attrs, @"\bhref\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+            var hrefMatch = StylesheetHrefRegex().Match(attrs);
             if (!hrefMatch.Success)
                 return match.Value;
 
@@ -209,7 +206,7 @@ public class ParsingEngine : IParsingEngine
                 return match.Value;
 
             return $"<style type=\"text/css\">{cssFile.Content}</style>";
-        }, RegexOptions.IgnoreCase);
+        });
     }
 
     private static EpubLocalTextContentFile? FindCss(EpubBook epub, string resolvedPath)
@@ -225,17 +222,14 @@ public class ParsingEngine : IParsingEngine
     {
         var chapterDir = GetDirectoryPath(chapterFilePath);
 
-        html = Regex.Replace(html, @"(<img\b[^>]*?\bsrc\s*=\s*"")([^""]+)("")", match =>
-            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory),
-            RegexOptions.IgnoreCase);
+        html = ImgSrcRegex().Replace(html, match =>
+            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory));
 
-        html = Regex.Replace(html, @"(<image\b[^>]*?\bxlink:href\s*=\s*"")([^""]+)("")", match =>
-            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory),
-            RegexOptions.IgnoreCase);
+        html = SvgImageXlinkHrefRegex().Replace(html, match =>
+            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory));
 
-        html = Regex.Replace(html, @"(<image\b[^>]*?\bhref\s*=\s*"")([^""]+)("")", match =>
-            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory),
-            RegexOptions.IgnoreCase);
+        html = SvgImageHrefRegex().Replace(html, match =>
+            ReplaceImageRef(match, 2, chapterDir, epub, imagesDirectory));
 
         return html;
     }
@@ -324,4 +318,25 @@ public class ParsingEngine : IParsingEngine
         var navPoint = epub.Navigation?.FirstOrDefault(n => n.HtmlContentFile?.FilePath == filePath);
         return navPoint?.Title ?? Path.GetFileNameWithoutExtension(filePath);
     }
+
+    [GeneratedRegex(@"(<dc:title[^>]*>)(.*?)(</dc:title>)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex OpfTitleRegex();
+
+    [GeneratedRegex(@"<link\b([^>]*?)/?>", RegexOptions.IgnoreCase)]
+    private static partial Regex LinkTagRegex();
+
+    [GeneratedRegex(@"\brel\s*=\s*""stylesheet""", RegexOptions.IgnoreCase)]
+    private static partial Regex StylesheetRelRegex();
+
+    [GeneratedRegex(@"\bhref\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase)]
+    private static partial Regex StylesheetHrefRegex();
+
+    [GeneratedRegex(@"(<img\b[^>]*?\bsrc\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]
+    private static partial Regex ImgSrcRegex();
+
+    [GeneratedRegex(@"(<image\b[^>]*?\bxlink:href\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]
+    private static partial Regex SvgImageXlinkHrefRegex();
+
+    [GeneratedRegex(@"(<image\b[^>]*?\bhref\s*=\s*"")([^""]+)("")", RegexOptions.IgnoreCase)]
+    private static partial Regex SvgImageHrefRegex();
 }

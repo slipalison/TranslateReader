@@ -50,6 +50,7 @@ public class ReadingManagerTests
     {
         var book = new Book { Id = 1, FilePath = "/tmp/livro.epub" };
         _booksAccess.FetchBookAsync(1).Returns(book);
+        _fileUtility.DirectoryHasContent(Arg.Any<string>()).Returns(false);
         _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub")
             .Returns(new Dictionary<string, byte[]>());
         _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
@@ -115,6 +116,7 @@ public class ReadingManagerTests
         var illustration = new byte[] { 4, 5 };
         var book = new Book { Id = 7, FilePath = "/tmp/livro.epub" };
         _booksAccess.FetchBookAsync(7).Returns(book);
+        _fileUtility.DirectoryHasContent(Arg.Any<string>()).Returns(false);
         _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(new Dictionary<string, byte[]>
         {
             ["cover.jpg"] = cover,
@@ -130,5 +132,21 @@ public class ReadingManagerTests
         await _fileUtility.Received(1).WriteFileAsync(Path.Combine(imagesDir, "cover.jpg"), cover);
         await _fileUtility.Received(1).WriteFileAsync(
             Path.Combine(imagesDir, "images" + Path.DirectorySeparatorChar + "fig1.png"), illustration);
+    }
+
+    [Fact]
+    public async Task LoadChapterContentAsync_WhenImagesDirectoryAlreadyHasContent_SkipsExtractionEntirely()
+    {
+        var book = new Book { Id = 7, FilePath = "/tmp/livro.epub" };
+        _booksAccess.FetchBookAsync(7).Returns(book);
+        _fileUtility.DirectoryHasContent(Path.Combine("/tmp/books", "images", "7")).Returns(true);
+        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
+            .Returns("<p>Texto</p>");
+
+        var result = await _sut.LoadChapterContentAsync(7, "cap1.html");
+
+        Assert.Equal("<p>Texto</p>", result.Html);
+        await _parsingEngine.DidNotReceive().ExtractAllImagesAsync(Arg.Any<string>());
+        await _fileUtility.DidNotReceive().WriteFileAsync(Arg.Any<string>(), Arg.Any<byte[]>());
     }
 }

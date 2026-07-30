@@ -38,4 +38,7 @@ public class FileUtility : IFileUtility
             Directory.Delete(directoryPath, recursive: true);
         return Task.CompletedTask;
     }
+
+    public bool DirectoryHasContent(string directoryPath) =>
+        Directory.Exists(directoryPath) && Directory.GetFileSystemEntries(directoryPath).Length > 0;
 }

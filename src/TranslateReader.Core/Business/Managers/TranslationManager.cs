@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using TranslateReader.Contracts.Access;
 using TranslateReader.Contracts.Engines;
 using TranslateReader.Contracts.Managers;
@@ -11,7 +10,7 @@ using TranslateReader.Utilities;
 
 namespace TranslateReader.Business.Managers;
 
-public partial class TranslationManager(
+public class TranslationManager(
     ITranslationEngine translationEngine,
     IModelAccess modelAccess,
     ITranslationCacheAccess translationCacheAccess,
@@ -138,7 +137,7 @@ public partial class TranslationManager(
         CancellationToken ct)
     {
         var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapter.HRef, string.Empty);
-        var textBlocks = ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
+        var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
 
         for (var paraIdx = 0; paraIdx < textBlocks.Count; paraIdx++)
         {
@@ -183,10 +182,10 @@ public partial class TranslationManager(
         foreach (var chapter in chapters)
         {
             var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapter.HRef, string.Empty);
-            var textBlocks = ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
+            var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
             var translations = await FetchTranslationsFromCacheAsync(
                 book.Id, chapter.HRef, textBlocks, sourceLanguage, targetLanguage);
-            translatedChapters[chapter.HRef] = ReplaceTextBlocksInHtml(html, translations);
+            translatedChapters[chapter.HRef] = HtmlUtility.ReplaceTextBlocksInHtml(html, translations);
         }
         return translatedChapters;
     }
@@ -215,7 +214,7 @@ public partial class TranslationManager(
         var book = await booksAccess.FetchBookAsync(bookId);
         var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapterHRef, string.Empty);
         var bodyContent = HtmlUtility.ExtractBodyContent(html);
-        var paragraphs = ExtractParagraphs(bodyContent);
+        var paragraphs = HtmlUtility.ExtractParagraphs(bodyContent);
 
         string? previousParagraph = null;
         var chapter = (await parsingEngine.ExtractChaptersAsync(book.FilePath))
@@ -301,45 +300,6 @@ public partial class TranslationManager(
     public Task DeleteModelAsync() =>
         modelAccess.DeleteModelAsync();
 
-    private static List<string> ExtractParagraphs(string bodyContent)
-    {
-        var matches = ParagraphRegex().Matches(bodyContent);
-        return matches
-            .Select(m => StripHtmlTags(m.Groups[1].Value).Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .ToList();
-    }
-
-    private static List<string> ExtractTextBlocks(string bodyContent)
-    {
-        var matches = TextBlockRegex().Matches(bodyContent);
-        return matches
-            .Select(m => StripHtmlTags(m.Groups[2].Value).Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .ToList();
-    }
-
-    private static string ReplaceTextBlocksInHtml(string html, IReadOnlyList<string> translations)
-    {
-        var index = 0;
-        return TextBlockRegex().Replace(html, match =>
-        {
-            var innerHtml = match.Groups[2].Value;
-            var text = StripHtmlTags(innerHtml).Trim();
-            if (string.IsNullOrWhiteSpace(text))
-                return match.Value;
-            if (index >= translations.Count)
-                return match.Value;
-            var translated = System.Net.WebUtility.HtmlEncode(translations[index++]);
-            var tag = match.Groups[1].Value;
-            var openTag = match.Value[..(match.Value.IndexOf('>') + 1)];
-            return $"{openTag}{translated}</{tag}>";
-        });
-    }
-
-    private static string StripHtmlTags(string html) =>
-        HtmlTagRegex().Replace(html, string.Empty);
-
     private static string ComputeHash(string text, string sourceLanguage, string targetLanguage)
     {
         var input = $"{sourceLanguage}|{targetLanguage}|{text}";
@@ -353,13 +313,4 @@ public partial class TranslationManager(
         cleaned = cleaned.TrimStart('"', '\'', '\u201C').TrimEnd('"', '\'', '\u201D');
         return cleaned.Trim();
     }
-
-    [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex ParagraphRegex();
-
-    [GeneratedRegex(@"<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex TextBlockRegex();
-
-    [GeneratedRegex(@"<[^>]+>")]
-    private static partial Regex HtmlTagRegex();
 }
