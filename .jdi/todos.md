@@ -155,3 +155,13 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `.claude/rules/csharp.md` §6) ou um seam de producao — a API de `ParsingEngine` recebe path,
   nao stream. Mesmo motivo tecnico ja registrado na `regression-suite` (SUMMARY > Lacuna 4).
   Candidato: phase de teste de integracao com fixtures proprias, ou refactor da API para stream.
+  **RESOLVIDO na iter 2 de `the-method-refactor`** (blocker do DoD critic) — o diagnostico acima
+  errou ao concluir "so com I/O de disco ou seam novo": `ParsingEngineRegexTests.cs` alcanca os 7
+  `[GeneratedRegex]` por reflection (`BindingFlags.NonPublic | Static`) e asserta COMPORTAMENTO de
+  cada padrao (match/no-match/grupos/case), sem disco e sem mudar 1 byte de producao. Mutacao
+  medida: corromper qualquer 1 dos 7 patterns derruba teste; remover `IgnoreCase` de qualquer 1
+  dos 7 derruba exatamente 1 teste cada; remover `Singleline` de `OpfTitleRegex` derruba 1. Ver
+  `D-2026-07-30-the-method-refactor-7`. **Residuo NAO coberto** (continua valendo): o wiring
+  end-to-end de `InlineCssLinks`/`UpdateOpfTitleAsync` (o padrao certo chamado no lugar certo,
+  sobre um EPUB real) segue sem assercao — isso sim exige fixture com I/O. O que morreu foi a
+  classe de defeito "pattern/options corrompidos passam em silencio".
