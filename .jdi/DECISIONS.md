@@ -539,3 +539,39 @@ se justifica quando `llm-mobile` precisar trocar de backend por plataforma (Andr
 exatamente o escopo daquela fase. Os 2 testes de integracao `[Fact(Skip=...)]` seguem
 inalterados. Overlap consciente registrado para o planner de `llm-mobile` ler esta decisao antes
 de comecar.
+
+D-2026-07-30-the-method-refactor-7: O `Verify:` do item 4 do Definition of Done desta fase
+(CONTEXT.md, achado #3) fica SUPERSEDED pelo comando endurecido registrado abaixo. Motivo, com
+contra-exemplo executado: o DoD critic (iter 1, read-only, segmento `## DoD Critic` de REVIEW.md)
+provou que o `Verify:` original — `test $(grep -cE "Regex\.(Replace|Match|IsMatch)\(" F) -eq 0 &&
+grep -q "public partial class ParsingEngine" F && test $(grep -c "\[GeneratedRegex" F) -ge 7` —
+mede CONTAGEM, nunca IDENTIDADE: numa copia de `ParsingEngine.cs` com o pattern de
+`StylesheetRelRegex` corrompido (`stylesheet` -> `stylsheet`) E `RegexOptions.IgnoreCase` removido
+— exatamente a armadilha de migracao que o PLAN nomeou como risco #1 — o comando literal saiu
+`exit 0`. A rede de testes tambem nao fechava o furo (medido na T-2: `StylesheetRelRegex`,
+`OpfTitleRegex`, `LinkTagRegex` e `StylesheetHrefRegex` sozinhos produziam 0 falhas), entao a
+unica prova de conformidade real era a inspecao manual byte-a-byte do reviewer — prova que vive
+FORA do gate e nao sobrevive a proxima phase. Um `Verify:` que passa trivialmente e pior que
+nenhum (`.jdi/todos.md` `[PROCESSO/DoD]`, mesma classe de defeito da regra Semgrep
+`translatereader-zip-slip`). Esta decisao NAO reescreve nenhuma decisao anterior (append-only):
+D-2026-07-30-the-method-refactor-5 continua valendo integralmente no QUE deve ser feito (7 padroes
+inline -> `[GeneratedRegex]`, classe `partial`); o que muda e apenas COMO o DoD prova isso.
+
+Novo criterio locked (4 propriedades, todas verificaveis por comando, nenhuma afrouxada em relacao
+a versao anterior — o comando antigo esta contido no novo): (1) zero `Regex.(Replace|Match|IsMatch)(`
+estatico no arquivo; (2) `public partial class ParsingEngine` presente; (3) EXATAMENTE 7
+`[GeneratedRegex` (antes `>= 7`); (4) NOVO — para cada um dos 7, a linha de atributo conferida por
+literal exato (`grep -F`, pattern E `RegexOptions` byte-a-byte) e ligada por adjacencia (`grep -A1`)
+a assinatura `partial Regex <Nome>()` correspondente, mais `-eq 14` ocorrencias de linha dos 7 nomes
+(7 declaracoes + 7 call sites, fechando o caso "regex declarado e nunca chamado"). Efeito: alterar
+um unico caractere de qualquer pattern, remover um `RegexOptions.IgnoreCase`/`Singleline`, trocar
+dois patterns de metodo ou orfanar um regex derruba o gate.
+
+Prova por mutacao do proprio gate (5 mutacoes, copia em scratchpad, repo intocado): `stylsheet` +
+sem `IgnoreCase` (o contra-exemplo do critico), so o pattern, so o `IgnoreCase`, `src`->`scr` em
+`ImgSrcRegex`, e `IgnoreCase` removido de `ImgSrcRegex` — o comando ANTIGO da `exit 0` nas 5, o
+NOVO da `exit 1` nas 5. Complemento (nao substituto): a mesma iter entrega
+`test/TranslateReader.Tests/ParsingEngineRegexTests.cs`, que fecha a propriedade pelo lado do
+COMPORTAMENTO (26 casos, reflection sobre as factories privadas, sem I/O de disco — §6 respeitada,
+zero diff em producao). Os dois juntos cobrem o que nenhum cobre sozinho: o teste prova semantica
+de casamento, o `Verify:` prova que o texto que gera essa semantica nao mudou.
