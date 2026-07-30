@@ -79,11 +79,24 @@ deve dar WARN, nao BLOCK. Nenhum codigo de producao foi adicionado para conserta
 - Gate 5.17: nas linhas ADICIONADAS nao existe `new SqliteConnection`, `HttpClient` nem
   `File.Write/Read/Create`; os testes novos nao criaram nenhum `Substitute.For<>` proprio — reusam os
   campos existentes, todos sobre interfaces `I[A-Z]` de `Contracts/` OK
-- `dotnet format --verify-no-changes`: a lista de violacoes e **identica** a do baseline
-  (`HtmlInjectionTests.cs(25,1)`, `(42,1)`, `ThemeEngineTests.cs(12,33)`,
-  `TranslationManagerTests.cs(528,21/33/61)`, `(529,31)`) — todas em linhas LEGADAS, isentas por D-2.
-  Nenhuma linha nova aparece na lista. Uma violacao introduzida por codigo novo (inicializador de
-  objeto multi-declarador copiado do estilo vizinho) foi corrigida antes do commit de T-5.
+- `dotnet format --verify-no-changes` — **o escopo importa.** Rodado na solucao inteira (sem
+  `--project`), o total e **12** violacoes WHITESPACE: **7 no test project** e **5 em `src/`**.
+  A versao anterior desta secao listava so as 7 do test project e as apresentava como "a lista" —
+  enumeracao **incompleta** (warning 3 do REVIEW). Lista completa, a nivel de SOLUCAO:
+
+  | Escopo | Violacoes |
+  |---|---|
+  | `test/TranslateReader.Tests` (7) | `HtmlInjectionTests.cs(25,1)`, `(42,1)`, `ThemeEngineTests.cs(12,33)`, `TranslationManagerTests.cs(528,21)`, `(528,33)`, `(528,61)`, `(529,31)` |
+  | `src/` (5) | `ThemeEngine.cs(12,24)`, `(14,11)`, `ReadingManager.cs(55,1)`, `ReaderPage.xaml.cs(122,103)`, `(124,72)` |
+
+  A afirmacao central **nao muda e foi CONFIRMADA independentemente pelo reviewer**: 12 no baseline
+  `299f150`, 12 no HEAD, listas identicas em arquivo/linha, todas em linhas LEGADAS isentas por D-2 —
+  **zero violacao nova introduzida pela fase** (re-medido tambem depois da rodada de correcao de
+  warnings: continua 12, mesma lista). A unica delta e de posicao em `ReaderPage.xaml.cs`
+  (`(123,1)` no baseline vs `(122,103)` no HEAD): nao-determinismo de anotacao do proprio
+  `dotnet format`, com o blob do arquivo bit-identico nas duas revisoes.
+  Uma violacao introduzida por codigo novo (inicializador de objeto multi-declarador copiado do
+  estilo vizinho) foi corrigida antes do commit de T-5.
 
 ## Provas de discriminacao (regra 3 do PLAN)
 
