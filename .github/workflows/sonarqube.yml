@@ -64,9 +64,21 @@ jobs:
           SONAR_PR_BRANCH: ${{ inputs.pr-branch }}
           SONAR_PR_BASE: ${{ inputs.pr-base }}
         run: |
+          # Waivers auditaveis (D-2026-07-30-sonar-zero-issues-3 mecanismo (b),
+          # D-2026-07-30-sonar-zero-issues-4): as duas regras abaixo apontam para
+          # decisoes de produto em index.html, nao para defeitos.
+          #   Web:S7926 -> user-scalable=no e requisito do modo Paginated (viewport fixo);
+          #                WCAG 1.4.4 ja atendido pela tipografia configuravel.
+          #   css:S4667 -> <style id="reader-theme"> e vazio por design, populado em
+          #                runtime pelo CSS que o ThemeEngine gera.
           args=(/k:"slipalison_TranslateReader" /o:"slipalison"
                 /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
-                /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml")
+                /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+                /d:sonar.issue.ignore.multicriteria=e1,e2
+                /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
+                /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
+                /d:sonar.issue.ignore.multicriteria.e2.ruleKey="css:S4667"
+                /d:sonar.issue.ignore.multicriteria.e2.resourceKey="**/index.html")
           if [ -n "$SONAR_PR_KEY" ]; then
             args+=(/d:sonar.pullrequest.key="$SONAR_PR_KEY"
                    /d:sonar.pullrequest.branch="$SONAR_PR_BRANCH"
