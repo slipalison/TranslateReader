@@ -57,7 +57,7 @@ justificada por violacao nomeada e protegida pela rede de `regression-suite` (19
     (auto-value de `bool` ja e `false`) e ajuste **MECANICO**, assercoes intactas.
 - **Dependencies:** none
 - **Test:** `dotnet test` — `ReadingManagerTests` (7 -> >=8), `FileUtilityTests` (9 -> >=11)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 — achado #3 (fecha DoD 4)
 
@@ -87,7 +87,7 @@ justificada por violacao nomeada e protegida pela rede de `regression-suite` (19
     SUMMARY > Lacuna 4). Registrar em `.jdi/todos.md` na T-4; nao inventar fixture nem relaxar §6.
 - **Dependencies:** none (arquivo disjunto de T-1/T-3)
 - **Test:** `dotnet test` — `ParsingEngineTests` (19 attrs, 0 novos)
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3 — achado #2 (fecha DoD 3)
 
@@ -118,7 +118,7 @@ justificada por violacao nomeada e protegida pela rede de `regression-suite` (19
     `ExtractBodyContent`/`InjectTags`/`BuildContinuousScrollHtml`.
 - **Dependencies:** none (arquivos disjuntos de T-1/T-2)
 - **Test:** `dotnet test` — `TranslationManagerTests` (32) + `HtmlInjectionTests` (15), 0 novos
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4 — guardrail agregado (fecha DoD 5)
 
@@ -138,7 +138,7 @@ justificada por violacao nomeada e protegida pela rede de `regression-suite` (19
     `.claude/rules/csharp.md` §2 (infra de medicao nao criada, D-...-2 (B)).
 - **Dependencies:** T-1, T-2, T-3
 - **Test:** N/A (task de evidencia, nao altera `.cs`)
-- **Status:** pending
+- **Status:** completed
 
 ## Execucao
 - Total tasks: 4 | Waves: 4 | Speedup paralelo real: **1x**

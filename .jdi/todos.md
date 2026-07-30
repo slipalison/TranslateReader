@@ -142,3 +142,16 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   nao foram auditadas nesta sessao (orcamento de contexto e escopo finding-driven, nao
   rewrite amplo). Uma varredura completa do app MAUI (fora da rede de testes, D-2026-07-30-
   regression-suite-2) continua um gap conhecido e deliberadamente aceito.
+
+- **[TESTE] `ParsingEngine`: 6 dos 7 `[GeneratedRegex]` nao sao discriminados por nenhum teste.**
+  Medido por mutacao na T-2 de `the-method-refactor` (evidencia completa na SUMMARY da fase).
+  So `ImgSrcRegex` morde sozinho (quebra-lo derruba 2 testes); `SvgImageXlinkHrefRegex` e
+  `SvgImageHrefRegex` so mordem JUNTOS (1 teste); e os 4 restantes — `OpfTitleRegex`,
+  `LinkTagRegex`, `StylesheetRelRegex`, `StylesheetHrefRegex` — podem ser quebrados sem que a
+  suite (203 casos) acuse nada. Consequencias: (1) o caminho inteiro de `InlineCssLinks` (inline
+  de `<link rel="stylesheet">` em `<style>`) nao tem assercao nenhuma; (2) `UpdateOpfTitleAsync`
+  nunca e executado por teste algum — `CreateTranslatedEpubAsync` so aparece MOCKADO em
+  `TranslationManagerTests`. Fechar isso exige I/O de disco real (proibido por
+  `.claude/rules/csharp.md` §6) ou um seam de producao — a API de `ParsingEngine` recebe path,
+  nao stream. Mesmo motivo tecnico ja registrado na `regression-suite` (SUMMARY > Lacuna 4).
+  Candidato: phase de teste de integracao com fixtures proprias, ou refactor da API para stream.
