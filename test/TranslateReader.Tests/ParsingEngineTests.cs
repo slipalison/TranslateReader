@@ -243,7 +243,7 @@ public class ParsingEngineTests
     public async Task Practice_CreateTranslatedEpubAsync_GravaCapituloTraduzidoEAtualizaTitulo()
     {
         var destinationDirectory = Path.Combine(Path.GetTempPath(), "translatereader_translated_" + Guid.NewGuid().ToString("N"));
-        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub)).First();
+        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub))[0];
         const string translatedTitle = "Pratica Leva a Perfeicao";
         const string translatedHtml = "<html><body><p>PARAGRAFO TRADUZIDO SENTINELA</p></body></html>";
 
@@ -275,7 +275,7 @@ public class ParsingEngineTests
     public async Task Practice_CreateTranslatedEpubAsync_NaoAlteraOArquivoOriginal()
     {
         var destinationDirectory = Path.Combine(Path.GetTempPath(), "translatereader_translated_" + Guid.NewGuid().ToString("N"));
-        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub)).First();
+        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub))[0];
         var originalLength = new FileInfo(PracticeEpub).Length;
 
         try
