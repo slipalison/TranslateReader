@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using TranslateReader.Access;
 using TranslateReader.Models;
 
@@ -136,5 +137,68 @@ public class SettingsAccessTests : IDisposable
 
         Assert.Equal("Spanish", fetched.SourceLanguage);
         Assert.Equal("French", fetched.TargetLanguage);
+    }
+
+    [Fact]
+    public async Task FetchSettingsAsync_WithOnlyAnUnknownKeyStored_FallsBackToEveryDefault()
+    {
+        var sut = CreateSut();
+        await InsertRawAsync("LegacyKeyNobodyReadsAnymore", "whatever");
+
+        var settings = await sut.FetchSettingsAsync();
+
+        Assert.Equal(ThemeType.Light, settings.Theme);
+        Assert.Equal("Georgia", settings.FontFamily);
+        Assert.Equal(18, settings.FontSize);
+        Assert.Equal(1.6, settings.LineSpacing);
+        Assert.Equal(0, settings.LetterSpacing);
+        Assert.Equal(0, settings.WordSpacing);
+        Assert.Equal(ReadingMode.Scroll, settings.ReadingMode);
+        Assert.Equal("gemma-2-2b", settings.TranslationModelName);
+        Assert.Equal(0.1, settings.TranslationTemperature);
+        Assert.Equal("English", settings.SourceLanguage);
+        Assert.Equal("Brazilian Portuguese (PT-BR)", settings.TargetLanguage);
+    }
+
+    [Fact]
+    public async Task FetchSettingsAsync_WithUnparsableStoredValues_FallsBackToTheTypedDefaults()
+    {
+        var sut = CreateSut();
+        await InsertRawAsync("Theme", "Neon");
+        await InsertRawAsync("ReadingMode", "Diagonal");
+        await InsertRawAsync("FontSize", "grande");
+        await InsertRawAsync("LineSpacing", "");
+        await InsertRawAsync("LetterSpacing", "n/a");
+        await InsertRawAsync("WordSpacing", "n/a");
+        await InsertRawAsync("TranslationTemperature", "quente");
+
+        var settings = await sut.FetchSettingsAsync();
+
+        Assert.Equal(ThemeType.Light, settings.Theme);
+        Assert.Equal(ReadingMode.Scroll, settings.ReadingMode);
+        Assert.Equal(18, settings.FontSize);
+        Assert.Equal(1.6, settings.LineSpacing);
+        Assert.Equal(0, settings.LetterSpacing);
+        Assert.Equal(0, settings.WordSpacing);
+        Assert.Equal(0.1, settings.TranslationTemperature);
+    }
+
+    [Fact]
+    public async Task Constructor_WithoutStartupInitialization_LeavesTheSchemaUncreated()
+    {
+        var sut = new SettingsAccess(_db.ConnectionString, initializeOnStartup: false);
+
+        await Assert.ThrowsAsync<SqliteException>(sut.FetchSettingsAsync);
+    }
+
+    private async Task InsertRawAsync(string key, string value)
+    {
+        using var connection = new SqliteConnection(_db.ConnectionString);
+        await connection.OpenAsync();
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT OR REPLACE INTO Settings (Key, Value) VALUES ($key, $value)";
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$value", value);
+        await command.ExecuteNonQueryAsync();
     }
 }
