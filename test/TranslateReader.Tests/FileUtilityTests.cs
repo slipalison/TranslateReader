@@ -83,6 +83,29 @@ public class FileUtilityTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFileAsync_WritesContentAndCreatesTheParentDirectory()
+    {
+        var file = Path.Combine(_tempDir, "nested", "cover.bin");
+        byte[] content = [1, 2, 3, 4];
+
+        await _sut.WriteFileAsync(file, content);
+
+        Assert.True(File.Exists(file));
+        Assert.Equal(content, await File.ReadAllBytesAsync(file));
+    }
+
+    [Fact]
+    public async Task WriteFileAsync_OverwritesAnExistingFile()
+    {
+        var file = Path.Combine(_tempDir, "cover.bin");
+        await _sut.WriteFileAsync(file, [9, 9, 9]);
+
+        await _sut.WriteFileAsync(file, [7]);
+
+        Assert.Equal([7], await File.ReadAllBytesAsync(file));
+    }
+
+    [Fact]
     public async Task DeleteDirectoryAsync_RemovesExistingDirectory()
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());

@@ -102,7 +102,9 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   phase `llm-mobile`), a rede desta fase nao caracteriza esse caminho hoje; qualquer mudanca ali
   precisa de revisao manual adicional. Ver `D-2026-07-30-regression-suite-5(2)`.
   **DEFERIDO para `llm-mobile`** — ver `D-2026-07-30-the-method-refactor-6` (nao e violacao
-  hoje; abstrair sem 2a implementacao real seria YAGNI).
+  hoje; abstrair sem 2a implementacao real seria YAGNI). **DEFERIDO NOVAMENTE em `coverage-90`**
+  — ver `D-2026-07-31-coverage-90-4`: as 52 linhas descobertas de `TranslationEngine.cs`
+  permanecem fora do escopo dessa fase tambem, plano de 90% de cobertura nao depende delas.
 
 - **[PROCESSO/DoD] Grep de guardrail anti-multi-target e estreito demais — endurecer nas phases
   futuras.** O `Verify:` do item 5 do DoD desta phase (CONTEXT.md linha 98) e
@@ -180,6 +182,10 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   Residuos de MEDIDA conhecidos e deliberadamente mantidos: `[ Fact ]` com espacos nao conta
   (fail-closed, subconta, consistente com o baseline 192) e `"[Fact]"` em string literal conta
   (sobreconta, so alcancavel de proposito) — fechar qualquer um dos dois exige parsear C#.
+  **AINDA nao aplicado em `coverage-90`**: esta fase nao toca a suite C# de forma que mude a
+  contagem de `[Fact]`/`[Theory]` de modo relevante (so `ModelAccessTests.cs` ganha 1 metodo de
+  teste novo) — o ratchet do piso continua pendente para a proxima phase que reescrever esse
+  DoD item de forma material.
 
 ## De `sonar-zero-issues` (2026-07-30)
 
@@ -204,6 +210,9 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   **Confirmado na rodada de warnings (iter 3):** segue exatamente como escrito acima — W-3(c) da
   REVIEW nao foi fechada e nao deve ser: criar job Sonar em `windows-latest` com workload MAUI e
   infraestrutura nova, ja declarada fora de escopo por `D-2026-07-30-sonar-zero-issues-6`.
+  **AINDA nao fechado em `coverage-90`**: `sonar.javascript.lcov.reportPaths` (D-2026-07-31-
+  coverage-90-2) fecha a lacuna de cobertura de JS dentro do job existente, mas NAO abre o job
+  Windows/MAUI — este item continua aberto exatamente como escrito.
 
 - **[CI/QUALITY-GATE] O "Sonar way" so mede New Code — dois cegos estruturais que nenhum comando
   deste repo fecha** (W-3(a) e W-3(b) da REVIEW iter 2 da phase `sonar-zero-issues`). (a) Issue
@@ -218,6 +227,8 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   tomada pelo dono do projeto, nao por uma phase de codigo. Ate la o mecanismo entregue
   (`sonar.qualitygate.wait=true`, `D-2026-07-30-sonar-zero-issues-2`) protege o que promete e so
   isso: **regressao em New Code do que o job compila**.
+  **Reafirmado em `coverage-90`**: ver D-2026-07-31-coverage-90-7 — o mesmo limite explica por que
+  nenhum `Verify:` desta fase usa o Quality Gate como prova da meta de 90% Overall.
 
 - **[LEGADO/D-2] Achados legados do gate de seguranca/camada, nenhum tocado por esta phase, todos
   pre-existentes em `main`** (W-5 da REVIEW iter 2 — enumerados aqui porque ate agora so existiam
@@ -250,3 +261,58 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   achados desta phase so apareceram depois do push: o smell `S125` que o proprio refactor introduziu
   e as 2 `CA1826` dos testes novos do T-6. Qualquer phase futura que prometa "0 issues do Sonar"
   precisa contar com um ciclo de push+CI dentro do proprio escopo, nao so `Verify:` locais.
+  **Aplicado em `coverage-90`**: ver D-2026-07-31-coverage-90-6 — nenhum `Verify:` desta fase
+  alega provar "zero issue nova" localmente; a confirmacao real fica em `## Deferred to PR review`.
+
+## De `coverage-90` (2026-07-31)
+
+- **[FERRAMENTA] Lint estatico dedicado para o JS do WebView (eslint) nao entra nesta fase.**
+  D-2026-07-31-coverage-90-1 travou o harness de teste JS em `node:test`+`node:vm` nativo
+  (zero dependencia nova); adicionar `eslint` para os 4 scripts de producao + os novos
+  `test/js/*.test.js` traria valor real (a analise `javascript` do SonarCloud so roda apos
+  push+CI, per D-2026-07-30-sonar-zero-issues-6), mas exige `package.json` + config propria —
+  contradiria a escolha deliberada de "zero dependencia nova" desta fase. Candidato a phase
+  futura de qualidade de JS (ou sub-escopo de `pipeline-unificada`), junto com a decisao ja
+  registrada de nao abrir um job Sonar Windows/MAUI (item `[CI/COBERTURA-DE-SCAN]` acima).
+- **[CONTINGENCIA] `ParsingEngine.cs` (45 linhas descobertas, 71% hoje) fica fora do plano
+  principal desta fase (D-2026-07-31-coverage-90-5) — reserva nomeada SE a soma real de JS +
+  `ModelAccess` + `FileUtility`/`HtmlUtility` ficar abaixo das 187 linhas necessarias apos a
+  primeira medicao local. Se acionada, usa o MESMO padrao de fixture `.epub` real ja estabelecido
+  em `ParsingEngineTests.cs` (autorizado nomeadamente no PLAN de `sonar-zero-issues`, T-6) — nao
+  inventa um terceiro padrao de excecao a `.claude/rules/csharp.md` §6.
+
+- **[CODIGO/RECURSO] `ReadEpubSafeAsync` deixa o handle do zip aberto quando o fallback e
+  acionado.** Achado colateral de `coverage-90` (T-7), reportado no SUMMARY e cobrado como work
+  item pelo reviewer (Warning 1 da REVIEW iter 1). `src/TranslateReader.Core/Business/Engines/
+  ParsingEngine.cs:138-190`: a leitura estrita (`:162`) lanca `EpubPackageException`, o `catch`
+  (`:164`) refaz a leitura com `fallbackOptions` (`:188`) — e o descarte do `EpubBook`/arquivo da
+  primeira tentativa fica inteiramente por conta do VersOne.Epub, que nao o fecha.
+  Evidencia empirica: o teste novo precisou de um guard `catch (IOException)` no proprio `Dispose`
+  para conseguir apagar o temp dir — `test/TranslateReader.Tests/ParsingEngineEdgeCaseTests.cs:
+  47-52` ("VersOne.Epub keeps the archive handle open when the strict read throws
+  EpubPackageException"). Consequencia real: em Windows o `.epub` segue TRAVADO depois que
+  `ExtractCoverImageAsync`/`ParseBookAsync` retornam, entao renomear/apagar/reimportar o livro
+  falha ate o GC rodar. Nao re-provado em processo isolado (o lock e interno a lib de terceiro) —
+  confirmar antes de corrigir. Corrigir exige mexer em `src/`, o que `coverage-90` proibiu por
+  decisao de escopo; contra `.claude/rules/csharp.md` §2.4 ("Dispose what you own"). Candidato a
+  phase de higiene do Core ou a sub-escopo de `epub-zip-slip` (mesmo arquivo, mesmo caminho de
+  leitura de zip).
+
+- **[CODIGO/CONTRATO] `ExtractCoverImageAsync` devolve `byte[0]` em vez de `null` quando a capa do
+  manifesto aponta para arquivo ausente.** Mesmo achado/mesma origem do item acima (SUMMARY de
+  `coverage-90`, Warning 1 da REVIEW iter 1). `src/TranslateReader.Core/Business/Engines/
+  ParsingEngine.cs:316` (`return imageFile?.Content;`) devolve o `Content` sem a guarda
+  `Length > 0` que as DUAS fontes anteriores do mesmo metodo aplicam (`:72`
+  `epub.CoverImage is { Length: > 0 }` e `:75` `epub.Content.Cover?.Content is { Length: > 0 }`).
+  Como `ReadEpubSafeAsync` liga `IgnoreMissingFileError = true` (`:156` no caminho estrito, `:184`
+  no fallback), o
+  VersOne.Epub materializa um placeholder VAZIO para o item ausente — e ele escapa como `byte[0]`
+  por esse terceiro caminho. O contrato e `Task<byte[]?>`: quem consome recebe "tem capa" e depois
+  grava/renderiza 0 byte, em vez de cair no caminho de "sem capa". Comportamento hoje FIXADO por
+  teste de caracterizacao (`ParsingEngineEdgeCaseTests.cs:185`
+  `ExtractCoverImageAsync_WithACoverImagePropertyPointingAtAMissingFile_ReturnsNoBytes`), com a
+  assercao deliberadamente frouxa `Assert.Empty(cover ?? [])` (`:196`) justamente para NAO
+  cristalizar o defeito como contrato. Correcao esperada: aplicar a mesma guarda `Length > 0` no
+  `:316`; ao fazer isso, apertar `:196` para exigir `Assert.Null(cover)` (Warning 3 da REVIEW).
+  Uma linha de producao — nao foi feita aqui porque `coverage-90` fechou `src/` por decisao de
+  escopo, nao por dificuldade.

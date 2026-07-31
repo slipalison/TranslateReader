@@ -1192,3 +1192,203 @@ para o importador), mas e supressao no PROJETO INTEIRO, exatamente a "vassoura" 
 phase reprova: esconderia um SYSLIB1044 legitimo em qualquer outro regex futuro do Core.
 Estado final honesto da phase: 112 das 113 issues fora da analise; a ultima e um waiver INFO
 documentado, com Quality Gate OK (INFO nao move rating nenhum), aguardando a decisao acima.
+
+D-2026-07-31-coverage-90-0 (registro de phase): phase `coverage-90` registrada na posicao 15 do
+ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-31 — "adicione os tests
+faltante ate chegar em 90% de cobertura no Sonarqube e sem issues nova" (texto colado, sem URL de
+tracker). Baseline medido na API do SonarCloud no momento do registro (`branch=main`, apos o merge
+do PR #12 / `1af3a51`): coverage 75,9%, line_coverage 77,0%, lines_to_cover 1428, uncovered_lines
+329, ncloc 3103, 1 issue aberta (o waiver INFO `SYSLIB1044` de D-2026-07-30-sonar-zero-issues-13).
+Distribuicao das 329 linhas descobertas: 195 em JavaScript do WebView (`paginated.js` 70,
+`bridge.js` 60, `translation.js` 38, `scroll.js` 27 — todos 0%, sem harness JS no repo) e 134 em C#
+(`TranslationEngine` 52, `ParsingEngine` 45, `ModelAccess` 25, `FileUtility` 3, `HtmlUtility` 2,
+`ThemeEngine` 1, models 6).
+D-2026-07-31-coverage-90-1 (rota: harness JS real, nao exclusao de denominador): entre as 3 rotas
+do brief, fica LOCKED a rota (A) — harness JS real via `node:test`+`node:vm` nativo do Node 24
+(zero dependencia nova) — e NAO a rota (B) `sonar.coverage.exclusions`. Motivo: (B) so entrega o
+NUMERO — o denominador cai de 1428 para 1233 e o numero de HOJE (1099 linhas cobertas) ja vira
+89,1%, faltando so +11 linhas de C#; mas o JS continua 0% testado, contradizendo o pedido literal
+do card ("adicione os tests faltante") e o proprio brief exige justificativa forte + Deferred to
+PR review pra essa rota. (A) e viavel sem infra nova porque inspecao direta dos 4 arquivos
+(`paginated.js`, `bridge.js`, `translation.js`, `scroll.js`) confirmou que sao 100% atribuicoes
+flat `window.X = function(){}` sobre leitura/escrita de propriedade DOM simples
+(`getElementById`, `querySelectorAll`, `.dataset`, `.offsetWidth/offsetLeft/scrollWidth`,
+`getBoundingClientRect`, `window.addEventListener('resize', ...)`) — nenhum uso de framework ou
+modulo, entao um sandbox `vm.createContext` com `window`/`document` stub minimos basta pra
+exercitar toda funcao exportada, sem jsdom. Alvo local: cobertura agregada dos 4 arquivos >= 85%
+via lcov (>= ~166 das 195 linhas descobertas) — abaixo de 100% de proposito, pra nao forcar cobrir
+ramos puramente defensivos (ex.: a cadeia de retry `setTimeout` de `_sendReady` em `bridge.js`,
+4 branches de deteccao de host).
+
+D-2026-07-31-coverage-90-2 (layout do harness + wiring de CI): testes JS vivem em
+`test/js/<nome>.test.js` (1 arquivo por script de producao: `paginated`, `bridge`, `translation`,
+`scroll`), fora de `TranslateReader.Tests.csproj` (nao e .NET) — usam `node:test` +
+`node:assert/strict` + `node:vm`. Comando de cobertura local: `node --test
+--experimental-test-coverage --test-reporter=lcov
+--test-reporter-destination=TestResults/js-lcov.info test/js/` (flags confirmadas via doc oficial
+do Node, disponiveis desde 20.11 — pesquisa web desta sessao). Risco tecnico registrado: a
+cobertura V8 (`--experimental-test-coverage`) so atribui linhas corretamente se o `vm.Script`
+carregar o codigo com `filename` apontando pro caminho REAL do arquivo de producao
+(`fs.readFileSync` + `new vm.Script(code, {filename: path})`) — copiar/colar o codigo como string
+literal quebra a atribuicao de cobertura silenciosamente; isso e responsabilidade do doer, nao do
+DoD (nao ha `Verify:` local pra essa propriedade de implementacao). `.github/workflows/
+sonarqube.yml` ganha: `actions/setup-node` (pinada por SHA, D-2026-07-28-ci-seguranca-4) ANTES do
+`dotnet-sonarscanner begin`; o comando de teste JS acima, gated `if: env.SONAR_TOKEN != ''` —
+MESMO padrao dos steps ja existentes no arquivo, reusando o guard de
+D-2026-07-30-sonar-zero-issues-10 (falha alto no repo de origem se o secret sumir, o que agora
+tambem cobre "os testes JS nao rodaram", sem gap novo: hoje ZERO teste JS existe em qualquer
+contexto, entao esta fase e estritamente uma melhoria em todo cenario, inclusive fork/Dependabot);
+`sonar.javascript.lcov.reportPaths` entra no MESMO bloco `args=(...)` do `begin` que ja tem
+`sonar.cs.opencover.reportsPaths`, apontando pro `TestResults/js-lcov.info`.
+
+D-2026-07-31-coverage-90-3 (ModelAccess + excecao de I/O real): `ModelAccess.cs` (25 linhas
+descobertas, 39% hoje) e alvo direto — `DownloadModelAsync` (o metodo maior e o unico sem teste
+hoje, confirmado em `ModelAccessTests.cs`) ganha teste com `HttpMessageHandler` fake injetado via
+`HttpClient` (ja e parametro de construtor — zero mudanca de seam), SEM rede real. O teste ESCREVE
+em diretorio temp real (`Path.GetTempPath()+Guid`, mesma convencao ja usada no proprio
+`ModelAccessTests.cs` e em `FileUtilityTests.cs`), porque o comportamento sob teste (buffer,
+progress, swap atomico `tmp`->final via `File.Move`) SO existe como efeito em disco. Alvo local:
+cobertura de `ModelAccess.cs` >= 90% (de 39% hoje). Esta e a UNICA excecao NOVA a
+`.claude/rules/csharp.md` §6 ("no disk... in unit tests") nesta fase, ao lado da que
+`ParsingEngineTests.cs` ja usa (fixture `.epub` real, autorizada nomeadamente no PLAN de
+`sonar-zero-issues`, T-6) — SE a contingencia de `ParsingEngine` (D-...-5) for acionada, segue o
+MESMO padrao de fixture real, nao um terceiro padrao. Nenhuma outra classe ganha excecao; rede
+real e SQLite real continuam banidos sem excecao em qualquer teste novo desta fase.
+
+D-2026-07-31-coverage-90-4 (TranslationEngine mantido deferido): as 52 linhas de
+`TranslationEngine.cs` (o maior gap de C#, caminho de `LLamaWeights`/`StatelessExecutor` sem
+interface-seam) NAO sao tocadas — esta fase NAO reverte `D-2026-07-30-regression-suite-5(2)` nem
+`D-2026-07-30-the-method-refactor-6` (abrir o seam pertence a `llm-mobile`). Consequencia numerica
+explicita: isso so e seguro porque D-...-1 + D-...-3 ja fecham a meta sem precisar dessas 52
+linhas (ver aritmetica em D-...-5 abaixo). Se a execucao ficar abaixo do plano, a reserva de
+contingencia e `ParsingEngine` (45 linhas, ja com padrao de fixture estabelecido), nunca
+`TranslationEngine`.
+
+D-2026-07-31-coverage-90-5 (aritmetica-alvo, amarra a fase): baseline (D-...-0) lines_to_cover=
+1428, covered=1099 (77,0%). Meta >=90% de 1428 => covered >= 1286 (ceil de 0,9*1428) => precisa de
+>= 187 linhas NOVAS cobertas. Plano: JS >=85% de 195 => >=166 (D-...-1); ModelAccess 39%->90% de
+~25 linhas descobertas => +-20 (D-...-3); `FileUtility.cs`(3) + `HtmlUtility.cs`(2) fechados a
+100%, sem infra nova => +5. Soma = 166+20+5 = 191 >= 187, margem de 4 linhas. `TranslationEngine`
+(52, D-...-4) e `ParsingEngine`(45) ficam fora do plano principal por design — `ParsingEngine` e a
+reserva nomeada se o numero real (so mensuravel apos implementar; ferramentas de cobertura de JS
+e C# sao distintas e nao produzem um numero unico local) ficar abaixo de 187. O numero AGREGADO
+real do SonarCloud (que pode divergir do proxy local — o analisador JS do Sonar conta linha
+executavel de um jeito, V8/node de outro, ambos sao proxies, nao a mesma medida) so existe apos
+push+CI — `## Deferred to PR review`; os itens Auto do DoD provam os PISOS locais por
+arquivo/agregado, nao o numero remoto.
+
+D-2026-07-31-coverage-90-6 ("sem issues nova" — sem gate local possivel, mesmo limite ja medido em
+`sonar-zero-issues`): a segunda condicao do card vale para as issues que os testes NOVOS desta
+fase introduzem — precedente direto e medido: a fase anterior zerou 113 e introduziu 2 (`CA1826`)
+nos proprios testes novos, so visiveis apos push (D-2026-07-30-sonar-zero-issues-12). Nenhum
+analisador do SonarCloud (`external_roslyn`, `javascript`, `csharpsquid`) roda em `dotnet build`/
+`node --test` local — um `Verify:` que fingisse provar "zero issue nova" localmente repetiria o
+exato erro de proxy ja catalogado varias vezes em `.jdi/todos.md` `[PROCESSO/DoD]`. O DoD desta
+fase portanto NAO contem item alegando provar isso; a confirmacao real vai para
+`## Deferred to PR review`, mesmo mecanismo de `D-2026-07-30-sonar-zero-issues-6`. Mitigacao de
+escrita (nao gated): novo teste C# usa indexador em vez de `.First()`/`.Last()` sobre
+`IReadOnlyList<T>` (padrao CA1826 ja corrigido em `sonar-zero-issues`); novo teste JS usa
+`const`/`let`/`===`, nunca `var`/`==`.
+
+D-2026-07-31-coverage-90-7 (Quality Gate mede so New Code — cautela sobre `Verify:`):
+`sonar.qualitygate.wait=true` (D-2026-07-30-sonar-zero-issues-2/10/11) mede so New Code
+(`new_coverage>=80` hoje). O diff desta fase e majoritariamente arquivo de teste NOVO + poucas
+linhas alteradas em producao (`ModelAccess.cs`, `FileUtility.cs`, `HtmlUtility.cs`,
+`sonarqube.yml`) — Quality Gate verde e sinal FRACO pra "chegamos a 90% Overall": New Code
+coverage e Overall coverage sao metricas diferentes, e uma fase que so ADICIONA teste pode
+satisfazer a primeira sem mover a segunda o bastante. Nenhum `Verify:` do DoD desta fase
+referencia `sonar.qualitygate.wait` ou status de CI como prova da meta de 90% — so os pisos
+locais por arquivo/agregado (D-...-5) e a confirmacao remota fica em
+`## Deferred to PR review`.
+
+D-2026-07-31-coverage-90-8 (os `Verify:` do DoD passam a medir a execucao ATUAL — supersede os
+comandos dos itens 1, 2, 3, 4 e 5 de `.jdi/phases/coverage-90/CONTEXT.md`; os CRITERIOS e os PISOS
+ficam identicos): o DoD critic da iter 1 derrubou tres linhas como OCAS e declarou residuo em
+outras duas, todas da mesma familia — **o gate lia um artefato de medicao que ja estava em disco em
+vez de exigir que a medicao DESTA execucao tivesse sucesso**. Dois defeitos mecanicos, ambos
+reproduzidos por medicao propria nesta iter 2:
+(i) **`;` descarta o exit code do runner.** Os itens 2, 3 e 4 usavam
+`<runner> >/dev/null 2>&1; <leitor do relatorio>` — se `node --test` ou `dotnet test` falhasse, o
+`awk`/`grep` seguinte lia o artefato antigo e o gate saia 0. Contra-exemplo EXECUTADO (item 2): com
+o `node` removido do `PATH` (regressao plausivel: o step `actions/setup-node` do `sonarqube.yml`
+nasceu nesta propria fase, T-8) e um `TestResults/js-lcov.info` valido de 5399 bytes em disco, o
+comando ANTIGO saiu **exit 0** sem executar 1 teste; o NOVO saiu 127. Contra-exemplo EXECUTADO
+(itens 3 e 4): invertendo uma assercao viva (`FileUtilityTests.cs:81`,
+`Assert.Equal(".epub", ...)` -> `".MUTANT"`), com a suite REPROVANDO, os comandos ANTIGOS sairam
+**exit 0** e os NOVOS sairam 1. Nota de honestidade: o contra-exemplo LITERAL do critico para o
+item 2 (`throw` num `.test.js`) NAO reproduz identico neste runtime — o reporter lcov do Node
+trunca o destino para um stub de 4 bytes (`TN:`), entao o comando antigo falhava por ACIDENTE, nao
+por design; o defeito estrutural continua real e esta provado pelos dois casos acima.
+(ii) **selecao de relatorio arbitraria.** Os itens 3 e 4 faziam
+`find TestResults -name "coverage.cobertura.xml" | sort | tail -1`. Os diretorios sao GUIDs do
+VSTest, entao `sort` e LEXICOGRAFICO e nao tem relacao nenhuma com tempo. Medido neste repo com 4
+relatorios em disco: o comando escolheu `9a248056-...` (mtime 07:49:59) enquanto o mais recente era
+`3e886ce2-...` (mtime 07:53:32).
+
+**Mecanismo adotado (deliberadamente determinista, nao heuristico):** artefato de destino LIMPO por
+execucao + encadeamento com `&&` do runner ate a assercao. Itens 3 e 4 escrevem em
+`--results-directory TestResults/dod3` e `TestResults/dod4`, apagados com `rm -rf` imediatamente
+antes, e o gate exige `find ... | wc -l` **igual a 1** — com um diretorio limpo e um unico projeto
+de teste existe exatamente 1 relatorio, entao a selecao deixa de ser heuristica e passa a ser
+provada. Item 2 apaga `TestResults/js-lcov.info` com `rm -f` antes de rodar e exige `test -s` depois
+— **mantendo o mesmo caminho que o CI usa** (`sonarqube.yml:107,137`), para que o item 5 continue
+aferindo a mesma string que o item 2 produz. Selecao por mtime foi REJEITADA: `find -printf "%T@"`
+nao existe em todo ambiente (BSD/macOS) e o diretorio limpo e determinista sem depender de
+extensao GNU.
+
+**Endurecimentos adicionais, todos com contra-exemplo executado e zero falso positivo no repo real:**
+(a) item 2 conta arquivos de PRODUCAO DISTINTOS no lcov e exige os **4** (`seen[f]` + `n==4`), nao
+so a razao agregada — assim um script que nunca foi carregado nao pode ser mascarado pelos outros
+tres; medido: esvaziando so `test/js/scroll.test.js`, ANTIGO exit 0 / NOVO exit 1. (b) itens 3 e 4
+passaram a comparar `line-rate` como NUMERO por classe (`$1+0<0.90` / `<0.99` em `awk`, reprovando
+se QUALQUER classe do arquivo ficar abaixo, e exigindo `n>0` matches) — o comando antigo montava um
+`R` MULTILINHA (`ModelAccess` tem 2 classes, `FileUtility` 3) e o `awk` acabava fazendo comparacao
+de STRING, que so coincide com a numerica por sorte; verificado que o novo reprova de fato
+apontando-o para `TranslationEngine.cs` (line-rate 0.21/0.4/0.2, deferido por D-...-4) -> exit 1, e
+subindo o piso de `FileUtility`/`HtmlUtility` para 1.01 -> exit 1, e o de JS para 101% -> exit 1.
+(c) item 1 (residuo "aceita suite VAZIA") exige `# pass > 1` e `# fail == 0` do reporter `tap`;
+medido que com os 4 `.test.js` esvaziados o Node ainda reporta `# pass 1` (conta o proprio arquivo
+como teste), entao um piso `> 0` seria vacuo e `> 1` e o menor piso que discrimina: ANTIGO exit 0 /
+NOVO exit 1. (d) item 5 (residuo "grep prova presenca de string, nao correspondencia") passou a
+EXTRAIR o caminho de `sonar.javascript.lcov.reportPaths=` e o de `--test-reporter-destination=` do
+mesmo YAML e exigir `"$P" = "$D"`, alem de exigir o `actions/setup-node@` SHA-pinned com regex de 40
+hex; medido: trocando o `reportPaths` para `TestResults/coverage/js.info`, ANTIGO exit 0 / NOVO exit
+1. Fecha localmente a mesma classe de defeito que quebrou `sonar-zero-issues`
+(`sonar.qualitygate.wait` presente e invalido, verde local, exit 1 no runner).
+
+**O que NAO muda:** os criterios e os PISOS sao literalmente os mesmos (JS agregado >= 85%,
+`ModelAccess.cs` >= 90%, `FileUtility.cs`/`HtmlUtility.cs` >= 99%, mesmo conjunto de strings do CI).
+Nenhum piso foi afrouxado e nenhum teste foi deletado ou relaxado — esta decisao troca COMO se mede,
+nunca O QUE se exige. Nenhuma linha de `src/` e tocada.
+
+**O que fica deferido de proposito:** o ratchet NUMERICO de contagem de teste JS (ex.: `# pass >=
+60`, a medida fechada desta fase) NAO entra aqui. O item `[PROCESSO/DoD]` de `.jdi/todos.md`
+(`## De the-method-refactor`) ja decidiu que piso de contagem se ergue na VIRADA da phase, com o
+numero ja publicado — apertar o proprio criterio no fim da corrida, sabendo que passa, e movimento
+de trave, nao endurecimento. O piso `> 1` adotado em (c) nao e ratchet: ele so nega a suite vazia,
+nao codifica a medida desta fase.
+
+D-2026-07-31-coverage-90-9 (o item 5 do DoD pina TAMBEM o literal do caminho do lcov — supersede
+o comando do item 5 de `.jdi/phases/coverage-90/CONTEXT.md` fixado por D-2026-07-31-coverage-90-8;
+o CRITERIO e os demais requisitos ficam identicos): a REVIEW da iter 2 registrou como W-3 um
+residuo do endurecimento anterior. O item 5 passou a exigir `"$P" = "$D"` (o caminho que o Sonar le
+== o caminho que o reporter do node escreve), o que fecha a divergencia UNILATERAL, mas nao pina o
+literal: uma mudanca COORDENADA dos dois lados do `sonarqube.yml` mantem a igualdade e o gate
+continua verde, enquanto o item 2 segue medindo o caminho hardcoded `TestResults/js-lcov.info`.
+Os itens 2 e 5 deixariam de aferir a mesma string sem que nenhum gate reclamasse.
+Contra-exemplo EXECUTADO nesta iter 3: renomeando `TestResults/js-lcov.info` ->
+`TestResults/coverage/js.info` nas DUAS ocorrencias do YAML (`sonarqube.yml:107` e `:137`), o
+comando do item 5 fixado por D-...-8 saiu **exit 0**; com o literal pinado sai **exit 1**. Os dois
+cenarios ja cobertos continuam cobertos: divergencia unilateral (so a linha 107 renomeada) = exit 1
+nos dois comandos, e `setup-node` pinado por tag em vez de SHA = exit 1. No repo real, exit 0 sem
+falso positivo.
+**Mecanismo:** insere `&& test "$P" = "TestResults/js-lcov.info"` imediatamente apos
+`&& test "$P" = "$D"`. E ADITIVO: todo teste do comando anterior (`test -n "$P"`, a igualdade
+`P = D`, o regex de 40 hex do `setup-node@`, `--experimental-test-coverage`, `--test-reporter=lcov`)
+permanece literalmente no lugar. **Nenhum piso foi afrouxado e nenhum criterio mudou** — o item 5
+continua sendo "CI wiring para cobertura JS", so que agora prova tambem que o caminho aferido e o
+MESMO que o item 2 mede localmente, amarrando os dois gates a uma unica string.
+**Por que agora e nao na proxima phase:** a W-3 nomeava a proxima phase que tocasse o YAML como
+lugar natural do conserto, mas o custo medido e de um `test` adicional, com contra-exemplo e zero
+falso positivo em duas rodadas; adiar deixaria os itens 2 e 5 desacoplados no unico momento em que
+o par foi verificado de ponta a ponta. Nenhuma linha de `src/` e tocada por esta decisao.

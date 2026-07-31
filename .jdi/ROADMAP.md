@@ -68,6 +68,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** sonar-zero-issues
 - **Goal:** resolver as 113 issues abertas do SonarQube em `main` (2 bugs, 7 vulnerabilities, 104 code smells) e instalar o mecanismo que impede a classe delas de voltar — cada issue resolvida no codigo, excluida da analise com justificativa registrada, ou suprimida com waiver auditavel; nunca silenciada sem registro
 
+### Phase 15: Cobertura de 90% no SonarQube sem issues novas
+- **Slug:** coverage-90
+- **Goal:** escrever os testes que faltam ate a cobertura medida pelo SonarQube atingir 90%, sem introduzir nenhuma issue nova — partindo de 75,9% em `main` (1428 lines to cover, 329 descobertas, das quais 195 sao JS do WebView sem harness nenhum no repo)
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram
