@@ -856,3 +856,89 @@ Prova por mutacao nos DOIS sentidos (executada, repo real):
 - mutante M2 — permissao removida mas `dotnet-install.ps1` restaurado: NEW `exit 1` (pega pelas
   duas clausulas).
 - falso positivo — no repo entregue, sem mutacao, NEW `exit 0`.
+
+D-2026-07-30-sonar-zero-issues-8: O `Verify:` do item 9 do Definition of Done desta fase
+(CONTEXT.md — `TranslationManager.cs`, S107 + S3267) fica SUPERSEDED pelo comando registrado nesta
+decisao e copiado byte-a-byte para o CONTEXT.md. Ela NAO reescreve `D-2026-07-30-sonar-zero-issues-5`
+nem qualquer decisao anterior (append-only): o QUE deve ser feito segue identico — os 2 helpers
+privados `TranslateChaptersWithCacheAsync` e `TranslateSingleChapterAsync` declaram no maximo 7
+parametros (S107, via objeto de contexto privado) e o loop de `chapters` usa
+`.Select(chapter => chapter.HRef)` (S3267). Muda so COMO o DoD prova isso. Nenhuma linha de
+producao muda por causa desta decisao — o refactor da iter 1 ja entrega 5 parametros reais em cada
+metodo; o que estava quebrado era a PROVA.
+
+Furo (contra-exemplo EXECUTADO pelo DoD critic da iter 1 — ver `## DoD Critic` em
+`.jdi/phases/sonar-zero-issues/REVIEW.md`, veredito BLOCKED): o comando vigente era
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do N=$(awk -v m="$M(" 'index($0,m){f=1} f{printf "%s",$0; if(/\)$/ && f>1){exit} f++}' "$F" | grep -o "," | wc -l); test "$N" -le 6 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+Esse `awk` NAO mede parametros. Ele (1) acha a PRIMEIRA linha do arquivo que contem `<Nome>(`,
+(2) concatena linhas ate a primeira terminada em `)`, (3) conta as virgulas dessa janela textual.
+Para `TranslateChaptersWithCacheAsync` a primeira ocorrencia no arquivo e o CALL SITE
+(`TranslationManager.cs:59`, 5 argumentos), nao a declaracao (`:147`) — a janela mede o CHAMADOR.
+Consequencia medida: uma copia do arquivo com 3 parametros extras inseridos na DECLARACAO (8 no
+total — exatamente a violacao S107 que o item existe para impedir) continua saindo `exit 0`. O gate
+e POSICIONAL, nao semantico: o proprio SUMMARY da iter 1 admite ter reordenado a declaracao de
+`TranslateSingleChapterAsync` para antes do chamador "para a janela cair sobre a declaracao".
+Mesma familia de defeito ja catalogada em `.jdi/todos.md` `[PROCESSO/DoD]` e causa das 2
+reprovacoes da phase `the-method-refactor`: o gate mede um PROXY conveniente — aqui "virgulas de
+uma janela textual" — em vez da propriedade.
+
+Propriedade REAL locked: **cada um dos dois metodos DECLARA no maximo 7 parametros, contados na
+assinatura da propria DECLARACAO, independentemente da posicao dela em relacao a qualquer
+chamador e do numero de linhas em que a assinatura esteja quebrada.** Comando novo (byte-a-byte
+igual ao que vai para o CONTEXT.md):
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do test $(grep -cE "^[[:space:]]*private async Task $M\(" "$F") -eq 1 || exit 1; N=$(awk -v m="private async Task $M(" 'index($0,m){f=1} f{for(i=1;i<=length($0);i++){h=substr($0,i,1); if(h=="("){p++} else if(h==")"){p--; if(p==0){print (s?k+1:0); exit}} else if(h=="<"){if(pc!=" ")a++} else if(h==">"){if(a>0)a--} else if(h=="["){b++} else if(h=="]"){if(b>0)b--} else if(h=="{"){c++} else if(h=="}"){if(c>0)c--} else if(h==","){if(p==1&&a==0&&b==0&&c==0)k++} else if(p>=1&&h!=" "&&h!="\t"){s=1} pc=h}}' "$F"); test -n "$N" && test "$N" -le 7 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+
+Como ele mede (3 mudancas de natureza, nao de limiar):
+1. ANCORA NA DECLARACAO: `^[[:space:]]*private async Task <Nome>(`, exigida EXATAMENTE 1 vez
+   (`grep -cE ... -eq 1`). Nenhum call site casa esse prefixo — `await <Nome>(...)` nao contem
+   `private async Task `. Some a declaracao (rename/mudanca de assinatura) e o gate reprova.
+2. CONTA PARAMETROS, NAO VIRGULAS DE JANELA: varre caractere a caractere a partir da ancora ate o
+   `)` que fecha a assinatura (profundidade de parenteses de volta a 0) e conta SEPARADORES de
+   parametro — virgulas em profundidade de parenteses 1 com profundidade 0 de `<>`, `[]` e `{}`.
+   Parametros = separadores + 1 (0 se a assinatura for vazia). Virgula de generico
+   (`Dictionary<string, int>`), de atributo (`[Foo(1, 2)]`) e de inicializador nao contam.
+3. LIMIAR NA UNIDADE CERTA: `-le 7` PARAMETROS (o antigo comparava `-le 6` VIRGULAS de uma janela
+   arbitraria). Mesma fronteira do S107, agora contada na unidade que a regra usa.
+
+Nenhuma protecao afrouxada: a clausula `grep -q "chapters.Select(chapter => chapter.HRef)"` fica
+BYTE-IDENTICA (S3267 continua preso do mesmo jeito), e o novo comando e ESTRITAMENTE mais forte —
+reprova tudo que o antigo reprovava e mais (matriz abaixo, colunas NEW/OLD).
+
+Prova por mutacao (executada; repo real NUNCA mutado — copias em `/tmp/s107/<var>/`,
+`git status --porcelain` vazio ao final; `Nc/Ns` = parametros medidos em
+`TranslateChaptersWithCacheAsync`/`TranslateSingleChapterAsync`):
+
+| Var | Mutante | NEW | OLD | Nc/Ns |
+|---|---|---|---|---|
+| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 |
+| m1 | 3 params extras na DECL de `TranslateChaptersWithCacheAsync` (8) | **`exit 1`** | `exit 0` | 8/5 |
+| m2 | 3 params extras na DECL de `TranslateSingleChapterAsync` (8) | **`exit 1`** | `exit 1` | 5/8 |
+| m3 | REORDER puro: as 2 decls movidas para DEPOIS dos chamadores | `exit 0` | **`exit 1`** | 5/5 |
+| m4 | m3 + 8 params na DECL de `TranslateSingleChapterAsync` | **`exit 1`** | `exit 1` | 5/8 |
+| m11 | a mesma violacao de 8 params colapsada em UMA linha | **`exit 1`** | `exit 0` | 8/5 |
+| m12 | fronteira: exatamente 7 params | `exit 0` | `exit 0` | 7/5 |
+| m5 | 6o param `Dictionary<string, int>` (virgula de generico) | `exit 0` | `exit 0` | 6/5 |
+| m7 | 6o param com default `1 > 0 ? 1 : 0` (`>` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m10 | 6o param com default `1 < 2 ? 1 : 0` (`<` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m8 | clausula S3267 revertida para `foreach (var chapter in chapters)` | `exit 1` | `exit 1` | 5/5 |
+| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | — |
+
+m1 e o contra-exemplo do critico reproduzido: OLD `exit 0` (falso PASS), NEW `exit 1`. m3 e a prova
+de que o gate deixou de ser posicional: reordenacao pura (mesmo multiset de linhas, verificado por
+`sort`+`cmp`) NAO muda o resultado do NEW, enquanto DERRUBA o OLD. m8/m9 provam que nao houve
+regressao de gate.
+
+Residuos DECLARADOS (nenhum silenciado; nenhum ocorre nos 2 metodos de hoje, que nao tem valor
+default nem literal na assinatura):
+- Virgula dentro de LITERAL DE STRING num valor default (`string x = "a,b"`) e contada como
+  separador — medido em m6: 6 parametros reais reportados como 7. Direcao SEGURA (superestima):
+  so pode causar reprovacao falsa, nunca aprovacao falsa. Idem para virgula dentro de comentario
+  `//` escrito no meio da assinatura.
+- `<` colado a um identificador dentro de um valor default (ex.: `int x = 1<2 ? 1 : 0`, sem
+  espaco) abriria a profundidade de generico e subestimaria. As duas variantes com formatacao
+  normal foram fechadas e medidas: `>` sem par por clamp `if(a>0)a--` (m7 = 6, correto), `<` sem
+  par pela guarda `if(pc!=" ")` (m10 = 6, correto). C# exige constante em valor default, entao
+  expressao relacional em assinatura e teoricamente possivel e praticamente inexistente.
+- A ancora fixa a forma `private async Task <Nome>(`. Trocar tipo de retorno (`Task<T>`) ou
+  visibilidade faz `grep -c` dar != 1 e o gate REPROVA — falha ruidosa e deliberada: mudanca de
+  assinatura desses 2 metodos obriga revisitar este item do DoD em vez de passar silenciosamente.

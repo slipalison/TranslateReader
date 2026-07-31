@@ -92,8 +92,8 @@ cada issue termina em fix, exclusao ou waiver auditavel, nunca silenciada sem re
 - [ ] `TranslationManager.cs`: `TranslateChaptersWithCacheAsync`/`TranslateSingleChapterAsync`
       (S107, 8 params>7) reduzidos via objeto de contexto privado (<=7 params cada);
       loop de `chapters` (S3267, L182) vira `.Select(chapter => chapter.HRef)`.
-      **Verify:** `F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do N=$(awk -v m="$M(" 'index($0,m){f=1} f{printf "%s",$0; if(/\)$/ && f>1){exit} f++}' "$F" | grep -o "," | wc -l); test "$N" -le 6 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
-      **Source:** CONTEXT (D-...-5)
+      **Verify:** `F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do test $(grep -cE "^[[:space:]]*private async Task $M\(" "$F") -eq 1 || exit 1; N=$(awk -v m="private async Task $M(" 'index($0,m){f=1} f{for(i=1;i<=length($0);i++){h=substr($0,i,1); if(h=="("){p++} else if(h==")"){p--; if(p==0){print (s?k+1:0); exit}} else if(h=="<"){if(pc!=" ")a++} else if(h==">"){if(a>0)a--} else if(h=="["){b++} else if(h=="]"){if(b>0)b--} else if(h=="{"){c++} else if(h=="}"){if(c>0)c--} else if(h==","){if(p==1&&a==0&&b==0&&c==0)k++} else if(p>=1&&h!=" "&&h!="\t"){s=1} pc=h}}' "$F"); test -n "$N" && test "$N" -le 7 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+      **Source:** CONTEXT (D-...-5, `Verify:` superseded por D-2026-07-30-sonar-zero-issues-8)
 
 - [ ] Mecanismo anti-recorrencia ativo: `dotnet-sonarscanner end` roda com
       `sonar.qualitygate.wait=true`.
