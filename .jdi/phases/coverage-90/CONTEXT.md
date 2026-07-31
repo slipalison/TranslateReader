@@ -52,28 +52,41 @@ nenhuma issue nova — partindo de 75,9% em `main` (1428 lines to cover, 329 des
 
 ### Auto-verifiable
 - [ ] Harness de teste JS existe para os 4 scripts do WebView e todos os testes passam.
-      **Verify:** `test -f test/js/paginated.test.js && test -f test/js/bridge.test.js && test -f test/js/translation.test.js && test -f test/js/scroll.test.js && node --test test/js/`
-      **Source:** CONTEXT (D-...-1, D-...-2)
+      **Verify:** `test -f test/js/paginated.test.js && test -f test/js/bridge.test.js && test -f test/js/translation.test.js && test -f test/js/scroll.test.js && S=$(node --test --test-reporter=tap test/js/) && printf '%s\n' "$S" | awk '/^# pass /{p=$3} /^# fail /{f=$3} END{exit (p>1 && f==0)?0:1}'`
+      **Source:** CONTEXT (D-...-1, D-...-2); comando superseded por D-2026-07-31-coverage-90-8
+      (o piso `p>1` nega a suite VAZIA — com os 4 `.test.js` esvaziados o Node ainda reporta
+      `# pass 1`, contando o proprio arquivo; ratchet numerico fica para a proxima phase)
 
 - [ ] Cobertura local agregada dos 4 scripts JS (`paginated.js`, `bridge.js`, `translation.js`,
       `scroll.js`) >= 85% via lcov.
-      **Verify:** `node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=TestResults/js-lcov.info test/js/ >/dev/null 2>&1; awk -F: '/^SF:/{f=$2} /^LH:/{h=$2} /^LF:/{l=$2} /^end_of_record/{if(f ~ /(paginated|bridge|translation|scroll)\.js$/){H+=h;L+=l}} END{exit (L>0 && (H*100/L)>=85)?0:1}' TestResults/js-lcov.info`
-      **Source:** CONTEXT (D-...-1, D-...-5)
+      **Verify:** `rm -f TestResults/js-lcov.info && mkdir -p TestResults && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=TestResults/js-lcov.info test/js/ >/dev/null 2>&1 && test -s TestResults/js-lcov.info && awk -F: '/^SF:/{f=$2} /^LH:/{h=$2} /^LF:/{l=$2} /^end_of_record/{if(f ~ /(paginated|bridge|translation|scroll)\.js$/){H+=h;L+=l;seen[f]=1}} END{n=0;for(k in seen)n++; exit (n==4 && L>0 && (H*100/L)>=85)?0:1}' TestResults/js-lcov.info`
+      **Source:** CONTEXT (D-...-1, D-...-5); comando superseded por D-2026-07-31-coverage-90-8
+      (artefato apagado antes da medicao + `&&` do runner ate a assercao + os 4 arquivos de
+      producao distintos exigidos no lcov; piso de 85% inalterado)
 
 - [ ] `ModelAccess.cs` cobertura local >= 90% (`DownloadModelAsync` testado com
       `HttpMessageHandler` fake, sem rede real).
-      **Verify:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=cobertura" --results-directory TestResults >/dev/null 2>&1; F=$(find TestResults -name "coverage.cobertura.xml" | sort | tail -1); R=$(grep -oE '<class name="[^"]*" filename="[^"]*ModelAccess\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"'); awk -v r="$R" 'BEGIN{exit (r!="" && r>=0.90)?0:1}'`
-      **Source:** CONTEXT (D-...-3, D-...-5)
+      **Verify:** `rm -rf TestResults/dod3 && dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=cobertura" --results-directory TestResults/dod3 >/dev/null 2>&1 && test "$(find TestResults/dod3 -name coverage.cobertura.xml | wc -l)" -eq 1 && F=$(find TestResults/dod3 -name coverage.cobertura.xml) && grep -oE 'filename="[^"]*ModelAccess\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"' | awk '{n++; if($1+0<0.90) bad++} END{exit (n>0 && !bad)?0:1}'`
+      **Source:** CONTEXT (D-...-3, D-...-5); comando superseded por D-2026-07-31-coverage-90-8
+      (diretorio de resultados LIMPO e dedicado + `&&` do runner ate a assercao + exatamente 1
+      relatorio exigido, no lugar de `find|sort|tail -1` lexicografico sobre GUIDs; comparacao
+      numerica por classe, no lugar de `awk -v r="<multilinha>"` que virava comparacao de string;
+      piso de 0.90 inalterado)
 
 - [ ] `FileUtility.cs` e `HtmlUtility.cs` cobertura local = 100% (fechando os 3+2 linhas
       triviais descobertas hoje).
-      **Verify:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=cobertura" --results-directory TestResults >/dev/null 2>&1; F=$(find TestResults -name "coverage.cobertura.xml" | sort | tail -1); FU=$(grep -oE '<class name="[^"]*" filename="[^"]*FileUtility\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"'); HU=$(grep -oE '<class name="[^"]*" filename="[^"]*HtmlUtility\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"'); awk -v a="$FU" -v b="$HU" 'BEGIN{exit (a!="" && b!="" && a>=0.99 && b>=0.99)?0:1}'`
-      **Source:** CONTEXT (D-...-5)
+      **Verify:** `rm -rf TestResults/dod4 && dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=cobertura" --results-directory TestResults/dod4 >/dev/null 2>&1 && test "$(find TestResults/dod4 -name coverage.cobertura.xml | wc -l)" -eq 1 && F=$(find TestResults/dod4 -name coverage.cobertura.xml) && grep -oE 'filename="[^"]*FileUtility\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"' | awk '{n++; if($1+0<0.99) bad++} END{exit (n>0 && !bad)?0:1}' && grep -oE 'filename="[^"]*HtmlUtility\.cs" line-rate="[0-9.]+"' "$F" | grep -oE '[0-9.]+"$' | tr -d '"' | awk '{n++; if($1+0<0.99) bad++} END{exit (n>0 && !bad)?0:1}'`
+      **Source:** CONTEXT (D-...-5); comando superseded por D-2026-07-31-coverage-90-8
+      (mesmo mecanismo do item 3, em `TestResults/dod4`; cada arquivo aferido por classe, todas
+      precisam ficar >= 0.99; pisos inalterados)
 
 - [ ] CI wiring para cobertura JS: `sonarqube.yml` ganha `actions/setup-node`, o comando de
       teste JS com lcov, e `sonar.javascript.lcov.reportPaths` apontando pro arquivo certo.
-      **Verify:** `W=.github/workflows/sonarqube.yml; grep -q "sonar.javascript.lcov.reportPaths" "$W" && grep -q "actions/setup-node@" "$W" && grep -q -- "--experimental-test-coverage" "$W" && grep -q -- "--test-reporter=lcov" "$W" && grep -q "TestResults/js-lcov.info" "$W"`
-      **Source:** CONTEXT (D-...-2)
+      **Verify:** `W=.github/workflows/sonarqube.yml && P=$(grep -oE 'sonar\.javascript\.lcov\.reportPaths=[^ ")]+' "$W" | head -1 | cut -d= -f2) && D=$(grep -oE -- '--test-reporter-destination=[^ ]+' "$W" | head -1 | cut -d= -f2) && test -n "$P" && test "$P" = "$D" && grep -qE 'uses: actions/setup-node@[0-9a-f]{40}' "$W" && grep -q -- '--experimental-test-coverage' "$W" && grep -q -- '--test-reporter=lcov' "$W"`
+      **Source:** CONTEXT (D-...-2); comando superseded por D-2026-07-31-coverage-90-8
+      (PROVA a correspondencia entre o caminho que o Sonar le e o que o reporter escreve, em vez
+      de so constatar presenca das duas strings; `setup-node` exigido SHA-pinned por regex de 40
+      hex; mesmo conjunto de flags do comando antigo)
 
 ### Manual
 - _(none)_
