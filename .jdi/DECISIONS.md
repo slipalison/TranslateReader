@@ -1367,3 +1367,28 @@ nunca O QUE se exige. Nenhuma linha de `src/` e tocada.
 numero ja publicado — apertar o proprio criterio no fim da corrida, sabendo que passa, e movimento
 de trave, nao endurecimento. O piso `> 1` adotado em (c) nao e ratchet: ele so nega a suite vazia,
 nao codifica a medida desta fase.
+
+D-2026-07-31-coverage-90-9 (o item 5 do DoD pina TAMBEM o literal do caminho do lcov — supersede
+o comando do item 5 de `.jdi/phases/coverage-90/CONTEXT.md` fixado por D-2026-07-31-coverage-90-8;
+o CRITERIO e os demais requisitos ficam identicos): a REVIEW da iter 2 registrou como W-3 um
+residuo do endurecimento anterior. O item 5 passou a exigir `"$P" = "$D"` (o caminho que o Sonar le
+== o caminho que o reporter do node escreve), o que fecha a divergencia UNILATERAL, mas nao pina o
+literal: uma mudanca COORDENADA dos dois lados do `sonarqube.yml` mantem a igualdade e o gate
+continua verde, enquanto o item 2 segue medindo o caminho hardcoded `TestResults/js-lcov.info`.
+Os itens 2 e 5 deixariam de aferir a mesma string sem que nenhum gate reclamasse.
+Contra-exemplo EXECUTADO nesta iter 3: renomeando `TestResults/js-lcov.info` ->
+`TestResults/coverage/js.info` nas DUAS ocorrencias do YAML (`sonarqube.yml:107` e `:137`), o
+comando do item 5 fixado por D-...-8 saiu **exit 0**; com o literal pinado sai **exit 1**. Os dois
+cenarios ja cobertos continuam cobertos: divergencia unilateral (so a linha 107 renomeada) = exit 1
+nos dois comandos, e `setup-node` pinado por tag em vez de SHA = exit 1. No repo real, exit 0 sem
+falso positivo.
+**Mecanismo:** insere `&& test "$P" = "TestResults/js-lcov.info"` imediatamente apos
+`&& test "$P" = "$D"`. E ADITIVO: todo teste do comando anterior (`test -n "$P"`, a igualdade
+`P = D`, o regex de 40 hex do `setup-node@`, `--experimental-test-coverage`, `--test-reporter=lcov`)
+permanece literalmente no lugar. **Nenhum piso foi afrouxado e nenhum criterio mudou** — o item 5
+continua sendo "CI wiring para cobertura JS", so que agora prova tambem que o caminho aferido e o
+MESMO que o item 2 mede localmente, amarrando os dois gates a uma unica string.
+**Por que agora e nao na proxima phase:** a W-3 nomeava a proxima phase que tocasse o YAML como
+lugar natural do conserto, mas o custo medido e de um `test` adicional, com contra-exemplo e zero
+falso positivo em duas rodadas; adiar deixaria os itens 2 e 5 desacoplados no unico momento em que
+o par foi verificado de ponta a ponta. Nenhuma linha de `src/` e tocada por esta decisao.
