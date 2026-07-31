@@ -1203,3 +1203,100 @@ Distribuicao das 329 linhas descobertas: 195 em JavaScript do WebView (`paginate
 `bridge.js` 60, `translation.js` 38, `scroll.js` 27 — todos 0%, sem harness JS no repo) e 134 em C#
 (`TranslationEngine` 52, `ParsingEngine` 45, `ModelAccess` 25, `FileUtility` 3, `HtmlUtility` 2,
 `ThemeEngine` 1, models 6).
+D-2026-07-31-coverage-90-1 (rota: harness JS real, nao exclusao de denominador): entre as 3 rotas
+do brief, fica LOCKED a rota (A) — harness JS real via `node:test`+`node:vm` nativo do Node 24
+(zero dependencia nova) — e NAO a rota (B) `sonar.coverage.exclusions`. Motivo: (B) so entrega o
+NUMERO — o denominador cai de 1428 para 1233 e o numero de HOJE (1099 linhas cobertas) ja vira
+89,1%, faltando so +11 linhas de C#; mas o JS continua 0% testado, contradizendo o pedido literal
+do card ("adicione os tests faltante") e o proprio brief exige justificativa forte + Deferred to
+PR review pra essa rota. (A) e viavel sem infra nova porque inspecao direta dos 4 arquivos
+(`paginated.js`, `bridge.js`, `translation.js`, `scroll.js`) confirmou que sao 100% atribuicoes
+flat `window.X = function(){}` sobre leitura/escrita de propriedade DOM simples
+(`getElementById`, `querySelectorAll`, `.dataset`, `.offsetWidth/offsetLeft/scrollWidth`,
+`getBoundingClientRect`, `window.addEventListener('resize', ...)`) — nenhum uso de framework ou
+modulo, entao um sandbox `vm.createContext` com `window`/`document` stub minimos basta pra
+exercitar toda funcao exportada, sem jsdom. Alvo local: cobertura agregada dos 4 arquivos >= 85%
+via lcov (>= ~166 das 195 linhas descobertas) — abaixo de 100% de proposito, pra nao forcar cobrir
+ramos puramente defensivos (ex.: a cadeia de retry `setTimeout` de `_sendReady` em `bridge.js`,
+4 branches de deteccao de host).
+
+D-2026-07-31-coverage-90-2 (layout do harness + wiring de CI): testes JS vivem em
+`test/js/<nome>.test.js` (1 arquivo por script de producao: `paginated`, `bridge`, `translation`,
+`scroll`), fora de `TranslateReader.Tests.csproj` (nao e .NET) — usam `node:test` +
+`node:assert/strict` + `node:vm`. Comando de cobertura local: `node --test
+--experimental-test-coverage --test-reporter=lcov
+--test-reporter-destination=TestResults/js-lcov.info test/js/` (flags confirmadas via doc oficial
+do Node, disponiveis desde 20.11 — pesquisa web desta sessao). Risco tecnico registrado: a
+cobertura V8 (`--experimental-test-coverage`) so atribui linhas corretamente se o `vm.Script`
+carregar o codigo com `filename` apontando pro caminho REAL do arquivo de producao
+(`fs.readFileSync` + `new vm.Script(code, {filename: path})`) — copiar/colar o codigo como string
+literal quebra a atribuicao de cobertura silenciosamente; isso e responsabilidade do doer, nao do
+DoD (nao ha `Verify:` local pra essa propriedade de implementacao). `.github/workflows/
+sonarqube.yml` ganha: `actions/setup-node` (pinada por SHA, D-2026-07-28-ci-seguranca-4) ANTES do
+`dotnet-sonarscanner begin`; o comando de teste JS acima, gated `if: env.SONAR_TOKEN != ''` —
+MESMO padrao dos steps ja existentes no arquivo, reusando o guard de
+D-2026-07-30-sonar-zero-issues-10 (falha alto no repo de origem se o secret sumir, o que agora
+tambem cobre "os testes JS nao rodaram", sem gap novo: hoje ZERO teste JS existe em qualquer
+contexto, entao esta fase e estritamente uma melhoria em todo cenario, inclusive fork/Dependabot);
+`sonar.javascript.lcov.reportPaths` entra no MESMO bloco `args=(...)` do `begin` que ja tem
+`sonar.cs.opencover.reportsPaths`, apontando pro `TestResults/js-lcov.info`.
+
+D-2026-07-31-coverage-90-3 (ModelAccess + excecao de I/O real): `ModelAccess.cs` (25 linhas
+descobertas, 39% hoje) e alvo direto — `DownloadModelAsync` (o metodo maior e o unico sem teste
+hoje, confirmado em `ModelAccessTests.cs`) ganha teste com `HttpMessageHandler` fake injetado via
+`HttpClient` (ja e parametro de construtor — zero mudanca de seam), SEM rede real. O teste ESCREVE
+em diretorio temp real (`Path.GetTempPath()+Guid`, mesma convencao ja usada no proprio
+`ModelAccessTests.cs` e em `FileUtilityTests.cs`), porque o comportamento sob teste (buffer,
+progress, swap atomico `tmp`->final via `File.Move`) SO existe como efeito em disco. Alvo local:
+cobertura de `ModelAccess.cs` >= 90% (de 39% hoje). Esta e a UNICA excecao NOVA a
+`.claude/rules/csharp.md` §6 ("no disk... in unit tests") nesta fase, ao lado da que
+`ParsingEngineTests.cs` ja usa (fixture `.epub` real, autorizada nomeadamente no PLAN de
+`sonar-zero-issues`, T-6) — SE a contingencia de `ParsingEngine` (D-...-5) for acionada, segue o
+MESMO padrao de fixture real, nao um terceiro padrao. Nenhuma outra classe ganha excecao; rede
+real e SQLite real continuam banidos sem excecao em qualquer teste novo desta fase.
+
+D-2026-07-31-coverage-90-4 (TranslationEngine mantido deferido): as 52 linhas de
+`TranslationEngine.cs` (o maior gap de C#, caminho de `LLamaWeights`/`StatelessExecutor` sem
+interface-seam) NAO sao tocadas — esta fase NAO reverte `D-2026-07-30-regression-suite-5(2)` nem
+`D-2026-07-30-the-method-refactor-6` (abrir o seam pertence a `llm-mobile`). Consequencia numerica
+explicita: isso so e seguro porque D-...-1 + D-...-3 ja fecham a meta sem precisar dessas 52
+linhas (ver aritmetica em D-...-5 abaixo). Se a execucao ficar abaixo do plano, a reserva de
+contingencia e `ParsingEngine` (45 linhas, ja com padrao de fixture estabelecido), nunca
+`TranslationEngine`.
+
+D-2026-07-31-coverage-90-5 (aritmetica-alvo, amarra a fase): baseline (D-...-0) lines_to_cover=
+1428, covered=1099 (77,0%). Meta >=90% de 1428 => covered >= 1286 (ceil de 0,9*1428) => precisa de
+>= 187 linhas NOVAS cobertas. Plano: JS >=85% de 195 => >=166 (D-...-1); ModelAccess 39%->90% de
+~25 linhas descobertas => +-20 (D-...-3); `FileUtility.cs`(3) + `HtmlUtility.cs`(2) fechados a
+100%, sem infra nova => +5. Soma = 166+20+5 = 191 >= 187, margem de 4 linhas. `TranslationEngine`
+(52, D-...-4) e `ParsingEngine`(45) ficam fora do plano principal por design — `ParsingEngine` e a
+reserva nomeada se o numero real (so mensuravel apos implementar; ferramentas de cobertura de JS
+e C# sao distintas e nao produzem um numero unico local) ficar abaixo de 187. O numero AGREGADO
+real do SonarCloud (que pode divergir do proxy local — o analisador JS do Sonar conta linha
+executavel de um jeito, V8/node de outro, ambos sao proxies, nao a mesma medida) so existe apos
+push+CI — `## Deferred to PR review`; os itens Auto do DoD provam os PISOS locais por
+arquivo/agregado, nao o numero remoto.
+
+D-2026-07-31-coverage-90-6 ("sem issues nova" — sem gate local possivel, mesmo limite ja medido em
+`sonar-zero-issues`): a segunda condicao do card vale para as issues que os testes NOVOS desta
+fase introduzem — precedente direto e medido: a fase anterior zerou 113 e introduziu 2 (`CA1826`)
+nos proprios testes novos, so visiveis apos push (D-2026-07-30-sonar-zero-issues-12). Nenhum
+analisador do SonarCloud (`external_roslyn`, `javascript`, `csharpsquid`) roda em `dotnet build`/
+`node --test` local — um `Verify:` que fingisse provar "zero issue nova" localmente repetiria o
+exato erro de proxy ja catalogado varias vezes em `.jdi/todos.md` `[PROCESSO/DoD]`. O DoD desta
+fase portanto NAO contem item alegando provar isso; a confirmacao real vai para
+`## Deferred to PR review`, mesmo mecanismo de `D-2026-07-30-sonar-zero-issues-6`. Mitigacao de
+escrita (nao gated): novo teste C# usa indexador em vez de `.First()`/`.Last()` sobre
+`IReadOnlyList<T>` (padrao CA1826 ja corrigido em `sonar-zero-issues`); novo teste JS usa
+`const`/`let`/`===`, nunca `var`/`==`.
+
+D-2026-07-31-coverage-90-7 (Quality Gate mede so New Code — cautela sobre `Verify:`):
+`sonar.qualitygate.wait=true` (D-2026-07-30-sonar-zero-issues-2/10/11) mede so New Code
+(`new_coverage>=80` hoje). O diff desta fase e majoritariamente arquivo de teste NOVO + poucas
+linhas alteradas em producao (`ModelAccess.cs`, `FileUtility.cs`, `HtmlUtility.cs`,
+`sonarqube.yml`) — Quality Gate verde e sinal FRACO pra "chegamos a 90% Overall": New Code
+coverage e Overall coverage sao metricas diferentes, e uma fase que so ADICIONA teste pode
+satisfazer a primeira sem mover a segunda o bastante. Nenhum `Verify:` do DoD desta fase
+referencia `sonar.qualitygate.wait` ou status de CI como prova da meta de 90% — so os pisos
+locais por arquivo/agregado (D-...-5) e a confirmacao remota fica em
+`## Deferred to PR review`.
