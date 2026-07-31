@@ -1392,3 +1392,29 @@ MESMO que o item 2 mede localmente, amarrando os dois gates a uma unica string.
 lugar natural do conserto, mas o custo medido e de um `test` adicional, com contra-exemplo e zero
 falso positivo em duas rodadas; adiar deixaria os itens 2 e 5 desacoplados no unico momento em que
 o par foi verificado de ponta a ponta. Nenhuma linha de `src/` e tocada por esta decisao.
+
+D-2026-07-31-conversion-performance-0 (registro de phase): phase `conversion-performance` registrada
+na posicao 16 do ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-31 —
+"garanta que as funcionalidades esteja funcionado corretamente, como a conversao de livros, as
+imagens, download de modelos, inclusive valide que a conversao esteja funcionando tanto para livros
+curtos quanto para livros grandes, se necessario ajuste para que tenhamos performance na conversao
+tanto na biblioteca quanto na leitura" (texto colado, sem URL de tracker). Base: `main` @ `ad607ac`
+(apos o merge do PR #13).
+Evidencia medida no momento do registro (script sobre os 3 fixtures ja rastreados em
+`test/TranslateReader.Tests/TestData/`):
+| Fixture | zip | entries | html | imgs | descomprimido | RAM retida pelo dict de imagens | imgs >=85KB (LOH) |
+|---|---|---|---|---|---|---|---|
+| Practice (curto) | 1,7 MB | 45 | 27 | 12 | 2,6 MB | 1,9 MB | 4 |
+| Righting (medio) | 10,8 MB | 163 | 26 | 125 | 16,0 MB | 14,9 MB | 63 |
+| Wardley (grande) | 32,0 MB | 286 | 23 | 256 | 45,0 MB | **44,0 MB** | **229** |
+Achado ancora: `ParsingEngine.ExtractAllImagesAsync` (`ParsingEngine.cs:59-66`) devolve
+`IReadOnlyDictionary<string, byte[]>` com TODAS as imagens do livro carregadas de uma vez — 44 MB
+num unico dicionario no fixture grande, 229 arrays acima do limiar de 85 KB da LOH, maior imagem
+4,56 MB. Viola `.claude/rules/csharp.md` §2.3 ("Never materialize a GGUF model, full EPUB, or image
+into one byte[]"; LOH nao e compactada por padrao -> fragmentacao -> OOM em mobile). O consumidor
+(`ReadingManager.ExtractImagesIfNeededAsync`, `ReadingManager.cs:56-62`) apenas itera e escreve cada
+imagem em disco, entao o dicionario inteiro nunca precisou existir.
+Achado secundario medido (NAO superdimensionar): `CreateTranslatedEpubAsync` faz
+`archive.Entries.FirstOrDefault(...)` dentro do loop de capitulos — O(entries x capitulos), mas em
+numeros absolutos sao 1.215 / 4.238 / 6.578 comparacoes de string nos tres fixtures; e defeito de
+forma, nao gargalo dominante.
