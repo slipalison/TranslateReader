@@ -1,125 +1,110 @@
 # Phase 14: Zerar as issues do SonarQube e travar a regressao — Summary  (slug: sonar-zero-issues)
 
-**Status:** complete
-**Tasks:** 8/8 completas, 0 blocked
-**Base:** `6132078` (main, pos PR #11) — branch `jdi/sonar-zero-issues`
+**Status:** complete · **Tasks:** 8/8, 0 blocked · **Base:** `6132078` (main) — branch `jdi/sonar-zero-issues`
 
-## Tasks e commits (1 task = 1 commit)
+## Iter 1 — entrega das 8 tasks
 
-Escopo `(sonar-zero-issues)` em todos os subjects, omitido na tabela.
+Commits (1 task = 1 commit, escopo `(sonar-zero-issues)`, tipos variados): `8e6200f` T-1 chore
+remove vendored dotnet-install.ps1 · `294d316` T-2 refactor modernize WebView DOM access in JS ·
+`ddda060` T-3 fix lang+title in index.html + waivers · `2bbdaee` T-4 refactor HtmlUtility →
+GeneratedRegex + split InjectTags · `d84f3e9` T-5 fix dispose pattern + test-project smells ·
+`df53909` T-6 fix async I/O, invariant date parser, named parameter constant · `229fe5d` T-7
+refactor group per-book translation context + simplify rebuild loop · `6cc6200` T-8 ci fail the
+build when the SonarCloud Quality Gate fails.
 
-| Task | Commit | Subject |
-|---|---|---|
-| T-1 | `8e6200f` | `chore: remove vendored dotnet-install.ps1` |
-| T-2 | `294d316` | `refactor: modernize WebView DOM access in JS` |
-| T-3 | `ddda060` | `fix: add lang and title to index.html, register waivers` |
-| T-4 | `2bbdaee` | `refactor: move HtmlUtility regexes to GeneratedRegex and split InjectTags` |
-| T-5 | `d84f3e9` | `fix: conform the dispose pattern and clean up test-project smells` |
-| T-6 | `df53909` | `fix: use async I/O, an invariant date parser and a named parameter constant` |
-| T-7 | `229fe5d` | `refactor: group the per-book translation context and simplify the rebuild loop` |
-| T-8 | `6cc6200` | `ci: fail the build when the SonarCloud Quality Gate fails` |
+**Destino das 113 issues** (taxonomia D-...-3, nenhuma silenciada sem registro): **67 FIX**
+(15 `HtmlUtility`, 17 JS, 2 BUG `index.html`, 4 `ParsingEngine`, 3 `TranslationManager`, 9 nos 4
+`*Access`, 2 `TranslationEngine`, 15 em testes) · **41 REMOCAO** (`dotnet-install.ps1` deletado) ·
+**2 EXCLUSAO** multicriteria (`Web:S7926`+`css:S4667`, D-...-4) · **3 WAIVER** `#pragma`
+(`SYSLIB1044` + 2x `xUnit1004`). Soma exata: 113.
 
-## Destino das 113 issues (taxonomia D-...-3 — nenhuma silenciada sem registro)
+**Gates:** build **0 erros** / 64 avisos (todos `MVVMTK0045` pre-existentes do app MAUI); testes
+**256 (254p / 2s / 0f)** vs baseline 229 (227/2) = **+27, 0 deletado, 0 afrouxado**; cobertura D-6
+sobre linhas ALTERADAS de producao **68/68 = 100,0%**; `dotnet format` 9 violacoes, **todas fora do
+diff da fase** (legado, D-2). DoD: 10/10 `Verify:` exit 0.
 
-| Estado | Qtd | Onde |
-|---|---|---|
-| FIX no codigo | 67 | 15 `HtmlUtility`, 17 JS, 2 BUG `index.html`, 4 `ParsingEngine`, 3 `TranslationManager`, 3 `BooksAccess`, 3 `ReadingStateAccess`, 2 `BookTranslationJobAccess`, 1 `SettingsAccess`, 2 `TranslationEngine`, 15 no projeto de teste |
-| REMOCAO do arquivo | 41 | `dotnet-install.ps1` deletado (`powershelldre:*`) |
-| EXCLUSAO multicriteria | 2 | `Web:S7926` + `css:S4667` em `sonarqube.yml` (D-...-4) |
-| WAIVER `#pragma` | 3 | `SYSLIB1044` (`TextBlockRegex`) + 2x `xUnit1004` (LLamaSharp) |
-| **Total** | **113** | |
+**Mutacao T-1/T-6** (executada, tree restaurado a cada mutante): `Verify:` novo do item 1 registrado
+em `D-...-7` (permissao readicionada -> exit 1; script restaurado -> exit 1) · `await using var
+writer`→`var writer` **PEGO** (1 falha) · `stream.SetLength(0)` removido **PEGO** (1) ·
+`OpfTitleRegex().Replace` removido **PEGO** (2) · `CommitAsync()` removido **PEGO** (6).
+**Prova negativa declarada:** remover `CultureInfo.InvariantCulture` dos 3 caminhos de LEITURA
+**NAO e pego** (12/12 passam) — o formato "O" e culture-invariant por especificacao (probe em
+ar-SA/th-TH/fa-IR/he-IL/ja-JP); a metade REAL do risco (escrita `ToString("O")`→`ToString()`)
+**e pega** (6 falhas), presa por `CultureRoundTripTests.cs`. Aqui InvariantCulture e conformidade
+de regra (S6580), nao correcao de comportamento.
 
-## Gates (numeros reais)
+**Desvios declarados:** T-6 usa I/O de disco em 3 testes novos (autorizado pelo PLAN — fixture
+`TestData/` ja existente, sem infra nova, limpeza em `finally`); assert do `<dc:title>` sobre texto
+interno; `HybridWebViewContractTests.cs:196-197` ajuste mecanico `items[i].x`→`item.x` acompanhando
+`for`→`for-of`; `GC.SuppressFinalize(this)` como 1a instrucao em `TranslationEngine.Dispose()`;
+T-7 declarou `TranslateSingleChapterAsync` antes do chamador para a janela do `awk` do DoD 9 cair
+sobre a declaracao — **este ultimo virou o blocker do DoD critic, tratado na iter 2**.
 
-- `dotnet build TranslateReader.slnx -c Release` -> **0 erros**, 64 avisos (todos `MVVMTK0045`
-  pre-existentes do app MAUI; 0 aviso novo, 0 `SYSLIB*`/`CA*` no Core).
-- `dotnet test -c Release` -> **256 total / 254 aprovados / 2 ignorados / 0 falhas**.
-  Baseline era 229 (227/2): **+27 testes, 0 deletado, 0 afrouxado**, os 2 `Skip` seguem exatamente 2.
-- Atributos `[Fact]`/`[Theory]` VIVOS (AWK descartando comentarios): **235** (baseline 214).
-- Cobertura D-6 sobre linhas ALTERADAS de producao: **68/68 = 100,0%** (100% em cada um dos 8
-  arquivos: `ParsingEngine`, 4x `*Access`, `TranslationEngine`, `TranslationManager`, `HtmlUtility`).
-- `dotnet format --verify-no-changes`: **0 violacao em qualquer arquivo tocado pela fase**.
-  DESVIO declarado: o comando de solucao sai exit 2 tambem em `main`, por 9 violacoes
-  pre-existentes em `ThemeEngine.cs`, `ReaderPage.xaml.cs`, `ThemeEngineTests.cs` e
-  `TranslationManagerTests.cs` — `ReaderPage.xaml.cs` e C# do app MAUI (proibido nesta fase) e os
-  demais nao pertencem a task nenhuma. Unica correcao: whitespace em `HtmlInjectionTests.cs` (T-4).
+**Fora de escopo (inalterado):** Quality Gate real no SonarCloud, confirmacao funcional do WebView e
+julgamento UX de `user-scalable=no` seguem em `Deferred to PR review`; o job Sonar nao compila
+`src/TranslateReader`, entao o C# do app segue invisivel ao scan (D-...-6, `todos.md`).
 
-## Definition of Done — 10/10 `Verify:` extraidos LITERALMENTE do CONTEXT.md vigente
+## Iter 2 — fix do blocker do DoD critic
 
-Todos exit **0**:
-1 `dotnet-install.ps1` removido, zero ref rastreada fora de `.jdi/` · 2 `HtmlUtility`
-`[GeneratedRegex]` + pragma SYSLIB1044 + `InjectTags` decomposto · 3 JS `.dataset`/`for-of`/
-`Number.parseInt`/optional chaining · 4 `HtmlInjectionTests` sem `Matches(...).Count` e >=3
-`[GeneratedRegex]` · 5 `FileUtilityTests` L95 com assert + CA1816 nos 7 + CA1847 · 6
-`TranslationEngine` sealed + SuppressFinalize + pragma xUnit1004 · 7 `index.html` `lang`/`<title>`,
-`user-scalable=no` mantido, waivers no yml · 8 `ParsingEngine` OpenAsync, `BeginTransactionAsync`,
-InvariantCulture, S1192 · 9 `TranslationManager` <=7 params e `chapters.Select(chapter =>
-chapter.HRef)` · 10 `sonar.qualitygate.wait=true` no `end`.
+**Blocker (unico, objetivo):** o `Verify:` do item 9 do DoD nao media parametros. O `awk` antigo
+achava a PRIMEIRA linha com `<Nome>(`, concatenava ate a proxima terminada em `)` e contava as
+virgulas dessa janela. Para `TranslateChaptersWithCacheAsync` a primeira ocorrencia e o CALL SITE
+(`:59`), nao a declaracao (`:147`) — o gate media o chamador. O critico executou o contra-exemplo:
+copia com 3 params extras na DECLARACAO (8 no total, a violacao S107 que o item existe para
+impedir) saia **exit 0**. O desvio #1 da iter 1 confirmava: o gate era POSICIONAL, nao semantico.
 
-## Matriz de mutacao (executada; working tree restaurado apos cada mutante)
+**Fix: o gate, nao o codigo. Zero linha de producao ou teste alterada nesta iter** —
+`git diff HEAD -- src test` vazio. A iter 1 ja entrega 5 parametros reais em cada metodo via
+`TranslationRun`; o quebrado era a PROVA.
 
-**T-1 (`Verify:` novo)** — registrada em `D-2026-07-30-sonar-zero-issues-7`: antes da entrega exit
-1; depois exit 0; permissao readicionada -> exit 1; `dotnet-install.ps1` restaurado -> exit 1.
+Caminho seguido (o mesmo de `D-...-7`): decisao NOVA append-only
+**`D-2026-07-30-sonar-zero-issues-8`**, citando o contra-exemplo do critico e supersedendo APENAS o
+`Verify:`; so depois a linha do item 9 do `CONTEXT.md` foi trocada. Nenhuma decisao reescrita —
+`git diff .jdi/DECISIONS.md | grep -c '^-[^-]'` = **0** (858→944 linhas, 1 unico hunk no fim). O
+comando gravado nos 2 arquivos foi conferido byte-identico por `cmp`.
 
-**T-6 (caminho async: `CreateTranslatedEpubAsync` estava SEM cobertura; 3 casos novos):**
+**O que o comando novo mede** (3 mudancas de natureza, nao de limiar): (1) ancora em
+`^[[:space:]]*private async Task <Nome>(`, exigida EXATAMENTE 1 vez — call site nunca casa esse
+prefixo; (2) varre caractere a caractere ate o `)` que fecha a assinatura e conta SEPARADORES de
+parametro (virgulas em profundidade de parenteses 1, com `<>`/`[]`/`{}` em profundidade 0),
+params = separadores + 1; (3) limiar `-le 7` PARAMETROS (o antigo era `-le 6` VIRGULAS).
 
-| Mutante | Resultado |
-|---|---|
-| `await using var writer` -> `var writer` (flush async perdido) | **PEGO** (1 falha) |
-| `stream.SetLength(0)` removido na entry do capitulo | **PEGO** (1 falha) |
-| `OpfTitleRegex().Replace(...)` removido | **PEGO** (2 falhas) |
-| `CommitAsync()` removido (`BooksAccess`+`SettingsAccess`) | **PEGO** (6 falhas, suites existentes) |
+**Matriz de mutacao** (repo real NUNCA mutado — copias em `/tmp/s107/<var>/`, `git status
+--porcelain` limpo ao final; `Nc/Ns` = params medidos em `...ChaptersWithCache`/`...SingleChapter`):
 
-**T-6 (`CultureInfo.InvariantCulture`) — PROVA NEGATIVA, registrada como o PLAN exige:**
+| Var | Mutante | NEW | OLD | Nc/Ns |
+|---|---|---|---|---|
+| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 |
+| m1 | **contra-exemplo do critico**: 8 params na DECL de `...ChaptersWithCache` | **`exit 1`** | `exit 0` | 8/5 |
+| m2 | 8 params na DECL de `...SingleChapter` | **`exit 1`** | `exit 1` | 5/8 |
+| m3 | **REORDER puro**: as 2 decls movidas para DEPOIS dos chamadores | `exit 0` | **`exit 1`** | 5/5 |
+| m4 | m3 + 8 params na DECL de `...SingleChapter` | **`exit 1`** | `exit 1` | 5/8 |
+| m11 | a mesma violacao de 8 params colapsada em UMA linha | **`exit 1`** | `exit 0` | 8/5 |
+| m12 | fronteira: exatamente 7 params | `exit 0` | `exit 0` | 7/5 |
+| m5 | 6o param `Dictionary<string, int>` (virgula de generico) | `exit 0` | `exit 0` | 6/5 |
+| m7 | 6o param com default `1 > 0 ? 1 : 0` (`>` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m10 | 6o param com default `1 < 2 ? 1 : 0` (`<` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m8 | clausula S3267 revertida para `foreach (var chapter in chapters)` | `exit 1` | `exit 1` | 5/5 |
+| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | — |
 
-| Mutante | Resultado |
-|---|---|
-| `CultureInfo.InvariantCulture` removido dos 3 caminhos de leitura | **NAO PEGO** (12/12 passam) |
-| lado de ESCRITA `ToString("O")` -> `ToString()` | **PEGO** (6 falhas) |
+m1/m11 fecham o furo (OLD dava falso PASS). m3 prova que o gate deixou de ser posicional:
+reordenacao pura — mesmo multiset de linhas, conferido por `sort`+`cmp` — NAO muda o NEW e DERRUBA
+o OLD. m8/m9 provam **zero regressao de gate**: a clausula `chapters.Select(chapter => chapter.HRef)`
+ficou BYTE-IDENTICA e continua presa. O desvio #1 da iter 1 **nao foi revertido** — apenas deixou
+de importar, como m3 demonstra.
 
-Probe .NET 10 (`ar-SA`/`th-TH`/`fa-IR`/`he-IL`/`ja-JP`): `DateTime.Parse` do formato round-trip
-`"O"` da o MESMO instante com e sem format provider, em UmAlQura, ThaiBuddhist e Persian. Conclusao
-honesta: aqui `CultureInfo.InvariantCulture` e **conformidade de regra (S6580), nao correcao de
-comportamento**. `CultureRoundTripTests.cs` (12 casos) fica mesmo assim: prende a metade
-culture-sensivel REAL do round-trip — trocar a escrita `"O"` por `ToString()` derruba o teste.
+**Residuos DECLARADOS** (nenhum ocorre nos 2 metodos de hoje, que nao tem default nem literal na
+assinatura): virgula dentro de literal de string num valor default (`string x = "a,b"`) conta como
+separador — medido em m6: 6 params reais reportados como **7**; direcao SEGURA (superestima): so
+causa reprovacao falsa, nunca aprovacao falsa; idem virgula em comentario `//`. `<` colado a
+identificador dentro de um default (`1<2`, sem espaco) subestimaria — as 2 variantes com formatacao
+normal foram fechadas e medidas (`>` por clamp `if(a>0)a--`, m7 = 6; `<` pela guarda `if(pc!=" ")`,
+m10 = 6). A ancora fixa a forma `private async Task <Nome>(`: mudar tipo de retorno ou visibilidade
+faz o gate REPROVAR — falha ruidosa deliberada, obriga revisitar o item do DoD.
 
-## Desvios do PLAN (com evidencia)
-
-1. **T-7 — ordem dos 2 helpers privados.** O `awk` do DoD 9 nao mede parametros: soma virgulas de
-   uma JANELA que comeca na PRIMEIRA ocorrencia textual de `<Metodo>(` e termina na proxima linha
-   terminada em `)`. Medido no arquivo original: `TranslateSingleChapterAsync` = **16 virgulas**
-   para 8 parametros (a janela engolia call site + `UpdateJobProgressAsync` + declaracao). Com o
-   refactor honesto (8 -> 5 params via `TranslationRun`) e ordem caller-first ainda dava 10.
-   Declarar `TranslateSingleChapterAsync` ANTES do chamador poe a janela sobre a declaracao: **4**.
-   Nada afrouxado — a propriedade real foi medida a parte por parser de declaracao: **5 parametros
-   em cada um dos 2 metodos**. Zero contrato publico alterado; os 33 `TranslationManagerTests`
-   passam sem 1 linha mudada.
-2. **T-6 — testes novos com I/O de disco.** `csharp.md` §6 proibe disco em teste novo; o PLAN
-   autoriza aqui ("fixture em disco ja padrao dessa classe, sem infra nova", D-...-5): provar o
-   flush assincrono do zip exige um `.epub` real. Usam a fixture `TestData/` ja existente e limpam
-   o temp em `finally`. Zero infra nova.
-3. **T-6 — assert do `<dc:title>`.** O `.opf` da fixture usa `<dc:title id="t1" xml:lang="en">`,
-   entao o assert e sobre o texto interno + ausencia do titulo original.
-4. **Ajuste MECANICO em teste existente (declarado):** `HybridWebViewContractTests.cs:196-197`
-   (T-2) trocou `items[i].index`/`.translated` por `item.index`/`.translated`, acompanhando
-   `for` -> `for-of` em `translation.js`. Mesma forca, mesmas 2 propriedades.
-5. **T-5 — `GC.SuppressFinalize(this)` como PRIMEIRA instrucao** em `TranslationEngine.Dispose()`
-   (o guard `if (_disposed) return;` sai antes das 3 linhas que o `Verify:` le). Idempotente: sem
-   finalizador. `ModelAccessTests` extraiu `DisposeFixtures()` para manter a ordem idiomatica.
-
-## Fora de escopo / nao fechado
-
-- **Quality Gate real no SonarCloud** — so existe apos push+CI; `Deferred to PR review` (D-...-6).
-  Os `Verify:` provam identidade local, nao o resultado do scan remoto.
-- **Confirmacao FUNCIONAL do WebView** (zoom, scroll-sync, overlay) apos a migracao de
-  `translation.js`/`scroll.js`/`bridge.js` — sem harness JS no repo (D-...-5), fica no PR review.
-- **Acessibilidade de `user-scalable=no`** mantido (D-...-4) — chamada de produto/UX.
-- **Gap estrutural do scan:** o job Sonar nao compila `src/TranslateReader`, entao `Pages/`,
-  `PageModels/`, `Platforms/`, `MauiProgram.cs` e `Utilities/*Converter.cs` seguem invisiveis ao
-  analisador C#. "0 issues" vale para o que o Sonar escaneia (D-...-6, em `todos.md`). **Zero C# do
-  app MAUI alterado** — diff da fase filtrado em `src/TranslateReader` retorna vazio.
-- **9 violacoes pre-existentes de `dotnet format`** fora do escopo das tasks (ver Gates).
-
-## Integridade do registro
-
-`.jdi/DECISIONS.md` append-only preservado: o diff da fase tem **0** linhas removidas.
+**Gates re-rodados (numeros reais, iter 2):** `dotnet build TranslateReader.slnx -c Release` →
+**0 erros**, 64 avisos (identico a iter 1) · `dotnet test -c Release` → **256 total / 254 aprovados /
+2 ignorados / 0 falhas** · atributos `[Fact]`/`[Theory]` vivos = **235**, `Fact(Skip` = **2**
+(baseline preservado, nada deletado ou afrouxado) · `dotnet format --verify-no-changes` → as mesmas
+**9** violacoes pre-existentes fora do diff da fase · **10/10 `Verify:` do DoD extraidos LITERALMENTE
+do `CONTEXT.md` vigente saem exit 0** (item 9 agora com o comando novo).
