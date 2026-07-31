@@ -69,7 +69,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
   - harness carrega N scripts no MESMO `vm.createContext` (sandbox com `window` === o proprio
     global) e da contexto novo por teste; `paginated.js` >=95% linhas no lcov.
   - `node --test test/js/` verde.
-- **Dependencies:** none | **Test:** `test/js/paginated.test.js` | **Status:** pending
+- **Dependencies:** none | **Test:** `test/js/paginated.test.js` | **Status:** completed
 
 #### T-2: `FileUtility.cs` + `HtmlUtility.cs` a 100% (DoD 4)
 - **Files:** `test/TranslateReader.Tests/FileUtilityTests.cs`,
@@ -79,7 +79,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     D-2026-07-30-the-method-refactor-3; ramos restantes de `HtmlUtility` fechados.
   - cobertura: `line-rate` = 1 E `branch-rate` = 1 nos dois arquivos (+10 unidades).
   - `HtmlInjectionTests.cs` nao e editado (esta sujo na worktree da phase anterior).
-- **Dependencies:** none | **Test:** `FileUtilityTests`, `HtmlUtilityTests` | **Status:** pending
+- **Dependencies:** none | **Test:** `FileUtilityTests`, `HtmlUtilityTests` | **Status:** completed
 
 #### T-3: `SettingsAccess.cs` — 12 condicoes descobertas (0 linhas)
 - **Files:** `test/TranslateReader.Tests/SettingsAccessTests.cs`
@@ -89,7 +89,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     coberto.
   - `branch-rate` de `SettingsAccess.cs` = 1 (`line-rate` ja e 1) — +12 unidades.
   - usa o `InMemoryDatabase` existente, sem disco (D-2026-07-30-regression-suite-3).
-- **Dependencies:** none | **Test:** `SettingsAccessTests` | **Status:** pending
+- **Dependencies:** none | **Test:** `SettingsAccessTests` | **Status:** completed
 
 ### Wave 2
 
@@ -100,7 +100,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     `setTimeout` stub + o `catch`, e os DOIS ramos de `document.readyState` (script recarregado em
     contexto novo), `flushChunk` com funcao ausente e com funcao que lanca.
   - `node --test test/js/` verde.
-- **Dependencies:** T-1 | **Test:** `test/js/bridge.test.js` | **Status:** pending
+- **Dependencies:** T-1 | **Test:** `test/js/bridge.test.js` | **Status:** completed
 
 #### T-5: `ModelAccess.cs` >= 90% (DoD 3)
 - **Files:** `test/TranslateReader.Tests/ModelAccessTests.cs`
@@ -110,7 +110,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     (`EnsureSuccessStatusCode`); cancelamento (`OperationCanceledException` propaga, §1); swap
     `.tmp` -> final com overwrite.
   - cobertura de `ModelAccess.cs`: `line-rate` >=0,95 e `branch-rate` >=0,90 (+~35 unidades).
-- **Dependencies:** none | **Test:** `ModelAccessTests` | **Status:** pending
+- **Dependencies:** none | **Test:** `ModelAccessTests` | **Status:** completed
 
 ### Wave 3
 
@@ -122,7 +122,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     como variaveis livres); cada arquivo >=95% linhas.
   - agregado dos 4 scripts >=95% (piso do DoD 2 = 85%); SUMMARY.md registra LH/LF e
     `sum(BRF)`/`sum(BRH)` agregados — entrada da reconciliacao de T-8.
-- **Dependencies:** T-1, T-4 | **Test:** `test/js/{scroll,translation}.test.js` | **Status:** pending
+- **Dependencies:** T-1, T-4 | **Test:** `test/js/{scroll,translation}.test.js` | **Status:** completed
 
 ### Wave 4
 
@@ -139,7 +139,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     zero I/O); EPUB sintetico montado em temp SO onde a entrada publica exige arquivo (D-...-3 +
     precedente `ParsingEngineTests.cs`); nenhum binario novo commitado.
 - **Dependencies:** T-5, T-6 (a medicao delas dimensiona o alvo real) | **Test:**
-  `ParsingEngineEdgeCaseTests` | **Status:** pending
+  `ParsingEngineEdgeCaseTests` | **Status:** completed
 
 ### Wave 5
 
@@ -160,7 +160,7 @@ afrouxado, 1 task = 1 commit atomico com scope `coverage-90`.
     reabre D-...-4, nao edita `src/`.
   - gating/hardening existentes intactos; nenhum step novo fora do `if: env.SONAR_TOKEN != ''`
     (o "Assert the scan is not silently skipped" ja cobre o no-op silencioso).
-- **Dependencies:** T-1..T-7 | **Test:** `node --test test/js/` + grep do DoD 5 | **Status:** pending
+- **Dependencies:** T-1..T-7 | **Test:** `node --test test/js/` + grep do DoD 5 | **Status:** completed
 
 ## Riscos
 - Proxy local != metrica remota (cobertura/lcov contam diferente do Sonar) — a margem de +44/+48
