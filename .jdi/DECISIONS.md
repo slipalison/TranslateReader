@@ -1192,3 +1192,14 @@ para o importador), mas e supressao no PROJETO INTEIRO, exatamente a "vassoura" 
 phase reprova: esconderia um SYSLIB1044 legitimo em qualquer outro regex futuro do Core.
 Estado final honesto da phase: 112 das 113 issues fora da analise; a ultima e um waiver INFO
 documentado, com Quality Gate OK (INFO nao move rating nenhum), aguardando a decisao acima.
+
+D-2026-07-31-coverage-90-0 (registro de phase): phase `coverage-90` registrada na posicao 15 do
+ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-31 — "adicione os tests
+faltante ate chegar em 90% de cobertura no Sonarqube e sem issues nova" (texto colado, sem URL de
+tracker). Baseline medido na API do SonarCloud no momento do registro (`branch=main`, apos o merge
+do PR #12 / `1af3a51`): coverage 75,9%, line_coverage 77,0%, lines_to_cover 1428, uncovered_lines
+329, ncloc 3103, 1 issue aberta (o waiver INFO `SYSLIB1044` de D-2026-07-30-sonar-zero-issues-13).
+Distribuicao das 329 linhas descobertas: 195 em JavaScript do WebView (`paginated.js` 70,
+`bridge.js` 60, `translation.js` 38, `scroll.js` 27 — todos 0%, sem harness JS no repo) e 134 em C#
+(`TranslationEngine` 52, `ParsingEngine` 45, `ModelAccess` 25, `FileUtility` 3, `HtmlUtility` 2,
+`ThemeEngine` 1, models 6).
