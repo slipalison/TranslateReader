@@ -280,3 +280,39 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   primeira medicao local. Se acionada, usa o MESMO padrao de fixture `.epub` real ja estabelecido
   em `ParsingEngineTests.cs` (autorizado nomeadamente no PLAN de `sonar-zero-issues`, T-6) — nao
   inventa um terceiro padrao de excecao a `.claude/rules/csharp.md` §6.
+
+- **[CODIGO/RECURSO] `ReadEpubSafeAsync` deixa o handle do zip aberto quando o fallback e
+  acionado.** Achado colateral de `coverage-90` (T-7), reportado no SUMMARY e cobrado como work
+  item pelo reviewer (Warning 1 da REVIEW iter 1). `src/TranslateReader.Core/Business/Engines/
+  ParsingEngine.cs:138-190`: a leitura estrita (`:162`) lanca `EpubPackageException`, o `catch`
+  (`:164`) refaz a leitura com `fallbackOptions` (`:188`) — e o descarte do `EpubBook`/arquivo da
+  primeira tentativa fica inteiramente por conta do VersOne.Epub, que nao o fecha.
+  Evidencia empirica: o teste novo precisou de um guard `catch (IOException)` no proprio `Dispose`
+  para conseguir apagar o temp dir — `test/TranslateReader.Tests/ParsingEngineEdgeCaseTests.cs:
+  47-52` ("VersOne.Epub keeps the archive handle open when the strict read throws
+  EpubPackageException"). Consequencia real: em Windows o `.epub` segue TRAVADO depois que
+  `ExtractCoverImageAsync`/`ParseBookAsync` retornam, entao renomear/apagar/reimportar o livro
+  falha ate o GC rodar. Nao re-provado em processo isolado (o lock e interno a lib de terceiro) —
+  confirmar antes de corrigir. Corrigir exige mexer em `src/`, o que `coverage-90` proibiu por
+  decisao de escopo; contra `.claude/rules/csharp.md` §2.4 ("Dispose what you own"). Candidato a
+  phase de higiene do Core ou a sub-escopo de `epub-zip-slip` (mesmo arquivo, mesmo caminho de
+  leitura de zip).
+
+- **[CODIGO/CONTRATO] `ExtractCoverImageAsync` devolve `byte[0]` em vez de `null` quando a capa do
+  manifesto aponta para arquivo ausente.** Mesmo achado/mesma origem do item acima (SUMMARY de
+  `coverage-90`, Warning 1 da REVIEW iter 1). `src/TranslateReader.Core/Business/Engines/
+  ParsingEngine.cs:316` (`return imageFile?.Content;`) devolve o `Content` sem a guarda
+  `Length > 0` que as DUAS fontes anteriores do mesmo metodo aplicam (`:72`
+  `epub.CoverImage is { Length: > 0 }` e `:75` `epub.Content.Cover?.Content is { Length: > 0 }`).
+  Como `ReadEpubSafeAsync` liga `IgnoreMissingFileError = true` (`:156` no caminho estrito, `:184`
+  no fallback), o
+  VersOne.Epub materializa um placeholder VAZIO para o item ausente — e ele escapa como `byte[0]`
+  por esse terceiro caminho. O contrato e `Task<byte[]?>`: quem consome recebe "tem capa" e depois
+  grava/renderiza 0 byte, em vez de cair no caminho de "sem capa". Comportamento hoje FIXADO por
+  teste de caracterizacao (`ParsingEngineEdgeCaseTests.cs:185`
+  `ExtractCoverImageAsync_WithACoverImagePropertyPointingAtAMissingFile_ReturnsNoBytes`), com a
+  assercao deliberadamente frouxa `Assert.Empty(cover ?? [])` (`:196`) justamente para NAO
+  cristalizar o defeito como contrato. Correcao esperada: aplicar a mesma guarda `Length > 0` no
+  `:316`; ao fazer isso, apertar `:196` para exigir `Assert.Null(cover)` (Warning 3 da REVIEW).
+  Uma linha de producao — nao foi feita aqui porque `coverage-90` fechou `src/` por decisao de
+  escopo, nao por dificuldade.
