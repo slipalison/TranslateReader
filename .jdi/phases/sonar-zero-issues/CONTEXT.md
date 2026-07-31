@@ -96,9 +96,11 @@ cada issue termina em fix, exclusao ou waiver auditavel, nunca silenciada sem re
       **Source:** CONTEXT (D-...-5, `Verify:` superseded por D-2026-07-30-sonar-zero-issues-9, que por sua vez supersede -8)
 
 - [ ] Mecanismo anti-recorrencia ativo: `dotnet-sonarscanner end` roda com
-      `sonar.qualitygate.wait=true`.
-      **Verify:** `grep -A3 "dotnet-sonarscanner end" .github/workflows/sonarqube.yml | grep -q "sonar.qualitygate.wait=true"`
-      **Source:** CONTEXT (D-...-2)
+      `sonar.qualitygate.wait=true`, e o job nao pode virar no-op SILENCIOSO sem o secret:
+      guard falha o job onde o token DEVE existir (repo de origem) e avisa alto onde a
+      ausencia e legitima (fork/Dependabot).
+      **Verify:** `grep -A3 "dotnet-sonarscanner end" .github/workflows/sonarqube.yml | grep -q "sonar.qualitygate.wait=true" && W=.github/workflows/sonarqube.yml && test $(grep -c "if: env.SONAR_TOKEN == ''" "$W") -eq 1 && G=$(awk "/if: env\.SONAR_TOKEN == ''/{f=1;next} f&&/^      - name:/{exit} f" "$W") && printf '%s' "$G" | grep -qE "^ +exit 1$" && printf '%s' "$G" | grep -q "github.repository == 'slipalison/TranslateReader'" && printf '%s' "$G" | grep -q "head.repo.fork" && printf '%s' "$G" | grep -q "dependabot\[bot\]"`
+      **Source:** CONTEXT (D-...-2, `Verify:` superseded por D-2026-07-30-sonar-zero-issues-10)
 
 ### Manual
 - _(none)_

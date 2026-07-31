@@ -1040,3 +1040,81 @@ Residuos DECLARADOS (nenhum silenciado; nenhum ocorre nas 2 assinaturas de hoje)
   de alcance de qualquer gate textual - jurisprudencia locked em D-2026-07-30-the-method-refactor-9.
   Backstop semantico: o S107 do proprio SonarCloud (analisador Roslyn) rodando com
   `sonar.qualitygate.wait=true` em New Code, mais o PR review humano.
+
+D-2026-07-30-sonar-zero-issues-10: o mecanismo anti-recorrencia locked por
+`D-2026-07-30-sonar-zero-issues-2` (`sonar.qualitygate.wait=true` no `dotnet-sonarscanner end`)
+ganha um guard contra desaparecimento SILENCIOSO, e o `Verify:` do item 10 do Definition of Done
+passa a prova-lo. Esta decisao NAO reescreve D-...-2 nem qualquer decisao anterior (append-only): o
+QUE deve existir segue identico - o `end` roda com `sonar.qualitygate.wait=true` e o job `sonarqube`
+e chamado por `pipeline.yml`. Acrescenta-se UMA garantia: o job nao pode ficar verde sem ter
+escaneado nada.
+
+Furo (W-3(d) da REVIEW iter 2): os 7 steps uteis de `.github/workflows/sonarqube.yml` sao
+condicionados a `if: env.SONAR_TOKEN != ''`. Sem o secret, TODOS sao pulados, o job termina com
+sucesso e o Quality Gate nunca roda - o mecanismo inteiro vira no-op sem nenhum sinal. Como
+`sonarqube` e required check da branch protection, um check verde sem scan e pior que a ausencia do
+check: da garantia falsa. Um mecanismo anti-recorrencia que desaparece em silencio nao e mecanismo.
+
+Correcao locked: um step novo `Assert the scan is not silently skipped`, gated em
+`if: env.SONAR_TOKEN == ''` (portanto so roda no cenario que interessa) e posicionado logo apos o
+`harden-runner`, antes do checkout. Ele resolve `TOKEN_EXPECTED` a partir do contexto e:
+- `TOKEN_EXPECTED == true` -> `::error` + `exit 1` (o job FALHA);
+- caso contrario -> `::warning` explicito de que scan e Quality Gate foram pulados (deixa de ser
+  silencioso mesmo onde falhar seria errado).
+
+`TOKEN_EXPECTED` = `github.repository == 'slipalison/TranslateReader'` E
+`github.actor != 'dependabot[bot]'` E NAO (`github.event_name == 'pull_request'` E
+`github.event.pull_request.head.repo.fork`). Tabela de contexto (comportamento COM o token ausente;
+com o token presente o step nem roda):
+
+| Contexto | TOKEN_EXPECTED | Efeito |
+|---|---|---|
+| `push` em `main` do repo de origem | true | **falha** |
+| PR de branch do proprio repo de origem | true | **falha** |
+| `workflow_dispatch` no repo de origem | true | **falha** |
+| PR vindo de FORK | false | warning (GitHub nao expoe secrets a PR de fork - ausencia legitima) |
+| PR do Dependabot | false | warning (Dependabot usa o cofre proprio de secrets, `.github/dependabot.yml` tem 2 ecossistemas semanais) |
+| fork/clone do repo rodando o proprio CI | false | warning (`github.repository` diferente) |
+
+Por que NAO falhar em fork/Dependabot: nesses contextos a ausencia do secret e uma decisao de
+seguranca do proprio GitHub, nao um defeito do repo - nao ha o que consertar, e falhar transformaria
+todo PR externo e todo bump semanal do Dependabot em check vermelho permanente. O sinal ali e o
+`::warning`, que ja mata o "silencio". Detalhe de semantica de expressao verificado: em `push`,
+`github.event.pull_request` e nulo, mas `&&` do GitHub curto-circuita no primeiro operando falso
+(`github.event_name == 'pull_request'`), entao nao ha desreferencia nula.
+
+Containment formal (mais forte que "provado clausula a clausula"): o comando anterior do item 10 e
+PREFIXO LITERAL do novo, seguido de ` && `. Logo `NEW exit 0` implica `OLD exit 0` por construcao,
+e nenhuma protecao antiga pode ter sido perdida. As clausulas acrescentadas medem, em pares
+presenca-positiva/ausencia-negativa (licao do `[PROCESSO/DoD]` de `regression-suite` em
+`todos.md`): EXATAMENTE 1 step gated em `env.SONAR_TOKEN == ''`; que o corpo desse step contenha
+`exit 1`; e que a expressao carregue as tres partes do escopo (`github.repository ==
+'slipalison/TranslateReader'`, `head.repo.fork`, `dependabot[bot]`) - ou seja, um "fix" que sempre
+falhe, quebrando fork e Dependabot, tambem reprova.
+
+Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`grep -A3 "dotnet-sonarscanner end" .github/workflows/sonarqube.yml | grep -q "sonar.qualitygate.wait=true" && W=.github/workflows/sonarqube.yml && test $(grep -c "if: env.SONAR_TOKEN == ''" "$W") -eq 1 && G=$(awk "/if: env\.SONAR_TOKEN == ''/{f=1;next} f&&/^      - name:/{exit} f" "$W") && printf '%s' "$G" | grep -qE "^ +exit 1$" && printf '%s' "$G" | grep -q "github.repository == 'slipalison/TranslateReader'" && printf '%s' "$G" | grep -q "head.repo.fork" && printf '%s' "$G" | grep -q "dependabot\[bot\]"`
+
+Prova por mutacao (9 mutantes do `sonarqube.yml`, copias em scratchpad, repo real nunca mutado):
+
+| Mutante | NEW | OLD |
+|---|---|---|
+| intacto (arquivo entregue) | `exit 0` | `exit 0` |
+| step de guard DELETADO | **`exit 1`** | `exit 0` |
+| `exit 1` do guard trocado por `echo` (guard vira aviso) | **`exit 1`** | `exit 0` |
+| `if:` do guard invertido para `!= ''` (nunca roda quando importa) | **`exit 1`** | `exit 0` |
+| `TOKEN_EXPECTED` hardcoded `'false'` (guard nunca falha) | **`exit 1`** | `exit 0` |
+| carve-out de FORK removido (quebraria PR externo) | **`exit 1`** | `exit 0` |
+| carve-out de DEPENDABOT removido (quebraria bump semanal) | **`exit 1`** | `exit 0` |
+| segundo step `== ''` duplicado (guard ambiguo) | **`exit 1`** | `exit 0` |
+| `sonar.qualitygate.wait=true` removido do `end` | `exit 1` | `exit 1` |
+
+O ultimo mutante e a prova de nao-regressao: a protecao original de D-...-2 continua presa
+identica. Os outros 7 sao furos que o comando anterior nao via.
+
+Escopo: muda `.github/workflows/sonarqube.yml` (CI), zero linha de `src/` e zero teste. NAO fecha os
+itens (a), (b) e (c) da W-3 - "Sonar way" so mede New Code (issue nova em linha legada nao alterada e
+smell abaixo do debt ratio seguem invisiveis) e o C# do app MAUI segue fora do scan por
+D-2026-07-30-sonar-zero-issues-6. Os tres sao limites do produto/pipeline, nao deste yml: (a) e (b)
+exigiriam trocar o Quality Gate na config do SonarCloud, que vive FORA do repo e nao e versionavel
+aqui; (c) exigiria job novo em `windows-latest` com workload MAUI. Registrados em `.jdi/todos.md`.

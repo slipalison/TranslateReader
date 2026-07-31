@@ -34,6 +34,24 @@ jobs:
         with:
           egress-policy: audit
 
+      # Todo step abaixo e condicionado a `env.SONAR_TOKEN != ''`. Sem o secret o job
+      # ficava VERDE sem escanear nada: o mecanismo anti-recorrencia
+      # (D-2026-07-30-sonar-zero-issues-2) desaparecia em SILENCIO. Este guard troca o
+      # silencio por sinal (D-2026-07-30-sonar-zero-issues-10): falha no contexto que DEVE
+      # ter o secret (repo de origem) e avisa alto onde a ausencia e legitima e nao ha o
+      # que consertar - fork (secrets nao sao expostos a PR de fork) e Dependabot (usa o
+      # cofre proprio de secrets).
+      - name: Assert the scan is not silently skipped
+        if: env.SONAR_TOKEN == ''
+        env:
+          TOKEN_EXPECTED: ${{ github.repository == 'slipalison/TranslateReader' && github.actor != 'dependabot[bot]' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+        run: |
+          if [ "$TOKEN_EXPECTED" = "true" ]; then
+            echo "::error::SONAR_TOKEN is missing on the origin repository: the SonarCloud scan and the Quality Gate did NOT run (D-2026-07-30-sonar-zero-issues-2). Restore the repository secret."
+            exit 1
+          fi
+          echo "::warning::SONAR_TOKEN unavailable (fork or Dependabot run): the SonarCloud scan and the Quality Gate were skipped for this run."
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
