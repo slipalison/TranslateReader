@@ -8,7 +8,11 @@ public class BookTranslationJobAccessTests : IDisposable
     private readonly InMemoryDatabase _db = new();
     private BookTranslationJobAccess CreateSut() => new(_db.ConnectionString, initializeOnStartup: true);
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        _db.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static BookTranslationJob MakeJob(
         int bookId = 1,

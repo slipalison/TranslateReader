@@ -7,11 +7,8 @@ window.getVisibleParagraphs = function () {
     var ps = pg.querySelectorAll('p');
     var result = [];
 
-    for (var i = 0; i < ps.length; i++) {
-        var el = ps[i];
-        var t = el.hasAttribute('data-original')
-            ? el.getAttribute('data-original')
-            : el.textContent.trim();
+    for (const [i, el] of ps.entries()) {
+        var t = el.dataset.original ?? el.textContent.trim();
         if (!t) continue;
         var ol = el.offsetLeft;
         if (ol >= left && ol < right) {
@@ -27,12 +24,12 @@ window.applyTranslations = function (items) {
         var pg = document.getElementById('_pager');
         if (!pg) return;
         var ps = pg.querySelectorAll('p');
-        for (var i = 0; i < items.length; i++) {
-            var idx = items[i].index;
-            var tr = items[i].translated;
+        for (const item of items) {
+            var idx = item.index;
+            var tr = item.translated;
             if (idx >= 0 && idx < ps.length) {
-                if (!ps[idx].hasAttribute('data-original'))
-                    ps[idx].setAttribute('data-original', ps[idx].textContent);
+                if (ps[idx].dataset.original === undefined)
+                    ps[idx].dataset.original = ps[idx].textContent;
                 ps[idx].textContent = tr;
             }
         }
@@ -46,9 +43,9 @@ window.clearTranslations = function () {
     var pg = document.getElementById('_pager');
     if (!pg) return;
     var ps = pg.querySelectorAll('p[data-original]');
-    for (var i = 0; i < ps.length; i++) {
-        ps[i].textContent = ps[i].getAttribute('data-original');
-        ps[i].removeAttribute('data-original');
+    for (const p of ps) {
+        p.textContent = p.dataset.original;
+        delete p.dataset.original;
     }
     window.goToPage(_currentPage);
 };

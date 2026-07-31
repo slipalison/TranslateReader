@@ -62,7 +62,7 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
     {
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        using var transaction = connection.BeginTransaction();
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
         await UpsertValueAsync(connection, transaction, "Theme", settings.Theme.ToString());
         await UpsertValueAsync(connection, transaction, "FontFamily", settings.FontFamily);

@@ -8,7 +8,11 @@ public class BooksAccessTests : IDisposable
     private readonly InMemoryDatabase _db = new();
     private BooksAccess CreateSut() => new(_db.ConnectionString, initializeOnStartup: true);
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        _db.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     private static Book MakeBook(
         string title = "Livro Teste",

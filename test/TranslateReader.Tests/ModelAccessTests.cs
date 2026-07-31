@@ -16,6 +16,12 @@ public class ModelAccessTests : IDisposable
 
     public void Dispose()
     {
+        DisposeFixtures();
+        GC.SuppressFinalize(this);
+    }
+
+    private void DisposeFixtures()
+    {
         _httpClient.Dispose();
         if (Directory.Exists(_modelsDir))
             Directory.Delete(_modelsDir, recursive: true);

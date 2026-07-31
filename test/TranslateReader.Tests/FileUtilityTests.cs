@@ -9,7 +9,11 @@ public class FileUtilityTests : IDisposable
 
     public FileUtilityTests() => Directory.CreateDirectory(_tempDir);
 
-    public void Dispose() => Directory.Delete(_tempDir, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_tempDir, recursive: true);
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public async Task CopyFileAsync_CopiesFileToDestination()
@@ -95,8 +99,8 @@ public class FileUtilityTests : IDisposable
     public async Task DeleteDirectoryAsync_DoesNotThrowForNonExistentDirectory()
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        var sut = new FileUtility();
-        await sut.DeleteDirectoryAsync(dir);
+        var exception = await Record.ExceptionAsync(() => _sut.DeleteDirectoryAsync(dir));
+        Assert.Null(exception);
     }
 
     [Fact]

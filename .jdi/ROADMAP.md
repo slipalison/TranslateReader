@@ -64,6 +64,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** the-method-refactor
 - **Goal:** eliminar as violacoes concretas de The Method (CLAUDE.md) e de `.claude/rules/csharp.md` e os hotspots reais de memoria/CPU (ParsingEngine, HtmlUtility, TranslationEngine, loops de paragrafo/token, LOH), cada mudanca justificada por uma violacao nomeada e protegida pela rede da phase `regression-suite` — finding-driven, nao rewrite amplo
 
+### Phase 14: Zerar as issues do SonarQube e travar a regressao
+- **Slug:** sonar-zero-issues
+- **Goal:** resolver as 113 issues abertas do SonarQube em `main` (2 bugs, 7 vulnerabilities, 104 code smells) e instalar o mecanismo que impede a classe delas de voltar — cada issue resolvida no codigo, excluida da analise com justificativa registrada, ou suprimida com waiver auditavel; nunca silenciada sem registro
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

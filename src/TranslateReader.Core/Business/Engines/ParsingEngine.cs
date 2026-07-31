@@ -90,7 +90,7 @@ public partial class ParsingEngine : IParsingEngine
         var destPath = Path.Combine(destinationDirectory, fileName);
         File.Copy(originalFilePath, destPath, overwrite: true);
 
-        using (var archive = ZipFile.Open(destPath, ZipArchiveMode.Update))
+        await using (var archive = await ZipFile.OpenAsync(destPath, ZipArchiveMode.Update))
         {
             foreach (var (href, html) in translatedChapterHtml)
             {
@@ -100,7 +100,7 @@ public partial class ParsingEngine : IParsingEngine
                     e.FullName.Replace('\\', '/').EndsWith("/" + normalizedHref, StringComparison.OrdinalIgnoreCase));
                 if (entry is null) continue;
 
-                using var stream = entry.Open();
+                await using var stream = await entry.OpenAsync();
                 stream.SetLength(0);
                 await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
                 await writer.WriteAsync(html);
@@ -119,13 +119,16 @@ public partial class ParsingEngine : IParsingEngine
         if (opfEntry is null) return;
 
         string content;
-        using (var reader = new StreamReader(opfEntry.Open()))
+        await using (var readStream = await opfEntry.OpenAsync())
+        {
+            using var reader = new StreamReader(readStream);
             content = await reader.ReadToEndAsync();
+        }
 
         var escapedTitle = System.Net.WebUtility.HtmlEncode(newTitle);
         content = OpfTitleRegex().Replace(content, $"$1{escapedTitle}$3");
 
-        using var stream = opfEntry.Open();
+        await using var stream = await opfEntry.OpenAsync();
         stream.SetLength(0);
         await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
         await writer.WriteAsync(content);

@@ -724,3 +724,471 @@ politica ENTRE fases: roteado para `.jdi/todos.md`, para valer a partir da proxi
 
 Zero linha de producao mudou por causa desta decisao — pela terceira vez, o codigo ja estava
 correto; o gate e que nao provava.
+
+D-2026-07-30-sonar-zero-issues-0 (registro de phase): phase `sonar-zero-issues` registrada na
+posicao 14 do ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-30 —
+"analise todas as issues que foram levantadas pelo sonarqube que estao na branch main, e resolva
+todas elas, crie mecanismo que evite que esses tipos e issues voltem a acontecer no futuro"
+(texto colado, sem URL de tracker). Baseline medido na API do SonarCloud no momento do registro
+(`branch=main`, apos o merge do PR #11 / `6132078`): 113 issues abertas, 2 bugs, 7 vulnerabilities,
+104 code smells, 0 security hotspots, coverage 72,7%, ncloc 4.074, sqale_index 401min.
+D-2026-07-30-sonar-zero-issues-1: `dotnet-install.ps1` (41/113 issues, 36%, regras
+`powershelldre:*`) e REMOVIDO do repo — opcao (b) das 3 do brief, nao (a) exclusao via
+`sonar.exclusions` nem (c) corrigir codigo de terceiro. Evidencia: script vendored da Microsoft
+(1573 linhas, commitado no legado `c86569e`), zero referencia em `src/`, `test/` ou qualquer
+workflow (`grep -r "dotnet-install.ps1"` no repo inteiro so bate no proprio arquivo e numa
+entrada de permissao Bash em `.claude/settings.local.json:38`), publicamente re-obtenivel em
+`dotnet.microsoft.com/download/dotnet/scripts`. Excluir via `sonar.exclusions` manteria 1573
+linhas mortas no repo so para o Sonar ignorar; corrigir 41 issues de estilo PowerShell em codigo
+de terceiro nao gera valor e diverge do upstream. A linha de permissao stale em
+`.claude/settings.local.json` e removida junto (mesmo commit) — arquivo rastreado pelo git
+(D-2026-07-28-ci-seguranca-2), nao gitignorado.
+
+D-2026-07-30-sonar-zero-issues-2 (mecanismo anti-recorrencia + fronteira com `baseline-de-estilo`):
+o mecanismo desta fase e `sonar.qualitygate.wait=true` adicionado ao passo `dotnet-sonarscanner end`
+em `.github/workflows/sonarqube.yml` — o scanner passa a falhar o job `sonarqube` (chamado por
+`pipeline.yml:54`, ja check obrigatorio) se o Quality Gate do SonarCloud reprovar. O gate "Sonar way"
+padrao mede New Code (rating de Reliability/Security/Maintainability = A), entao qualquer PR futuro
+que reintroduza um bug/vulnerability/code smell bloqueante do tipo aqui resolvido derruba o pipeline
+antes do merge — e a trava que o card pede ("evite que esses tipos... voltem a acontecer").
+Fronteira com a phase `baseline-de-estilo` (posicao 1, pendente, goal "editorconfig, gitattributes e
+analyzers configurados na raiz"): aquela phase e generica e local (Roslyn analyzers/editorconfig,
+independe de rede/Sonar); esta fase e especifica do SonarQube e roda so em CI. Nao ha sobreposicao —
+`baseline-de-estilo` continua dona integral do escopo dela, nada migrado.
+
+D-2026-07-30-sonar-zero-issues-3 (taxonomia de resolucao, aplicada a todas as 113 issues): toda
+issue termina em exatamente 1 de 3 estados, cada um com mecanismo auditavel em git (nunca so na UI
+do SonarCloud): (a) FIX no codigo — maioria dos casos; (b) EXCLUSAO por `sonar.issue.ignore.
+multicriteria` (rule+resourceKey) adicionado aos args do `begin` em `sonarqube.yml` — usado para
+`Web:S7926` e `css:S4667` em `index.html` (ver D-...-4 abaixo), decisao deliberada sobre codigo
+correto, nao defeito; (c) WAIVER via `#pragma warning disable <ID>`/`restore` no ponto exato, com
+comentario citando a razao e este documento — usado para `SYSLIB1044` (`HtmlUtility.TextBlockRegex`,
+backreference `\1` que o source generator nao otimiza, ja investigado no PR #11: mudar o pattern
+mudaria comportamento) e para `xUnit1004` (os 2 `[Fact(Skip=...)]` de integracao do LLamaSharp em
+`TranslationEngineTests.cs`, deliberados por D-2026-07-30-regression-suite-5(2) — desskipar quebra
+CI sem fixture `.gguf`). Nenhuma issue fica "resolvida" so por decisao verbal nao rastreavel no repo.
+
+D-2026-07-30-sonar-zero-issues-4 (`user-scalable=no` MANTIDO — waiver, nao fix por reflexo do
+linter): `index.html:5` continua com `user-scalable=no`. Argumento: o modo Paginated do reader
+(`paginated.js`) depende de viewport fixo para o calculo de coluna/pagina — pinch-zoom ativo quebra
+o snap de pagina, uma feature central do produto. WCAG 2.1 SC 1.4.4 (Resize text) exige ALGUM
+mecanismo de ampliacao ate 200%, nao especificamente pinch-zoom no WebView — o app ja oferece
+tipografia configuravel (PROJECT.md > Stack: "temas Light/Dark/Sepia e tipografia configuravel"),
+mecanismo equivalente e ja existente. Precedente de produto: leitores dedicados (Kindle, Apple
+Books) tambem desabilitam pinch-zoom na tela de leitura e oferecem controle de fonte em vez disso.
+Suprimido via `sonar.issue.ignore.multicriteria` (rule=`Web:S7926`, resourceKey=`**/index.html`),
+mecanismo (b) da D-...-3. O mesmo mecanismo suprime `css:S4667` ("Empty source") na tag
+`<style id="reader-theme"></style>` de `index.html:6` — vazia por design, populada em runtime via
+JS ao trocar de tema (ThemeEngine gera o CSS, injetado via bridge), nao um estilo esquecido.
+
+D-2026-07-30-sonar-zero-issues-5 (fronteira D-2/D-6 aplicada): esta fase E a "phase explicita"
+exigida por D-2 para tocar `ParsingEngine.cs`, `BooksAccess.cs`, `SettingsAccess.cs`,
+`ReadingStateAccess.cs`, `BookTranslationJobAccess.cs`, `TranslationManager.cs` e `HtmlUtility.cs`
+(todos legados, pre-`4285f25`). Nenhuma mudanca planejada introduz caminho de codigo sem teste: toda
+linha tocada ja e exercitada por suites existentes (`ParsingEngineTests.cs` com fixtures reais de
+EPUB; `*AccessTests.cs` via `InMemoryDatabase`; `TranslationManagerTests.cs`, 48 ocorrencias
+indiretas per D-2026-07-30-the-method-refactor-4) — D-6 (90% em codigo alterado) e satisfeito pela
+cobertura ja existente sobre comportamento preservado, sem infra de teste nova. Excecao nomeada: os
+3 arquivos JS do WebView (`translation.js`, `scroll.js`, `bridge.js`) NAO tem harness de teste
+automatizado no repo (nenhum runner JS configurado, fora do escopo de qualquer `.csproj`) — D-6 nao
+se aplica estruturalmente a eles; a confirmacao FUNCIONAL de que zoom/scroll/traducao continuam
+corretos apos a migracao mecanica de API vai para `## Deferred to PR review` do CONTEXT.md, por ser
+inerentemente humana (visual/interativa).
+
+D-2026-07-30-sonar-zero-issues-6 (idempotencia do "0 issues" + limite do mecanismo): os `Verify:`
+do DoD desta fase provam propriedades LOCAIS e reproduziveis (grep de identidade por arquivo/regra,
+sem rede) — nao dependem de um scan real do SonarCloud, que so existe apos push+CI. A confirmacao
+de que o Quality Gate real fica verde na branch/PR fica em `## Deferred to PR review`. LIMITE
+estrutural do mecanismo (achado nesta sessao, registrado tambem em `.jdi/todos.md`):
+`.github/workflows/sonarqube.yml` roda `dotnet build src/TranslateReader.Core/
+TranslateReader.Core.csproj` e `dotnet test test/TranslateReader.Tests/...` entre o `begin`/`end`
+do scanner — NUNCA compila `src/TranslateReader` (o head MAUI). O analisador C# do Sonar (Roslyn-
+based) so ve o que e compilado nessa janela; logo `PageModels/`, `Pages/*.xaml.cs`, `Platforms/`,
+`Utilities/*Converter.cs` e `MauiProgram.cs` sao estruturalmente invisiveis ao Sonar hoje — "0
+issues" desta fase e valido para o que o Sonar de fato escaneia (Core C# + JS/HTML/PowerShell), nao
+para o repo inteiro. Fechar isso exigiria um job Sonar rodando em `windows-latest` com workload MAUI
+— infraestrutura de CI nova, fora do escopo desta fase (issues + mecanismo sobre o que ja e
+escaneado), nao decidido aqui.
+
+D-2026-07-30-sonar-zero-issues-7: O `Verify:` do item 1 do Definition of Done desta fase
+(CONTEXT.md) fica SUPERSEDED pelo comando registrado no proprio CONTEXT.md sob esta decisao. Ela
+NAO reescreve D-2026-07-30-sonar-zero-issues-1 (append-only): o QUE deve ser feito segue
+identico — `dotnet-install.ps1` REMOVIDO do repo e a permissao stale de
+`.claude/settings.local.json:38` removida no MESMO commit. Muda so COMO o DoD prova isso.
+
+Furo (auto-derrota, medido antes de qualquer edicao): o comando vigente era
+`test ! -e dotnet-install.ps1 && test -z "$(grep -rl 'dotnet-install\.ps1' --exclude-dir=.git . 2>/dev/null)"`.
+`grep -r` varre TODO byte do working tree, entao ele bate em tres classes de arquivo que a phase
+nao pode e nao deve limpar:
+(a) o proprio registro de auditoria — `.jdi/DECISIONS.md:735,739` (a D-...-1 CITA o nome do
+    arquivo por design) e `.jdi/phases/sonar-zero-issues/CONTEXT.md:9,43,44` (o proprio item do
+    DoD contem a string que ele proibe — o gate se auto-derrota por construcao);
+(b) `.jdi/phases/sonar-zero-issues/PLAN.md` (7 ocorrencias, mesma natureza de registro);
+(c) `.idea/.idea.TranslateReader/.idea/workspace.xml` — untracked e gitignorado
+    (`.gitignore:29`), estado local de IDE de UMA maquina; nenhum commit desta phase o alcanca,
+    e o DoD passaria ou reprovaria conforme a maquina que rodasse o comando.
+Consequencia: o comando antigo saia `exit 1` mesmo com a phase 100% entregue — gate impossivel de
+satisfazer, que e a forma degenerada do defeito ja catalogado em `.jdi/todos.md` `[PROCESSO/DoD]`
+(o gate mede um PROXY, aqui o proxy "nenhum byte do repo menciona a string", em vez da propriedade
+real).
+
+Propriedade REAL locked: **(1) o arquivo nao existe mais no working tree E (2) nenhum arquivo
+RASTREADO pelo git fora de `.jdi/` o referencia.** `.jdi/` e excluido por ser registro de
+auditoria append-only cuja funcao E citar o nome; arquivo untracked/ignorado e excluido porque
+nao e conteudo do repo. Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`test ! -e dotnet-install.ps1 && test -z "$(git grep -l 'dotnet-install\.ps1' -- . ':(exclude).jdi' 2>/dev/null)"`
+
+Nenhuma protecao afrouxada em relacao ao que o criterio queria dizer: a clausula `test ! -e` fica
+BYTE-IDENTICA, e a segunda clausula continua exigindo ZERO referencia — o que muda e o universo
+varrido, que passa a ser exatamente o universo que a phase controla (arquivos rastreados, fora do
+registro de auditoria). O caso concreto que motivou a clausula em D-...-1 — a permissao stale em
+`.claude/settings.local.json:38`, arquivo RASTREADO (D-2026-07-28-ci-seguranca-2) — continua
+integralmente coberto: `git grep` o enxerga, e o gate reprova se ela voltar.
+
+Prova por mutacao nos DOIS sentidos (executada, repo real):
+- estado ANTES da entrega (arquivo presente + permissao presente): NEW `exit 1`. OLD tambem
+  `exit 1`, mas por motivo errado (bateria em `.jdi/` e `.idea/`, nao no defeito).
+- estado DEPOIS da entrega (arquivo deletado + permissao removida): NEW `exit 0`; OLD `exit 1`
+  (auto-derrota — bate em `.jdi/DECISIONS.md`, `CONTEXT.md`, `PLAN.md`, `.idea/workspace.xml`).
+- mutante realista M1 — arquivo deletado mas a linha de permissao de
+  `.claude/settings.local.json` READICIONADA (regressao exata que D-...-1 quer barrar):
+  NEW `exit 1`.
+- mutante M2 — permissao removida mas `dotnet-install.ps1` restaurado: NEW `exit 1` (pega pelas
+  duas clausulas).
+- falso positivo — no repo entregue, sem mutacao, NEW `exit 0`.
+
+D-2026-07-30-sonar-zero-issues-8: O `Verify:` do item 9 do Definition of Done desta fase
+(CONTEXT.md — `TranslationManager.cs`, S107 + S3267) fica SUPERSEDED pelo comando registrado nesta
+decisao e copiado byte-a-byte para o CONTEXT.md. Ela NAO reescreve `D-2026-07-30-sonar-zero-issues-5`
+nem qualquer decisao anterior (append-only): o QUE deve ser feito segue identico — os 2 helpers
+privados `TranslateChaptersWithCacheAsync` e `TranslateSingleChapterAsync` declaram no maximo 7
+parametros (S107, via objeto de contexto privado) e o loop de `chapters` usa
+`.Select(chapter => chapter.HRef)` (S3267). Muda so COMO o DoD prova isso. Nenhuma linha de
+producao muda por causa desta decisao — o refactor da iter 1 ja entrega 5 parametros reais em cada
+metodo; o que estava quebrado era a PROVA.
+
+Furo (contra-exemplo EXECUTADO pelo DoD critic da iter 1 — ver `## DoD Critic` em
+`.jdi/phases/sonar-zero-issues/REVIEW.md`, veredito BLOCKED): o comando vigente era
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do N=$(awk -v m="$M(" 'index($0,m){f=1} f{printf "%s",$0; if(/\)$/ && f>1){exit} f++}' "$F" | grep -o "," | wc -l); test "$N" -le 6 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+Esse `awk` NAO mede parametros. Ele (1) acha a PRIMEIRA linha do arquivo que contem `<Nome>(`,
+(2) concatena linhas ate a primeira terminada em `)`, (3) conta as virgulas dessa janela textual.
+Para `TranslateChaptersWithCacheAsync` a primeira ocorrencia no arquivo e o CALL SITE
+(`TranslationManager.cs:59`, 5 argumentos), nao a declaracao (`:147`) — a janela mede o CHAMADOR.
+Consequencia medida: uma copia do arquivo com 3 parametros extras inseridos na DECLARACAO (8 no
+total — exatamente a violacao S107 que o item existe para impedir) continua saindo `exit 0`. O gate
+e POSICIONAL, nao semantico: o proprio SUMMARY da iter 1 admite ter reordenado a declaracao de
+`TranslateSingleChapterAsync` para antes do chamador "para a janela cair sobre a declaracao".
+Mesma familia de defeito ja catalogada em `.jdi/todos.md` `[PROCESSO/DoD]` e causa das 2
+reprovacoes da phase `the-method-refactor`: o gate mede um PROXY conveniente — aqui "virgulas de
+uma janela textual" — em vez da propriedade.
+
+Propriedade REAL locked: **cada um dos dois metodos DECLARA no maximo 7 parametros, contados na
+assinatura da propria DECLARACAO, independentemente da posicao dela em relacao a qualquer
+chamador e do numero de linhas em que a assinatura esteja quebrada.** Comando novo (byte-a-byte
+igual ao que vai para o CONTEXT.md):
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do test $(grep -cE "^[[:space:]]*private async Task $M\(" "$F") -eq 1 || exit 1; N=$(awk -v m="private async Task $M(" 'index($0,m){f=1} f{for(i=1;i<=length($0);i++){h=substr($0,i,1); if(h=="("){p++} else if(h==")"){p--; if(p==0){print (s?k+1:0); exit}} else if(h=="<"){if(pc!=" ")a++} else if(h==">"){if(a>0)a--} else if(h=="["){b++} else if(h=="]"){if(b>0)b--} else if(h=="{"){c++} else if(h=="}"){if(c>0)c--} else if(h==","){if(p==1&&a==0&&b==0&&c==0)k++} else if(p>=1&&h!=" "&&h!="\t"){s=1} pc=h}}' "$F"); test -n "$N" && test "$N" -le 7 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+
+Como ele mede (3 mudancas de natureza, nao de limiar):
+1. ANCORA NA DECLARACAO: `^[[:space:]]*private async Task <Nome>(`, exigida EXATAMENTE 1 vez
+   (`grep -cE ... -eq 1`). Nenhum call site casa esse prefixo — `await <Nome>(...)` nao contem
+   `private async Task `. Some a declaracao (rename/mudanca de assinatura) e o gate reprova.
+2. CONTA PARAMETROS, NAO VIRGULAS DE JANELA: varre caractere a caractere a partir da ancora ate o
+   `)` que fecha a assinatura (profundidade de parenteses de volta a 0) e conta SEPARADORES de
+   parametro — virgulas em profundidade de parenteses 1 com profundidade 0 de `<>`, `[]` e `{}`.
+   Parametros = separadores + 1 (0 se a assinatura for vazia). Virgula de generico
+   (`Dictionary<string, int>`), de atributo (`[Foo(1, 2)]`) e de inicializador nao contam.
+3. LIMIAR NA UNIDADE CERTA: `-le 7` PARAMETROS (o antigo comparava `-le 6` VIRGULAS de uma janela
+   arbitraria). Mesma fronteira do S107, agora contada na unidade que a regra usa.
+
+Nenhuma protecao afrouxada: a clausula `grep -q "chapters.Select(chapter => chapter.HRef)"` fica
+BYTE-IDENTICA (S3267 continua preso do mesmo jeito), e o novo comando e ESTRITAMENTE mais forte —
+reprova tudo que o antigo reprovava e mais (matriz abaixo, colunas NEW/OLD).
+
+Prova por mutacao (executada; repo real NUNCA mutado — copias em `/tmp/s107/<var>/`,
+`git status --porcelain` vazio ao final; `Nc/Ns` = parametros medidos em
+`TranslateChaptersWithCacheAsync`/`TranslateSingleChapterAsync`):
+
+| Var | Mutante | NEW | OLD | Nc/Ns |
+|---|---|---|---|---|
+| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 |
+| m1 | 3 params extras na DECL de `TranslateChaptersWithCacheAsync` (8) | **`exit 1`** | `exit 0` | 8/5 |
+| m2 | 3 params extras na DECL de `TranslateSingleChapterAsync` (8) | **`exit 1`** | `exit 1` | 5/8 |
+| m3 | REORDER puro: as 2 decls movidas para DEPOIS dos chamadores | `exit 0` | **`exit 1`** | 5/5 |
+| m4 | m3 + 8 params na DECL de `TranslateSingleChapterAsync` | **`exit 1`** | `exit 1` | 5/8 |
+| m11 | a mesma violacao de 8 params colapsada em UMA linha | **`exit 1`** | `exit 0` | 8/5 |
+| m12 | fronteira: exatamente 7 params | `exit 0` | `exit 0` | 7/5 |
+| m5 | 6o param `Dictionary<string, int>` (virgula de generico) | `exit 0` | `exit 0` | 6/5 |
+| m7 | 6o param com default `1 > 0 ? 1 : 0` (`>` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m10 | 6o param com default `1 < 2 ? 1 : 0` (`<` sem par) | `exit 0` | `exit 0` | 6/5 |
+| m8 | clausula S3267 revertida para `foreach (var chapter in chapters)` | `exit 1` | `exit 1` | 5/5 |
+| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | — |
+
+m1 e o contra-exemplo do critico reproduzido: OLD `exit 0` (falso PASS), NEW `exit 1`. m3 e a prova
+de que o gate deixou de ser posicional: reordenacao pura (mesmo multiset de linhas, verificado por
+`sort`+`cmp`) NAO muda o resultado do NEW, enquanto DERRUBA o OLD. m8/m9 provam que nao houve
+regressao de gate.
+
+Residuos DECLARADOS (nenhum silenciado; nenhum ocorre nos 2 metodos de hoje, que nao tem valor
+default nem literal na assinatura):
+- Virgula dentro de LITERAL DE STRING num valor default (`string x = "a,b"`) e contada como
+  separador — medido em m6: 6 parametros reais reportados como 7. Direcao SEGURA (superestima):
+  so pode causar reprovacao falsa, nunca aprovacao falsa. Idem para virgula dentro de comentario
+  `//` escrito no meio da assinatura.
+- `<` colado a um identificador dentro de um valor default (ex.: `int x = 1<2 ? 1 : 0`, sem
+  espaco) abriria a profundidade de generico e subestimaria. As duas variantes com formatacao
+  normal foram fechadas e medidas: `>` sem par por clamp `if(a>0)a--` (m7 = 6, correto), `<` sem
+  par pela guarda `if(pc!=" ")` (m10 = 6, correto). C# exige constante em valor default, entao
+  expressao relacional em assinatura e teoricamente possivel e praticamente inexistente.
+- A ancora fixa a forma `private async Task <Nome>(`. Trocar tipo de retorno (`Task<T>`) ou
+  visibilidade faz `grep -c` dar != 1 e o gate REPROVA — falha ruidosa e deliberada: mudanca de
+  assinatura desses 2 metodos obriga revisitar este item do DoD em vez de passar silenciosamente.
+
+D-2026-07-30-sonar-zero-issues-9: O `Verify:` do item 9 do Definition of Done desta fase
+(CONTEXT.md - `TranslationManager.cs`, S107 + S3267) fica SUPERSEDED pelo comando registrado nesta
+decisao e copiado byte-a-byte para o CONTEXT.md. Ela NAO reescreve `D-2026-07-30-sonar-zero-issues-5`
+nem `-8` (append-only): o QUE deve ser feito segue identico - os 2 helpers privados
+`TranslateChaptersWithCacheAsync` e `TranslateSingleChapterAsync` declaram no maximo 7 parametros
+(S107) e o loop de `chapters` usa `.Select(chapter => chapter.HRef)` (S3267) - e as 3 propriedades
+que D-...-8 instalou (ancora na DECLARACAO exigida 1x, contagem de PARAMETROS e nao de virgulas de
+janela, limiar `-le 7` na unidade certa) continuam valendo integralmente. Muda UMA coisa: como o
+passe AWK trata COMENTARIO dentro da assinatura. Nenhuma linha de producao muda por causa desta
+decisao - as 2 assinaturas de hoje nao tem comentario algum; o que estava quebrado era a MEDIDA.
+
+Furo (W-1 da REVIEW iter 2, evasao EXECUTADA pelo reviewer e reproduzida de forma independente pelo
+DoD critic): o scanner char-a-char de D-...-8 le o texto cru da linha, entao um `)` dentro de um
+comentario na lista de parametros derruba a profundidade de parenteses a 0 e ENCERRA a varredura
+cedo. Medido nesta rodada: `IReadOnlyList<Chapter> chapters, // ver nota 2)` com 3 parametros extras
+(8 reais na DECLARACAO - exatamente a violacao S107 que o item existe para impedir) reporta N=3 e sai
+**exit 0**, falso PASS. Vale para os DOIS metodos (w1a, w1f) e para comentario de bloco de uma
+linha (`/* ver nota 2) fim */`) e multi-linha. Mesma familia ja fechada na phase `the-method-refactor`
+(D-2026-07-30-the-method-refactor-8): gate textual que conta estrutura tem de descartar comentario
+ANTES de contar.
+
+Correcao locked (nenhuma clausula removida ou afrouxada; das 3 clausulas do comando, 2 ficam
+BYTE-IDENTICAS - a ancora `grep -cE ... -eq 1` e `grep -q "chapters.Select(chapter => chapter.HRef)"`
+- e so o programa AWK muda): antes de contar, cada linha passa por um descarte de comentario de linha
+(`//`) e de bloco (`/* */`, com estado entre linhas), a MESMA tecnica do item 4 daquela phase. Duas
+diferencas deliberadas em relacao ao passe de la, ambas medidas: (1) a deteccao da ancora e a
+varredura rodam sobre a linha JA limpa, entao uma declaracao comentada nao ancora nada e o gate
+reprova por ausencia de medida (`test -n "$N"`); (2) o corte no `//` so acontece com PARIDADE PAR de
+aspas a esquerda - sem essa guarda, um default `string url = "https://x"` teria a virgula do
+parametro descartada junto com a falsa "abertura de comentario", subcontando 1 separador (fail-OPEN
+novo). Com a guarda, o mutante `res_url_in_sig` mede 6 no comando novo e no velho, identicos.
+
+Containment formal (provado por medida, nao alegado): em TODA entrada cujas duas assinaturas nao
+contenham comentario, o descarte e no-op sobre a regiao varrida e os dois comandos computam o MESMO
+N - verificado nos 14 mutantes sem comentario na assinatura (m0, m1, m2, m8, m9, ok_generic,
+ok_attribute, ok_default, ok_oneline, ok2_xmldoc_above, ok2_block_above, ok2_block_ml_above,
+res_url_in_sig, e o repo real), N identico em 14/14. Ou seja: nesse dominio inteiro - que inclui o
+codigo de hoje e todo mutante que o comando anterior ja pegava - as duas versoes sao a MESMA funcao,
+logo nenhuma protecao foi perdida. Fora dele (comentario DENTRO da assinatura) o comando anterior
+erra nas duas direcoes e o novo acerta: subconta com `)` no comentario (w1a/w1b/w1c/w1d/w1f: OLD le
+3, real 8/8/8/5/8) e superconta com virgula no comentario (div: OLD le 8, real 7). O UNICO caso em
+que o novo passa e o anterior reprova (`div_comma_in_comment_7real`) e uma REPROVACAO FALSA do
+anterior, residuo que D-...-8 ja declarava por escrito ("idem para virgula dentro de comentario `//`
+escrito no meio da assinatura ... direcao SEGURA (superestima): so pode causar reprovacao falsa"):
+sao 7 parametros DECLARADOS, e `exit 0` e o veredito CORRETO para o criterio. Remover um erro de
+medida nao afrouxa o criterio.
+
+Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do test $(grep -cE "^[[:space:]]*private async Task $M\(" "$F") -eq 1 || exit 1; N=$(awk -v m="private async Task $M(" '{l=$0; if(g){i=index(l,"*/"); if(i){l=substr(l,i+2); g=0} else next} o=0; while((z=index(substr(l,o+1),"//"))>0){z+=o; pre=substr(l,1,z-1); if(gsub(/"/,"&",pre)%2==0){l=substr(l,1,z-1); break} o=z+1} while(i=index(l,"/*")){r=substr(l,i+2); j=index(r,"*/"); if(j){l=substr(l,1,i-1) substr(r,j+2)} else {l=substr(l,1,i-1); g=1; break}} if(index(l,m))f=1; if(f){for(i=1;i<=length(l);i++){h=substr(l,i,1); if(h=="("){p++} else if(h==")"){p--; if(p==0){print (s?k+1:0); exit}} else if(h=="<"){if(pc!=" ")a++} else if(h==">"){if(a>0)a--} else if(h=="["){b++} else if(h=="]"){if(b>0)b--} else if(h=="{"){c++} else if(h=="}"){if(c>0)c--} else if(h==","){if(p==1&&a==0&&b==0&&c==0)k++} else if(p>=1&&h!=" "&&h!="\t"){s=1} pc=h}}}' "$F"); test -n "$N" && test "$N" -le 7 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+
+Prova por mutacao (20 mutantes; copias em scratchpad, repo real NUNCA mutado - `git status
+--porcelain` vazio ao final; `Nc/Ns` = parametros medidos em
+`TranslateChaptersWithCacheAsync`/`TranslateSingleChapterAsync`):
+
+| Var | Mutante | NEW | OLD | Nc/Ns NEW | Nc/Ns OLD |
+|---|---|---|---|---|---|
+| w1a | **evasao do reviewer**: 8 params na DECL + `// ver nota 2)` na assinatura | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1f | a mesma evasao no OUTRO metodo (`...SingleChapter`) | **`exit 1`** | `exit 0` | 5/8 | 5/3 |
+| w1b | 8 params + comentario de BLOCO `/* ver nota 2) fim */` na assinatura | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1c | 8 params + bloco `/* ... ) ... */` quebrado em 2 linhas | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1d | so o comentario `// ver nota 2)`, 5 params reais | `exit 0` | `exit 0` | 5/5 | 3/5 |
+| w1g | `(` desbalanceado no comentario + 8 params | `exit 1` | `exit 1` | 5/8 | none |
+| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| m1 | 8 params na DECL de `...ChaptersWithCache` | `exit 1` | `exit 1` | 8/5 | 8/5 |
+| m2 | 8 params na DECL de `...SingleChapter` | `exit 1` | `exit 1` | 5/8 | 5/8 |
+| m8 | clausula S3267 revertida (`chapters.Select(c => c.HRef)`) | `exit 1` | `exit 1` | 5/5 | 5/5 |
+| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | none/5 | none/5 |
+| ok | 6o param generico `IReadOnlyDictionary<string, int>` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | 6o param com atributo `[CallerMemberName] string caller = ""` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | 6o param com default `string extra = ""` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | assinatura inteira colapsada em UMA linha | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | `/// <summary>` imediatamente acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | `/* helper */` de uma linha acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | bloco `/*` ... `)` ... `*/` multi-linha acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| res | 6o param com default `string url = "https://x"` (guarda de aspas) | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| div | 7 params reais + `// nota, com virgula` na assinatura | `exit 0` | **`exit 1`** | 7/5 | 8/5 |
+
+w1a/w1f/w1b/w1c fecham o furo (OLD dava falso PASS nos quatro). m1/m2/m8/m9 provam zero regressao de
+gate. As 8 formas legitimas (ok/ok2/res + repo real) seguem `exit 0` - zero falso positivo novo,
+inclusive nas tres que um descarte de comentario mal feito quebraria (doc `///`, bloco acima da
+declaracao, `//` dentro de literal de string).
+
+Residuos DECLARADOS (nenhum silenciado; nenhum ocorre nas 2 assinaturas de hoje):
+- Verbatim/raw string com aspas escapadas na assinatura pode inverter a paridade da guarda e impedir
+  o corte no `//` - a linha volta a ser tratada como o comando ANTERIOR a tratava, nunca pior que o
+  estado locked por D-...-8. C# exige constante em valor default, entao literal exotico em assinatura
+  e teoricamente possivel e praticamente inexistente.
+- `/*` dentro de literal de string na assinatura nao tem guarda de aspas (so o `//` tem): abriria
+  estado de bloco e engoliria linhas ate um `*/`, fazendo a ancora sumir e `test -n "$N"` reprovar.
+  Direcao FAIL-CLOSED (reprovacao ruidosa), nunca aprovacao falsa.
+- Os residuos de D-...-8 que nao sao de comentario continuam valendo como la escrito (virgula dentro
+  de literal de string num default; `<` colado a identificador num default; ancora fixa na forma
+  `private async Task <Nome>(`, cuja ausencia REPROVA de proposito).
+- Evasao que exige parser C# de verdade (`#if`, texto da assinatura dentro de string) continua fora
+  de alcance de qualquer gate textual - jurisprudencia locked em D-2026-07-30-the-method-refactor-9.
+  Backstop semantico: o S107 do proprio SonarCloud (analisador Roslyn) rodando com
+  `sonar.qualitygate.wait=true` em New Code, mais o PR review humano.
+
+D-2026-07-30-sonar-zero-issues-10: o mecanismo anti-recorrencia locked por
+`D-2026-07-30-sonar-zero-issues-2` (`sonar.qualitygate.wait=true` no `dotnet-sonarscanner end`)
+ganha um guard contra desaparecimento SILENCIOSO, e o `Verify:` do item 10 do Definition of Done
+passa a prova-lo. Esta decisao NAO reescreve D-...-2 nem qualquer decisao anterior (append-only): o
+QUE deve existir segue identico - o `end` roda com `sonar.qualitygate.wait=true` e o job `sonarqube`
+e chamado por `pipeline.yml`. Acrescenta-se UMA garantia: o job nao pode ficar verde sem ter
+escaneado nada.
+
+Furo (W-3(d) da REVIEW iter 2): os 7 steps uteis de `.github/workflows/sonarqube.yml` sao
+condicionados a `if: env.SONAR_TOKEN != ''`. Sem o secret, TODOS sao pulados, o job termina com
+sucesso e o Quality Gate nunca roda - o mecanismo inteiro vira no-op sem nenhum sinal. Como
+`sonarqube` e required check da branch protection, um check verde sem scan e pior que a ausencia do
+check: da garantia falsa. Um mecanismo anti-recorrencia que desaparece em silencio nao e mecanismo.
+
+Correcao locked: um step novo `Assert the scan is not silently skipped`, gated em
+`if: env.SONAR_TOKEN == ''` (portanto so roda no cenario que interessa) e posicionado logo apos o
+`harden-runner`, antes do checkout. Ele resolve `TOKEN_EXPECTED` a partir do contexto e:
+- `TOKEN_EXPECTED == true` -> `::error` + `exit 1` (o job FALHA);
+- caso contrario -> `::warning` explicito de que scan e Quality Gate foram pulados (deixa de ser
+  silencioso mesmo onde falhar seria errado).
+
+`TOKEN_EXPECTED` = `github.repository == 'slipalison/TranslateReader'` E
+`github.actor != 'dependabot[bot]'` E NAO (`github.event_name == 'pull_request'` E
+`github.event.pull_request.head.repo.fork`). Tabela de contexto (comportamento COM o token ausente;
+com o token presente o step nem roda):
+
+| Contexto | TOKEN_EXPECTED | Efeito |
+|---|---|---|
+| `push` em `main` do repo de origem | true | **falha** |
+| PR de branch do proprio repo de origem | true | **falha** |
+| `workflow_dispatch` no repo de origem | true | **falha** |
+| PR vindo de FORK | false | warning (GitHub nao expoe secrets a PR de fork - ausencia legitima) |
+| PR do Dependabot | false | warning (Dependabot usa o cofre proprio de secrets, `.github/dependabot.yml` tem 2 ecossistemas semanais) |
+| fork/clone do repo rodando o proprio CI | false | warning (`github.repository` diferente) |
+
+Por que NAO falhar em fork/Dependabot: nesses contextos a ausencia do secret e uma decisao de
+seguranca do proprio GitHub, nao um defeito do repo - nao ha o que consertar, e falhar transformaria
+todo PR externo e todo bump semanal do Dependabot em check vermelho permanente. O sinal ali e o
+`::warning`, que ja mata o "silencio". Detalhe de semantica de expressao verificado: em `push`,
+`github.event.pull_request` e nulo, mas `&&` do GitHub curto-circuita no primeiro operando falso
+(`github.event_name == 'pull_request'`), entao nao ha desreferencia nula.
+
+Containment formal (mais forte que "provado clausula a clausula"): o comando anterior do item 10 e
+PREFIXO LITERAL do novo, seguido de ` && `. Logo `NEW exit 0` implica `OLD exit 0` por construcao,
+e nenhuma protecao antiga pode ter sido perdida. As clausulas acrescentadas medem, em pares
+presenca-positiva/ausencia-negativa (licao do `[PROCESSO/DoD]` de `regression-suite` em
+`todos.md`): EXATAMENTE 1 step gated em `env.SONAR_TOKEN == ''`; que o corpo desse step contenha
+`exit 1`; e que a expressao carregue as tres partes do escopo (`github.repository ==
+'slipalison/TranslateReader'`, `head.repo.fork`, `dependabot[bot]`) - ou seja, um "fix" que sempre
+falhe, quebrando fork e Dependabot, tambem reprova.
+
+Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`grep -A3 "dotnet-sonarscanner end" .github/workflows/sonarqube.yml | grep -q "sonar.qualitygate.wait=true" && W=.github/workflows/sonarqube.yml && test $(grep -c "if: env.SONAR_TOKEN == ''" "$W") -eq 1 && G=$(awk "/if: env\.SONAR_TOKEN == ''/{f=1;next} f&&/^      - name:/{exit} f" "$W") && printf '%s' "$G" | grep -qE "^ +exit 1$" && printf '%s' "$G" | grep -q "github.repository == 'slipalison/TranslateReader'" && printf '%s' "$G" | grep -q "head.repo.fork" && printf '%s' "$G" | grep -q "dependabot\[bot\]"`
+
+Prova por mutacao (9 mutantes do `sonarqube.yml`, copias em scratchpad, repo real nunca mutado):
+
+| Mutante | NEW | OLD |
+|---|---|---|
+| intacto (arquivo entregue) | `exit 0` | `exit 0` |
+| step de guard DELETADO | **`exit 1`** | `exit 0` |
+| `exit 1` do guard trocado por `echo` (guard vira aviso) | **`exit 1`** | `exit 0` |
+| `if:` do guard invertido para `!= ''` (nunca roda quando importa) | **`exit 1`** | `exit 0` |
+| `TOKEN_EXPECTED` hardcoded `'false'` (guard nunca falha) | **`exit 1`** | `exit 0` |
+| carve-out de FORK removido (quebraria PR externo) | **`exit 1`** | `exit 0` |
+| carve-out de DEPENDABOT removido (quebraria bump semanal) | **`exit 1`** | `exit 0` |
+| segundo step `== ''` duplicado (guard ambiguo) | **`exit 1`** | `exit 0` |
+| `sonar.qualitygate.wait=true` removido do `end` | `exit 1` | `exit 1` |
+
+O ultimo mutante e a prova de nao-regressao: a protecao original de D-...-2 continua presa
+identica. Os outros 7 sao furos que o comando anterior nao via.
+
+Escopo: muda `.github/workflows/sonarqube.yml` (CI), zero linha de `src/` e zero teste. NAO fecha os
+itens (a), (b) e (c) da W-3 - "Sonar way" so mede New Code (issue nova em linha legada nao alterada e
+smell abaixo do debt ratio seguem invisiveis) e o C# do app MAUI segue fora do scan por
+D-2026-07-30-sonar-zero-issues-6. Os tres sao limites do produto/pipeline, nao deste yml: (a) e (b)
+exigiriam trocar o Quality Gate na config do SonarCloud, que vive FORA do repo e nao e versionavel
+aqui; (c) exigiria job novo em `windows-latest` com workload MAUI. Registrados em `.jdi/todos.md`.
+
+D-2026-07-30-sonar-zero-issues-11 (defeito de execucao achado pelo CI do PR #12 — supersede o
+`Verify:` do item 10 do DoD, D-...-2/-10 permanecem intocadas no QUE decidem): a flag
+`sonar.qualitygate.wait=true` foi entregue na fase `end` do `dotnet-sonarscanner` e o CI provou que
+ali ela nao funciona. Log do job (run 30597997934, job 91054481106):
+`This setting is not valid in the "end" phase in this version of the C# plugin:
+sonar.qualitygate.wait` seguido de `Post-processing failed. Exit code: 1`. Ou seja: o mecanismo
+anti-recorrencia nao esperava Quality Gate nenhum — o job falhava por parametro invalido, ANTES de
+consultar o gate, e o PR ficava vermelho pelo motivo errado. Correcao: a flag passa para o array de
+argumentos do `dotnet-sonarscanner begin` (posicao onde o SonarScanner for .NET 11.2.1 a aceita) e
+sai do `end`.
+Consequencia para o gate: o `Verify:` anterior fazia `grep -A3 "dotnet-sonarscanner end" | grep -q
+"sonar.qualitygate.wait=true"` — provava PRESENCA da string, nunca VALIDADE da posicao, e por isso
+passou verde localmente enquanto o mecanismo estava quebrado no runner. Mesma familia de defeito ja
+catalogada em `.jdi/todos.md` (`[PROCESSO/DoD]`) e nas duas reprovacoes do DoD critic desta phase: o
+comando media um proxy conveniente em vez da propriedade. O `Verify:` novo exige a flag DENTRO do
+bloco `args=(...)` do `begin` E a ausencia dela na linha do `end` (a posicao invalida), mantendo
+integralmente as clausulas de guarda de token de D-...-10.
+Achado colateral do mesmo log, corrigido no mesmo esforco: `HtmlUtility.cs(104,5) warning S125
+"Remove this commented out code"` — smell NOVO, introduzido pelo proprio refactor de `InjectTags`
+desta phase (T-4). O comentario explicava o PORQUE do ponto de insercao do CSS (permitido por
+`.claude/rules/csharp.md` §7), mas continha `</head>` e identificadores, e a heuristica do S125 leu
+aquilo como codigo comentado. Reescrito como prosa, preservando a justificativa. Registro do limite
+que isso expoe: os analisadores do SonarCloud NAO rodam no `dotnet build` local, entao nenhum gate
+local desta phase poderia ter pego esse smell — so o CI pega, e so depois do push.
+
+D-2026-07-30-sonar-zero-issues-12 (fechamento do laco: 3 issues que a analise do PR #12 mostrou e
+que os gates locais nao podiam ver): com o `sonar.qualitygate.wait` finalmente valido (D-...-11), a
+primeira analise que de fato completou expos 3 issues abertas — nenhuma delas visivel em
+`dotnet build`/`dotnet test`, porque os analisadores do SonarCloud so rodam no scanner.
+(1) `test/TranslateReader.Tests/ParsingEngineTests.cs:246,278` — `external_roslyn:CA1826` INFO,
+"Do not use Enumerable methods on indexable collections". Sao issues NOVAS, introduzidas pelos
+testes que esta propria phase escreveu no T-6 (`.First()` sobre o `IReadOnlyList<Chapter>` de
+`ExtractChaptersAsync`). Registro honesto: a phase zerou 113 issues e introduziu 2 no caminho.
+Corrigidas com indexador (`[0]`) — mudanca de 2 caracteres por linha, sem alterar assercao.
+(2) `src/TranslateReader.Core/Utilities/HtmlUtility.cs:148` — `external_roslyn:SYSLIB1044`, o waiver
+declarado em D-...-3 mecanismo (c). O `#pragma warning disable/restore` esta na posicao correta
+(147/150, envolvendo o atributo em 148) e FUNCIONA no compilador: o build local e o do CI reportam 0
+SYSLIB no Core. Mas o importador `external_roslyn` do SonarCloud le o diagnostico do log do MSBuild
+e IGNORA o estado de supressao, entao a issue continuava aberta la. Conclusao operacional: para
+regra importada de analisador externo, `#pragma` nao e mecanismo de waiver valido no Sonar — so
+`sonar.issue.ignore.multicriteria` e. Esta issue migra do mecanismo (c) para o (b) da taxonomia
+D-...-3, com entrada `e3` (ruleKey `external_roslyn:SYSLIB1044`, resourceKey `**/HtmlUtility.cs`).
+O pragma permanece no codigo por higiene de build (suprime o aviso do compilador) e porque documenta
+o porque no ponto exato; a exclusao cuida do lado do Sonar.
+Licao registrada tambem em `.jdi/todos.md`: um "waiver" so vale se for provado no sistema que
+levanta a issue — provar no compilador e provar a coisa errada.
+
+D-2026-07-30-sonar-zero-issues-13 (CORRECAO de D-...-12, medida no CI do PR #12 — a correcao
+anterior estava errada no remedio, certa no diagnostico): D-...-12 afirmou que mover o waiver de
+`SYSLIB1044` do `#pragma` (mecanismo c) para `sonar.issue.ignore.multicriteria` (mecanismo b)
+fecharia a issue no SonarCloud. **Nao fecha.** Medicao do run 30598994128:
+- o argumento `e3` CHEGOU ao scanner (o log ecoa
+  `/d:sonar.issue.ignore.multicriteria.e3.ruleKey="external_roslyn:SYSLIB1044"` e
+  `multicriteria=e1,e2,e3`);
+- as duas exclusoes de regra NATIVA do mesmo bloco funcionaram: consulta a API por
+  `rules=Web:S7926,css:S4667` no PR retorna **0** issues abertas;
+- a issue `external_roslyn:SYSLIB1044` em `HtmlUtility.cs:148` seguiu **aberta**.
+Conclusao medida: `sonar.issue.ignore.multicriteria` filtra issue levantada pelos analisadores do
+proprio Sonar, e NAO filtra issue importada de analisador externo (`external_roslyn:*`). Somado ao
+que D-...-12 ja provou sobre o `#pragma` (funciona no compilador — o build local e o do CI emitem
+zero SYSLIB1044 —, mas o importador ignora o estado de supressao), o resultado e que **nenhum dos
+dois mecanismos que esta phase tem no repo remove uma issue de analisador externo do SonarCloud**.
+A entrada `e3` foi REMOVIDA do workflow: config que nao faz o que promete e a mesma classe de
+defeito da regra Semgrep `translatereader-zip-slip` ja catalogada em `.jdi/todos.md` — da falsa
+sensacao de cobertura para quem ler o arquivo depois.
+Sobram exatamente dois caminhos, ambos decisao do humano e nenhum deles executavel por esta phase:
+(1) marcar a issue como *Accepted* na UI do SonarCloud — caminho canonico do produto, mantem o
+registro visivel e auditado, e acao fora do repositorio;
+(2) `<NoWarn>SYSLIB1044</NoWarn>` no csproj do Core — funcionaria (o diagnostico deixa de existir
+para o importador), mas e supressao no PROJETO INTEIRO, exatamente a "vassoura" que o gate (b) desta
+phase reprova: esconderia um SYSLIB1044 legitimo em qualquer outro regex futuro do Core.
+Estado final honesto da phase: 112 das 113 issues fora da analise; a ultima e um waiver INFO
+documentado, com Quality Gate OK (INFO nao move rating nenhum), aguardando a decisao acima.

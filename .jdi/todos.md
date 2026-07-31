@@ -180,3 +180,73 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   Residuos de MEDIDA conhecidos e deliberadamente mantidos: `[ Fact ]` com espacos nao conta
   (fail-closed, subconta, consistente com o baseline 192) e `"[Fact]"` em string literal conta
   (sobreconta, so alcancavel de proposito) — fechar qualquer um dos dois exige parsear C#.
+
+## De `sonar-zero-issues` (2026-07-30)
+
+- **[CI/COBERTURA-DE-SCAN] O job Sonar nao compila o projeto App (`src/TranslateReader`) —
+  "0 issues" e cego pro head MAUI.** `.github/workflows/sonarqube.yml` roda `dotnet build
+  src/TranslateReader.Core/TranslateReader.Core.csproj -c Release` e `dotnet test
+  test/TranslateReader.Tests/TranslateReader.Tests.csproj` entre o `begin`/`end` do
+  `dotnet-sonarscanner` — nunca compila `src/TranslateReader.csproj` (o head MAUI, TFM
+  `net10.0-windows10.0.19041.0`). O analisador C#/Roslyn do Sonar so enxerga o que e compilado
+  nessa janela: `PageModels/*.cs`, `Pages/*.xaml.cs`, `Platforms/**/*.cs`,
+  `Utilities/*Converter.cs` e `MauiProgram.cs`/`AppShell.xaml.cs` (as mesmas 1516 linhas que
+  `D-2026-07-30-regression-suite-2` ja registrou como fora da rede de testes) sao
+  ESTRUTURALMENTE invisiveis ao Sonar hoje — nao aparecem nas 113 issues do inventario porque
+  nunca foram escaneadas, nao porque estao limpas. O mecanismo `sonar.qualitygate.wait=true`
+  desta fase (D-2026-07-30-sonar-zero-issues-2/6) protege exatamente o que o job ja escaneia
+  (Core C# + JS/HTML/CSS/PowerShell) — nao estende a cobertura de scan. Fechar isso exige um job
+  Sonar novo em `windows-latest` com workload MAUI instalado (o job `build` do CI ja roda
+  Windows por outro motivo — D-2026-07-28-ci-seguranca-5 — mas nunca rodou `dotnet-sonarscanner`
+  em cima dele), somando tempo de execucao e complexidade real de CI — candidato a phase propria
+  ou extensao de `pipeline-unificada`/`cobertura-e-ci`, nao decidido nem iniciado aqui. Ver
+  `D-2026-07-30-sonar-zero-issues-6`.
+  **Confirmado na rodada de warnings (iter 3):** segue exatamente como escrito acima — W-3(c) da
+  REVIEW nao foi fechada e nao deve ser: criar job Sonar em `windows-latest` com workload MAUI e
+  infraestrutura nova, ja declarada fora de escopo por `D-2026-07-30-sonar-zero-issues-6`.
+
+- **[CI/QUALITY-GATE] O "Sonar way" so mede New Code — dois cegos estruturais que nenhum comando
+  deste repo fecha** (W-3(a) e W-3(b) da REVIEW iter 2 da phase `sonar-zero-issues`). (a) Issue
+  levantada em linha LEGADA nao alterada nao entra em New Code: um upgrade de regra/analisador pode
+  flagrar codigo velho e o gate segue verde. (b) Code smell de New Code abaixo do debt ratio do
+  rating A (~5%) nao reprova: smells pequenos acumulam sem travar PR. **Por que nao foi fechado
+  aqui:** as duas condicoes vivem na definicao do Quality Gate, que e configuracao do projeto no
+  SonarCloud — FORA do repositorio, nao versionavel, nao alcancavel por commit nem por
+  `Verify:`. Fechar exigiria criar um Quality Gate customizado na UI do SonarCloud (ex.: condicoes
+  sobre Overall Code, nao so New Code) e apontar o projeto para ele — decisao de politica com custo
+  real (todo o legado passaria a reprovar de uma vez, o que e exatamente o que `D-2` isenta), a ser
+  tomada pelo dono do projeto, nao por uma phase de codigo. Ate la o mecanismo entregue
+  (`sonar.qualitygate.wait=true`, `D-2026-07-30-sonar-zero-issues-2`) protege o que promete e so
+  isso: **regressao em New Code do que o job compila**.
+
+- **[LEGADO/D-2] Achados legados do gate de seguranca/camada, nenhum tocado por esta phase, todos
+  pre-existentes em `main`** (W-5 da REVIEW iter 2 — enumerados aqui porque ate agora so existiam
+  no corpo da review): `catch { }` vazio em `src/TranslateReader/Pages/ReaderPage.xaml.cs:326` e
+  `:434`; `catch (OperationCanceledException) { }` sem rethrow em
+  `src/TranslateReader/PageModels/LibraryPageModel.cs:183`,
+  `src/TranslateReader/PageModels/ReaderPageModel.cs:222` e `ReaderPage.xaml.cs:308` (conversao de
+  cancelamento no boundary de UI — `.claude/rules/csharp.md` §1 diz que
+  `OperationCanceledException` sempre flui); `static` mutavel em
+  `src/TranslateReader.Core/Business/Engines/TranslationEngine.cs:16` (§2.4: statics sao
+  `static readonly` e imutaveis); desequilibrio de eventos `+=`/`-=` = 5/4 no app (§2.4: "todo `+=`
+  precisa de um `-=`"). Todos fora do diff da phase e cobertos por `D-2` (codigo anterior a
+  `4285f25`). **Nao refatorados aqui de proposito:** seriam o "rewrite amplo" que o escopo das
+  phases deste repo proibe, e todos ficam no app MAUI, que hoje esta fora da rede de testes
+  (`D-2026-07-30-regression-suite-2`) — mexer sem rede e trocar um cheiro conhecido por um bug
+  desconhecido. Candidatos naturais a uma phase de higiene do head MAUI, junto com a varredura
+  completa ja registrada no item `[AUDITORIA]` de `the-method-refactor`.
+
+## De `sonar-zero-issues` — pos-CI do PR #12 (2026-07-30)
+
+- **[PROCESSO/WAIVER] `#pragma warning disable` NAO e waiver valido para regra de analisador
+  externo no SonarCloud.** Provado no PR #12: o pragma em `HtmlUtility.cs:147-150` suprime
+  `SYSLIB1044` no compilador (build local e do CI: 0 SYSLIB no Core), mas o importador
+  `external_roslyn` le o diagnostico do log do MSBuild e ignora o estado de supressao — a issue
+  seguia aberta no SonarCloud. So `sonar.issue.ignore.multicriteria` fecha do lado do Sonar.
+  Regra geral para as proximas phases: um waiver so vale se for provado NO SISTEMA QUE LEVANTA a
+  issue; provar no compilador e provar a coisa errada. Ver `D-2026-07-30-sonar-zero-issues-12`.
+- **[PROCESSO/GATE] Gate local nao substitui a analise remota.** Os analisadores do SonarCloud
+  (`csharpsquid`, `external_roslyn`, `javascript`, `Web`, `css`) NAO rodam em `dotnet build`. Dois
+  achados desta phase so apareceram depois do push: o smell `S125` que o proprio refactor introduziu
+  e as 2 `CA1826` dos testes novos do T-6. Qualquer phase futura que prometa "0 issues do Sonar"
+  precisa contar com um ciclo de push+CI dentro do proprio escopo, nao so `Verify:` locais.

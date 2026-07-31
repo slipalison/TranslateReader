@@ -5,10 +5,14 @@ namespace TranslateReader.Utilities;
 
 public static partial class HtmlUtility
 {
+    // Book HTML is untrusted input (csharp.md 4): every regex here is bounded so a
+    // pathological chapter cannot pin a thread (S6444 / ReDoS).
+    private const int RegexTimeoutMilliseconds = 1000;
+
     public static string ExtractBodyContent(string html)
     {
         if (string.IsNullOrWhiteSpace(html)) return string.Empty;
-        var bodyStart = Regex.Match(html, @"<body\b[^>]*>", RegexOptions.IgnoreCase);
+        var bodyStart = BodyOpenTagRegex().Match(html);
         if (!bodyStart.Success) return html;
         var bodyEndIndex = html.IndexOf("</body>", bodyStart.Index + bodyStart.Length, StringComparison.OrdinalIgnoreCase);
         if (bodyEndIndex < 0) return html[(bodyStart.Index + bodyStart.Length)..];
@@ -71,72 +75,61 @@ public static partial class HtmlUtility
 
     public static string InjectTags(string html, string? baseTag, string? css)
     {
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            var headContent = (baseTag ?? "") + (css ?? "");
-            return $"<html><head>{headContent}</head><body></body></html>";
-        }
+        if (string.IsNullOrWhiteSpace(html)) return BuildEmptyDocument(baseTag, css);
 
-        bool hasBase = !string.IsNullOrEmpty(baseTag) && !html.Contains("<base ", StringComparison.OrdinalIgnoreCase);
-        bool hasCss = !string.IsNullOrEmpty(css);
+        var pendingBase = ResolvePendingBaseTag(html, baseTag);
+        var pendingCss = css ?? string.Empty;
+        if (pendingBase.Length == 0 && pendingCss.Length == 0) return html;
 
-        if (!hasBase && !hasCss) return html;
+        var headOpen = HeadOpenTagRegex().Match(html);
+        if (!CanInjectIntoHead(html, headOpen.Success, pendingBase.Length > 0))
+            return BuildFallbackHtml(html, baseTag, css);
 
-        var result = html;
+        var headOpenEnd = headOpen.Index + headOpen.Length;
+        var withBase = pendingBase.Length == 0 ? html : html.Insert(headOpenEnd, "\n" + pendingBase);
+        return pendingCss.Length == 0 ? withBase : InjectCss(withBase, pendingCss, headOpenEnd);
+    }
 
-        // Base tag: inject right after <head> (before EPUB content, needed for URL resolution)
-        if (hasBase)
-        {
-            var headMatch = Regex.Match(result, @"<head\b[^>]*>", RegexOptions.IgnoreCase);
-            if (headMatch.Success)
-            {
-                result = result.Insert(headMatch.Index + headMatch.Length, "\n" + baseTag);
-            }
-            else
-            {
-                return BuildFallbackHtml(result, baseTag, css);
-            }
-        }
+    private static string BuildEmptyDocument(string? baseTag, string? css) =>
+        $"<html><head>{baseTag ?? ""}{css ?? ""}</head><body></body></html>";
 
-        // CSS: inject right before </head> (after all EPUB CSS, for cascade priority)
-        if (hasCss)
-        {
-            var endHeadIndex = result.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
-            if (endHeadIndex >= 0)
-            {
-                result = result.Insert(endHeadIndex, "\n" + css + "\n");
-            }
-            else
-            {
-                var headMatch = Regex.Match(result, @"<head\b[^>]*>", RegexOptions.IgnoreCase);
-                if (headMatch.Success)
-                    result = result.Insert(headMatch.Index + headMatch.Length, "\n" + css);
-                else
-                    return BuildFallbackHtml(result, baseTag, css);
-            }
-        }
+    private static string ResolvePendingBaseTag(string html, string? baseTag) =>
+        string.IsNullOrEmpty(baseTag) || html.Contains("<base ", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : baseTag;
 
-        return result;
+    private static bool CanInjectIntoHead(string html, bool headOpenFound, bool injectingBase) =>
+        headOpenFound || (!injectingBase && html.Contains("</head>", StringComparison.OrdinalIgnoreCase));
+
+    // The reader stylesheet must come last inside the head element, otherwise the stylesheets
+    // shipped with the EPUB win the cascade. The head opening offset is the fallback anchor and
+    // stays valid after a base tag is inserted, because that insertion happens at the same offset.
+    private static string InjectCss(string html, string css, int headOpenEnd)
+    {
+        var endHeadIndex = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+        return endHeadIndex >= 0
+            ? html.Insert(endHeadIndex, "\n" + css + "\n")
+            : html.Insert(headOpenEnd, "\n" + css);
     }
 
     private static string BuildFallbackHtml(string html, string? baseTag, string? css)
     {
         var headContent = (baseTag ?? "") + (css ?? "");
 
-        var htmlMatch = Regex.Match(html, @"<html\b[^>]*>", RegexOptions.IgnoreCase);
+        var htmlMatch = HtmlOpenTagRegex().Match(html);
         if (htmlMatch.Success)
             return html.Insert(htmlMatch.Index + htmlMatch.Length, $"\n<head>{headContent}\n</head>");
 
-        var bodyMatch = Regex.Match(html, @"<body\b[^>]*>", RegexOptions.IgnoreCase);
+        var bodyMatch = BodyOpenTagRegex().Match(html);
         if (bodyMatch.Success)
         {
             var result = html.Insert(bodyMatch.Index, $"\n<head>{headContent}\n</head>\n");
-            if (!Regex.IsMatch(result, @"<html\b", RegexOptions.IgnoreCase))
+            if (!HtmlTagPresenceRegex().IsMatch(result))
                 result = "<html>" + result + "</html>";
             return result;
         }
 
-        var xmlMatch = Regex.Match(html, @"<\?xml\b[^>]*\?>", RegexOptions.IgnoreCase);
+        var xmlMatch = XmlDeclarationRegex().Match(html);
         if (xmlMatch.Success)
             return html.Insert(xmlMatch.Index + xmlMatch.Length,
                 $"\n<html>\n<head>{headContent}\n</head>\n<body>") + "\n</body>\n</html>";
@@ -144,12 +137,33 @@ public static partial class HtmlUtility
         return $"<html><head>{headContent}</head><body>{html}</body></html>";
     }
 
-    [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
     private static partial Regex ParagraphRegex();
 
-    [GeneratedRegex(@"<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    // SYSLIB1044: the backreference \1 blocks the source generator from emitting a complete
+    // implementation, so it falls back to the interpreted engine. Waiver per
+    // D-2026-07-30-sonar-zero-issues-3 mechanism (c): rewriting the pattern to drop the
+    // backreference would change which closing tag is matched, i.e. change behavior.
+#pragma warning disable SYSLIB1044
+    [GeneratedRegex(@"<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
     private static partial Regex TextBlockRegex();
+#pragma warning restore SYSLIB1044
 
-    [GeneratedRegex(@"<[^>]+>")]
+    [GeneratedRegex(@"<[^>]+>", RegexOptions.None, RegexTimeoutMilliseconds)]
     private static partial Regex HtmlTagRegex();
+
+    [GeneratedRegex(@"<body\b[^>]*>", RegexOptions.IgnoreCase, RegexTimeoutMilliseconds)]
+    private static partial Regex BodyOpenTagRegex();
+
+    [GeneratedRegex(@"<head\b[^>]*>", RegexOptions.IgnoreCase, RegexTimeoutMilliseconds)]
+    private static partial Regex HeadOpenTagRegex();
+
+    [GeneratedRegex(@"<html\b[^>]*>", RegexOptions.IgnoreCase, RegexTimeoutMilliseconds)]
+    private static partial Regex HtmlOpenTagRegex();
+
+    [GeneratedRegex(@"<html\b", RegexOptions.IgnoreCase, RegexTimeoutMilliseconds)]
+    private static partial Regex HtmlTagPresenceRegex();
+
+    [GeneratedRegex(@"<\?xml\b[^>]*\?>", RegexOptions.IgnoreCase, RegexTimeoutMilliseconds)]
+    private static partial Regex XmlDeclarationRegex();
 }

@@ -52,6 +52,11 @@ public class TranslationEngineTests
             sut.GenerateAsync("system", "test", 0.1f, 50, CancellationToken.None));
     }
 
+    // xUnit1004: the two integration tests below need a real .gguf fixture and are opt-in via
+    // LLAMASHARP_TEST_MODEL. Waiver per D-2026-07-30-sonar-zero-issues-3 mechanism (c), on the
+    // deliberate skip locked by D-2026-07-30-regression-suite-5(2): unskipping breaks CI, which
+    // has no model fixture.
+#pragma warning disable xUnit1004
     [Trait("Category", "Integration")]
     [Fact(Skip = "Requires GGUF model file for local development")]
     public async Task InitializeAsync_LoadsModel_WithValidPath()
@@ -78,4 +83,5 @@ public class TranslationEngineTests
 
         Assert.NotEmpty(result);
     }
+#pragma warning restore xUnit1004
 }

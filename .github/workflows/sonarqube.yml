@@ -34,6 +34,24 @@ jobs:
         with:
           egress-policy: audit
 
+      # Todo step abaixo e condicionado a `env.SONAR_TOKEN != ''`. Sem o secret o job
+      # ficava VERDE sem escanear nada: o mecanismo anti-recorrencia
+      # (D-2026-07-30-sonar-zero-issues-2) desaparecia em SILENCIO. Este guard troca o
+      # silencio por sinal (D-2026-07-30-sonar-zero-issues-10): falha no contexto que DEVE
+      # ter o secret (repo de origem) e avisa alto onde a ausencia e legitima e nao ha o
+      # que consertar - fork (secrets nao sao expostos a PR de fork) e Dependabot (usa o
+      # cofre proprio de secrets).
+      - name: Assert the scan is not silently skipped
+        if: env.SONAR_TOKEN == ''
+        env:
+          TOKEN_EXPECTED: ${{ github.repository == 'slipalison/TranslateReader' && github.actor != 'dependabot[bot]' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+        run: |
+          if [ "$TOKEN_EXPECTED" = "true" ]; then
+            echo "::error::SONAR_TOKEN is missing on the origin repository: the SonarCloud scan and the Quality Gate did NOT run (D-2026-07-30-sonar-zero-issues-2). Restore the repository secret."
+            exit 1
+          fi
+          echo "::warning::SONAR_TOKEN unavailable (fork or Dependabot run): the SonarCloud scan and the Quality Gate were skipped for this run."
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,9 +82,22 @@ jobs:
           SONAR_PR_BRANCH: ${{ inputs.pr-branch }}
           SONAR_PR_BASE: ${{ inputs.pr-base }}
         run: |
+          # Waivers auditaveis (D-2026-07-30-sonar-zero-issues-3 mecanismo (b),
+          # D-2026-07-30-sonar-zero-issues-4): as duas regras abaixo apontam para
+          # decisoes de produto em index.html, nao para defeitos.
+          #   Web:S7926 -> user-scalable=no e requisito do modo Paginated (viewport fixo);
+          #                WCAG 1.4.4 ja atendido pela tipografia configuravel.
+          #   css:S4667 -> <style id="reader-theme"> e vazio por design, populado em
+          #                runtime pelo CSS que o ThemeEngine gera.
           args=(/k:"slipalison_TranslateReader" /o:"slipalison"
                 /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
-                /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml")
+                /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+                /d:sonar.issue.ignore.multicriteria=e1,e2
+                /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
+                /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
+                /d:sonar.issue.ignore.multicriteria.e2.ruleKey="css:S4667"
+                /d:sonar.issue.ignore.multicriteria.e2.resourceKey="**/index.html"
+                /d:sonar.qualitygate.wait=true)
           if [ -n "$SONAR_PR_KEY" ]; then
             args+=(/d:sonar.pullrequest.key="$SONAR_PR_KEY"
                    /d:sonar.pullrequest.branch="$SONAR_PR_BRANCH"
@@ -82,6 +113,15 @@ jobs:
         if: env.SONAR_TOKEN != ''
         run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=opencover" --results-directory TestResults
 
+      # Mecanismo anti-recorrencia (D-2026-07-30-sonar-zero-issues-2): com
+      # sonar.qualitygate.wait=true o scanner espera o Quality Gate do SonarCloud e falha o
+      # job se ele reprovar. Como `sonarqube` ja e check obrigatorio (pipeline.yml), qualquer
+      # PR futuro que reintroduza bug/vulnerability/code smell bloqueante em New Code trava
+      # antes do merge, em vez de so aparecer na UI do SonarCloud.
+      # A flag vive na fase `begin` (D-2026-07-30-sonar-zero-issues-11): o SonarScanner for
+      # .NET 11.2.1 rejeita `sonar.qualitygate.wait` no `end` com
+      # "This setting is not valid in the end phase in this version of the C# plugin",
+      # saindo com exit 1 sem sequer consultar o Quality Gate.
       - name: End SonarQube analysis
         if: env.SONAR_TOKEN != ''
         run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"

@@ -6,13 +6,13 @@ window.getScrollInfo = function () {
     var visibleIdx = 0;
     var relScroll = 0;
 
-    for (var i = 0; i < chapters.length; i++) {
-        var rect = chapters[i].getBoundingClientRect();
+    for (const chapter of chapters) {
+        var rect = chapter.getBoundingClientRect();
         if (rect.top <= viewH / 2 && rect.bottom > viewH / 2) {
-            visibleHref = chapters[i].getAttribute('data-chapter-href');
-            visibleIdx = parseInt(chapters[i].getAttribute('data-chapter-index'));
-            var chapterTop = chapters[i].offsetTop;
-            var chapterH = chapters[i].offsetHeight;
+            visibleHref = chapter.dataset.chapterHref;
+            visibleIdx = Number.parseInt(chapter.dataset.chapterIndex);
+            var chapterTop = chapter.offsetTop;
+            var chapterH = chapter.offsetHeight;
             relScroll = chapterH > 0 ? (scrollY - chapterTop) / chapterH : 0;
             break;
         }
@@ -20,8 +20,8 @@ window.getScrollInfo = function () {
 
     if (!visibleHref && chapters.length > 0) {
         var last = chapters[chapters.length - 1];
-        visibleHref = last.getAttribute('data-chapter-href');
-        visibleIdx = parseInt(last.getAttribute('data-chapter-index'));
+        visibleHref = last.dataset.chapterHref;
+        visibleIdx = Number.parseInt(last.dataset.chapterIndex);
         relScroll = 1;
     }
 

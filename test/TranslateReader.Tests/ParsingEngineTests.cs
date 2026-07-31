@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using TranslateReader.Business.Engines;
 
 namespace TranslateReader.Tests;
@@ -232,5 +233,108 @@ public class ParsingEngineTests
             var html = await _sut.ExtractChapterContentAsync(WardleyEpub, chapter.HRef, ImagesDir);
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    // ── CreateTranslatedEpubAsync ───────────────────────────────────────────
+    // A escrita no zip e o unico caminho assincrono de flush do engine: se o writer nao
+    // esvaziar antes do archive fechar, o .epub sai com a entry original ou truncada.
+
+    [Fact]
+    public async Task Practice_CreateTranslatedEpubAsync_GravaCapituloTraduzidoEAtualizaTitulo()
+    {
+        var destinationDirectory = Path.Combine(Path.GetTempPath(), "translatereader_translated_" + Guid.NewGuid().ToString("N"));
+        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub))[0];
+        const string translatedTitle = "Pratica Leva a Perfeicao";
+        const string translatedHtml = "<html><body><p>PARAGRAFO TRADUZIDO SENTINELA</p></body></html>";
+
+        try
+        {
+            var destPath = await _sut.CreateTranslatedEpubAsync(
+                PracticeEpub,
+                translatedTitle,
+                new Dictionary<string, string> { [chapter.HRef] = translatedHtml },
+                destinationDirectory);
+
+            Assert.True(File.Exists(destPath));
+
+            using var archive = ZipFile.OpenRead(destPath);
+            Assert.Equal(translatedHtml, ReadEntry(archive, chapter.HRef));
+
+            var opf = ReadOpf(archive);
+            Assert.Contains($">{translatedTitle}</dc:title>", opf, StringComparison.Ordinal);
+            Assert.DoesNotContain("Practice Makes Perfect", opf, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(destinationDirectory))
+                Directory.Delete(destinationDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Practice_CreateTranslatedEpubAsync_NaoAlteraOArquivoOriginal()
+    {
+        var destinationDirectory = Path.Combine(Path.GetTempPath(), "translatereader_translated_" + Guid.NewGuid().ToString("N"));
+        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub))[0];
+        var originalLength = new FileInfo(PracticeEpub).Length;
+
+        try
+        {
+            var destPath = await _sut.CreateTranslatedEpubAsync(
+                PracticeEpub,
+                "Outro Titulo",
+                new Dictionary<string, string> { [chapter.HRef] = "<html><body><p>x</p></body></html>" },
+                destinationDirectory);
+
+            Assert.NotEqual(Path.GetFullPath(PracticeEpub), Path.GetFullPath(destPath));
+            Assert.Equal(originalLength, new FileInfo(PracticeEpub).Length);
+        }
+        finally
+        {
+            if (Directory.Exists(destinationDirectory))
+                Directory.Delete(destinationDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Practice_CreateTranslatedEpubAsync_IgnoraHRefInexistenteSemQuebrar()
+    {
+        var destinationDirectory = Path.Combine(Path.GetTempPath(), "translatereader_translated_" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var destPath = await _sut.CreateTranslatedEpubAsync(
+                PracticeEpub,
+                "Titulo",
+                new Dictionary<string, string> { ["nao/existe/capitulo.xhtml"] = "<p>ignorado</p>" },
+                destinationDirectory);
+
+            Assert.True(File.Exists(destPath));
+
+            using var archive = ZipFile.OpenRead(destPath);
+            Assert.Contains(">Titulo</dc:title>", ReadOpf(archive), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(destinationDirectory))
+                Directory.Delete(destinationDirectory, recursive: true);
+        }
+    }
+
+    private static string ReadEntry(ZipArchive archive, string href)
+    {
+        var normalized = href.Replace('\\', '/');
+        var entry = archive.Entries.First(e =>
+            string.Equals(e.FullName.Replace('\\', '/'), normalized, StringComparison.OrdinalIgnoreCase)
+            || e.FullName.Replace('\\', '/').EndsWith("/" + normalized, StringComparison.OrdinalIgnoreCase));
+        using var reader = new StreamReader(entry.Open());
+        return reader.ReadToEnd();
+    }
+
+    private static string ReadOpf(ZipArchive archive)
+    {
+        var entry = archive.Entries.First(e => e.FullName.EndsWith(".opf", StringComparison.OrdinalIgnoreCase));
+        using var reader = new StreamReader(entry.Open());
+        return reader.ReadToEnd();
     }
 }

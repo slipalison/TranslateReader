@@ -74,9 +74,9 @@ function _sendReady() {
     try {
         if (window.HybridWebView && typeof window.HybridWebView.SendRawMessage === 'function') {
             window.HybridWebView.SendRawMessage('ready');
-        } else if (window.chrome && window.chrome.webview) {
+        } else if (window.chrome?.webview) {
             window.chrome.webview.postMessage('__RawMessage|ready');
-        } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.webwindowinterop) {
+        } else if (window.webkit?.messageHandlers?.webwindowinterop) {
             window.webkit.messageHandlers.webwindowinterop.postMessage('__RawMessage|ready');
         } else if (window.hybridWebViewHost) {
             window.hybridWebViewHost.sendMessage('__RawMessage|ready');
