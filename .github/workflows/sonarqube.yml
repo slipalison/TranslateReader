@@ -96,7 +96,8 @@ jobs:
                 /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
                 /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
                 /d:sonar.issue.ignore.multicriteria.e2.ruleKey="css:S4667"
-                /d:sonar.issue.ignore.multicriteria.e2.resourceKey="**/index.html")
+                /d:sonar.issue.ignore.multicriteria.e2.resourceKey="**/index.html"
+                /d:sonar.qualitygate.wait=true)
           if [ -n "$SONAR_PR_KEY" ]; then
             args+=(/d:sonar.pullrequest.key="$SONAR_PR_KEY"
                    /d:sonar.pullrequest.branch="$SONAR_PR_BRANCH"
@@ -117,6 +118,10 @@ jobs:
       # job se ele reprovar. Como `sonarqube` ja e check obrigatorio (pipeline.yml), qualquer
       # PR futuro que reintroduza bug/vulnerability/code smell bloqueante em New Code trava
       # antes do merge, em vez de so aparecer na UI do SonarCloud.
+      # A flag vive na fase `begin` (D-2026-07-30-sonar-zero-issues-11): o SonarScanner for
+      # .NET 11.2.1 rejeita `sonar.qualitygate.wait` no `end` com
+      # "This setting is not valid in the end phase in this version of the C# plugin",
+      # saindo com exit 1 sem sequer consultar o Quality Gate.
       - name: End SonarQube analysis
         if: env.SONAR_TOKEN != ''
-        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN" /d:sonar.qualitygate.wait=true
+        run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"

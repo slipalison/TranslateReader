@@ -1118,3 +1118,28 @@ smell abaixo do debt ratio seguem invisiveis) e o C# do app MAUI segue fora do s
 D-2026-07-30-sonar-zero-issues-6. Os tres sao limites do produto/pipeline, nao deste yml: (a) e (b)
 exigiriam trocar o Quality Gate na config do SonarCloud, que vive FORA do repo e nao e versionavel
 aqui; (c) exigiria job novo em `windows-latest` com workload MAUI. Registrados em `.jdi/todos.md`.
+
+D-2026-07-30-sonar-zero-issues-11 (defeito de execucao achado pelo CI do PR #12 — supersede o
+`Verify:` do item 10 do DoD, D-...-2/-10 permanecem intocadas no QUE decidem): a flag
+`sonar.qualitygate.wait=true` foi entregue na fase `end` do `dotnet-sonarscanner` e o CI provou que
+ali ela nao funciona. Log do job (run 30597997934, job 91054481106):
+`This setting is not valid in the "end" phase in this version of the C# plugin:
+sonar.qualitygate.wait` seguido de `Post-processing failed. Exit code: 1`. Ou seja: o mecanismo
+anti-recorrencia nao esperava Quality Gate nenhum — o job falhava por parametro invalido, ANTES de
+consultar o gate, e o PR ficava vermelho pelo motivo errado. Correcao: a flag passa para o array de
+argumentos do `dotnet-sonarscanner begin` (posicao onde o SonarScanner for .NET 11.2.1 a aceita) e
+sai do `end`.
+Consequencia para o gate: o `Verify:` anterior fazia `grep -A3 "dotnet-sonarscanner end" | grep -q
+"sonar.qualitygate.wait=true"` — provava PRESENCA da string, nunca VALIDADE da posicao, e por isso
+passou verde localmente enquanto o mecanismo estava quebrado no runner. Mesma familia de defeito ja
+catalogada em `.jdi/todos.md` (`[PROCESSO/DoD]`) e nas duas reprovacoes do DoD critic desta phase: o
+comando media um proxy conveniente em vez da propriedade. O `Verify:` novo exige a flag DENTRO do
+bloco `args=(...)` do `begin` E a ausencia dela na linha do `end` (a posicao invalida), mantendo
+integralmente as clausulas de guarda de token de D-...-10.
+Achado colateral do mesmo log, corrigido no mesmo esforco: `HtmlUtility.cs(104,5) warning S125
+"Remove this commented out code"` — smell NOVO, introduzido pelo proprio refactor de `InjectTags`
+desta phase (T-4). O comentario explicava o PORQUE do ponto de insercao do CSS (permitido por
+`.claude/rules/csharp.md` §7), mas continha `</head>` e identificadores, e a heuristica do S125 leu
+aquilo como codigo comentado. Reescrito como prosa, preservando a justificativa. Registro do limite
+que isso expoe: os analisadores do SonarCloud NAO rodam no `dotnet build` local, entao nenhum gate
+local desta phase poderia ter pego esse smell — so o CI pega, e so depois do push.
