@@ -1143,3 +1143,25 @@ desta phase (T-4). O comentario explicava o PORQUE do ponto de insercao do CSS (
 aquilo como codigo comentado. Reescrito como prosa, preservando a justificativa. Registro do limite
 que isso expoe: os analisadores do SonarCloud NAO rodam no `dotnet build` local, entao nenhum gate
 local desta phase poderia ter pego esse smell — so o CI pega, e so depois do push.
+
+D-2026-07-30-sonar-zero-issues-12 (fechamento do laco: 3 issues que a analise do PR #12 mostrou e
+que os gates locais nao podiam ver): com o `sonar.qualitygate.wait` finalmente valido (D-...-11), a
+primeira analise que de fato completou expos 3 issues abertas — nenhuma delas visivel em
+`dotnet build`/`dotnet test`, porque os analisadores do SonarCloud so rodam no scanner.
+(1) `test/TranslateReader.Tests/ParsingEngineTests.cs:246,278` — `external_roslyn:CA1826` INFO,
+"Do not use Enumerable methods on indexable collections". Sao issues NOVAS, introduzidas pelos
+testes que esta propria phase escreveu no T-6 (`.First()` sobre o `IReadOnlyList<Chapter>` de
+`ExtractChaptersAsync`). Registro honesto: a phase zerou 113 issues e introduziu 2 no caminho.
+Corrigidas com indexador (`[0]`) — mudanca de 2 caracteres por linha, sem alterar assercao.
+(2) `src/TranslateReader.Core/Utilities/HtmlUtility.cs:148` — `external_roslyn:SYSLIB1044`, o waiver
+declarado em D-...-3 mecanismo (c). O `#pragma warning disable/restore` esta na posicao correta
+(147/150, envolvendo o atributo em 148) e FUNCIONA no compilador: o build local e o do CI reportam 0
+SYSLIB no Core. Mas o importador `external_roslyn` do SonarCloud le o diagnostico do log do MSBuild
+e IGNORA o estado de supressao, entao a issue continuava aberta la. Conclusao operacional: para
+regra importada de analisador externo, `#pragma` nao e mecanismo de waiver valido no Sonar — so
+`sonar.issue.ignore.multicriteria` e. Esta issue migra do mecanismo (c) para o (b) da taxonomia
+D-...-3, com entrada `e3` (ruleKey `external_roslyn:SYSLIB1044`, resourceKey `**/HtmlUtility.cs`).
+O pragma permanece no codigo por higiene de build (suprime o aviso do compilador) e porque documenta
+o porque no ponto exato; a exclusao cuida do lado do Sonar.
+Licao registrada tambem em `.jdi/todos.md`: um "waiver" so vale se for provado no sistema que
+levanta a issue — provar no compilador e provar a coisa errada.

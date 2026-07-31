@@ -92,11 +92,13 @@ jobs:
           args=(/k:"slipalison_TranslateReader" /o:"slipalison"
                 /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
                 /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
-                /d:sonar.issue.ignore.multicriteria=e1,e2
+                /d:sonar.issue.ignore.multicriteria=e1,e2,e3
                 /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
                 /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
                 /d:sonar.issue.ignore.multicriteria.e2.ruleKey="css:S4667"
                 /d:sonar.issue.ignore.multicriteria.e2.resourceKey="**/index.html"
+                /d:sonar.issue.ignore.multicriteria.e3.ruleKey="external_roslyn:SYSLIB1044"
+                /d:sonar.issue.ignore.multicriteria.e3.resourceKey="**/HtmlUtility.cs"
                 /d:sonar.qualitygate.wait=true)
           if [ -n "$SONAR_PR_KEY" ]; then
             args+=(/d:sonar.pullrequest.key="$SONAR_PR_KEY"

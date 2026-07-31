@@ -235,3 +235,18 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   (`D-2026-07-30-regression-suite-2`) — mexer sem rede e trocar um cheiro conhecido por um bug
   desconhecido. Candidatos naturais a uma phase de higiene do head MAUI, junto com a varredura
   completa ja registrada no item `[AUDITORIA]` de `the-method-refactor`.
+
+## De `sonar-zero-issues` — pos-CI do PR #12 (2026-07-30)
+
+- **[PROCESSO/WAIVER] `#pragma warning disable` NAO e waiver valido para regra de analisador
+  externo no SonarCloud.** Provado no PR #12: o pragma em `HtmlUtility.cs:147-150` suprime
+  `SYSLIB1044` no compilador (build local e do CI: 0 SYSLIB no Core), mas o importador
+  `external_roslyn` le o diagnostico do log do MSBuild e ignora o estado de supressao — a issue
+  seguia aberta no SonarCloud. So `sonar.issue.ignore.multicriteria` fecha do lado do Sonar.
+  Regra geral para as proximas phases: um waiver so vale se for provado NO SISTEMA QUE LEVANTA a
+  issue; provar no compilador e provar a coisa errada. Ver `D-2026-07-30-sonar-zero-issues-12`.
+- **[PROCESSO/GATE] Gate local nao substitui a analise remota.** Os analisadores do SonarCloud
+  (`csharpsquid`, `external_roslyn`, `javascript`, `Web`, `css`) NAO rodam em `dotnet build`. Dois
+  achados desta phase so apareceram depois do push: o smell `S125` que o proprio refactor introduziu
+  e as 2 `CA1826` dos testes novos do T-6. Qualquer phase futura que prometa "0 issues do Sonar"
+  precisa contar com um ciclo de push+CI dentro do proprio escopo, nao so `Verify:` locais.
