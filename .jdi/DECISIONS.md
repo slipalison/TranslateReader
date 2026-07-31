@@ -1300,3 +1300,70 @@ satisfazer a primeira sem mover a segunda o bastante. Nenhum `Verify:` do DoD de
 referencia `sonar.qualitygate.wait` ou status de CI como prova da meta de 90% — so os pisos
 locais por arquivo/agregado (D-...-5) e a confirmacao remota fica em
 `## Deferred to PR review`.
+
+D-2026-07-31-coverage-90-8 (os `Verify:` do DoD passam a medir a execucao ATUAL — supersede os
+comandos dos itens 1, 2, 3, 4 e 5 de `.jdi/phases/coverage-90/CONTEXT.md`; os CRITERIOS e os PISOS
+ficam identicos): o DoD critic da iter 1 derrubou tres linhas como OCAS e declarou residuo em
+outras duas, todas da mesma familia — **o gate lia um artefato de medicao que ja estava em disco em
+vez de exigir que a medicao DESTA execucao tivesse sucesso**. Dois defeitos mecanicos, ambos
+reproduzidos por medicao propria nesta iter 2:
+(i) **`;` descarta o exit code do runner.** Os itens 2, 3 e 4 usavam
+`<runner> >/dev/null 2>&1; <leitor do relatorio>` — se `node --test` ou `dotnet test` falhasse, o
+`awk`/`grep` seguinte lia o artefato antigo e o gate saia 0. Contra-exemplo EXECUTADO (item 2): com
+o `node` removido do `PATH` (regressao plausivel: o step `actions/setup-node` do `sonarqube.yml`
+nasceu nesta propria fase, T-8) e um `TestResults/js-lcov.info` valido de 5399 bytes em disco, o
+comando ANTIGO saiu **exit 0** sem executar 1 teste; o NOVO saiu 127. Contra-exemplo EXECUTADO
+(itens 3 e 4): invertendo uma assercao viva (`FileUtilityTests.cs:81`,
+`Assert.Equal(".epub", ...)` -> `".MUTANT"`), com a suite REPROVANDO, os comandos ANTIGOS sairam
+**exit 0** e os NOVOS sairam 1. Nota de honestidade: o contra-exemplo LITERAL do critico para o
+item 2 (`throw` num `.test.js`) NAO reproduz identico neste runtime — o reporter lcov do Node
+trunca o destino para um stub de 4 bytes (`TN:`), entao o comando antigo falhava por ACIDENTE, nao
+por design; o defeito estrutural continua real e esta provado pelos dois casos acima.
+(ii) **selecao de relatorio arbitraria.** Os itens 3 e 4 faziam
+`find TestResults -name "coverage.cobertura.xml" | sort | tail -1`. Os diretorios sao GUIDs do
+VSTest, entao `sort` e LEXICOGRAFICO e nao tem relacao nenhuma com tempo. Medido neste repo com 4
+relatorios em disco: o comando escolheu `9a248056-...` (mtime 07:49:59) enquanto o mais recente era
+`3e886ce2-...` (mtime 07:53:32).
+
+**Mecanismo adotado (deliberadamente determinista, nao heuristico):** artefato de destino LIMPO por
+execucao + encadeamento com `&&` do runner ate a assercao. Itens 3 e 4 escrevem em
+`--results-directory TestResults/dod3` e `TestResults/dod4`, apagados com `rm -rf` imediatamente
+antes, e o gate exige `find ... | wc -l` **igual a 1** — com um diretorio limpo e um unico projeto
+de teste existe exatamente 1 relatorio, entao a selecao deixa de ser heuristica e passa a ser
+provada. Item 2 apaga `TestResults/js-lcov.info` com `rm -f` antes de rodar e exige `test -s` depois
+— **mantendo o mesmo caminho que o CI usa** (`sonarqube.yml:107,137`), para que o item 5 continue
+aferindo a mesma string que o item 2 produz. Selecao por mtime foi REJEITADA: `find -printf "%T@"`
+nao existe em todo ambiente (BSD/macOS) e o diretorio limpo e determinista sem depender de
+extensao GNU.
+
+**Endurecimentos adicionais, todos com contra-exemplo executado e zero falso positivo no repo real:**
+(a) item 2 conta arquivos de PRODUCAO DISTINTOS no lcov e exige os **4** (`seen[f]` + `n==4`), nao
+so a razao agregada — assim um script que nunca foi carregado nao pode ser mascarado pelos outros
+tres; medido: esvaziando so `test/js/scroll.test.js`, ANTIGO exit 0 / NOVO exit 1. (b) itens 3 e 4
+passaram a comparar `line-rate` como NUMERO por classe (`$1+0<0.90` / `<0.99` em `awk`, reprovando
+se QUALQUER classe do arquivo ficar abaixo, e exigindo `n>0` matches) — o comando antigo montava um
+`R` MULTILINHA (`ModelAccess` tem 2 classes, `FileUtility` 3) e o `awk` acabava fazendo comparacao
+de STRING, que so coincide com a numerica por sorte; verificado que o novo reprova de fato
+apontando-o para `TranslationEngine.cs` (line-rate 0.21/0.4/0.2, deferido por D-...-4) -> exit 1, e
+subindo o piso de `FileUtility`/`HtmlUtility` para 1.01 -> exit 1, e o de JS para 101% -> exit 1.
+(c) item 1 (residuo "aceita suite VAZIA") exige `# pass > 1` e `# fail == 0` do reporter `tap`;
+medido que com os 4 `.test.js` esvaziados o Node ainda reporta `# pass 1` (conta o proprio arquivo
+como teste), entao um piso `> 0` seria vacuo e `> 1` e o menor piso que discrimina: ANTIGO exit 0 /
+NOVO exit 1. (d) item 5 (residuo "grep prova presenca de string, nao correspondencia") passou a
+EXTRAIR o caminho de `sonar.javascript.lcov.reportPaths=` e o de `--test-reporter-destination=` do
+mesmo YAML e exigir `"$P" = "$D"`, alem de exigir o `actions/setup-node@` SHA-pinned com regex de 40
+hex; medido: trocando o `reportPaths` para `TestResults/coverage/js.info`, ANTIGO exit 0 / NOVO exit
+1. Fecha localmente a mesma classe de defeito que quebrou `sonar-zero-issues`
+(`sonar.qualitygate.wait` presente e invalido, verde local, exit 1 no runner).
+
+**O que NAO muda:** os criterios e os PISOS sao literalmente os mesmos (JS agregado >= 85%,
+`ModelAccess.cs` >= 90%, `FileUtility.cs`/`HtmlUtility.cs` >= 99%, mesmo conjunto de strings do CI).
+Nenhum piso foi afrouxado e nenhum teste foi deletado ou relaxado — esta decisao troca COMO se mede,
+nunca O QUE se exige. Nenhuma linha de `src/` e tocada.
+
+**O que fica deferido de proposito:** o ratchet NUMERICO de contagem de teste JS (ex.: `# pass >=
+60`, a medida fechada desta fase) NAO entra aqui. O item `[PROCESSO/DoD]` de `.jdi/todos.md`
+(`## De the-method-refactor`) ja decidiu que piso de contagem se ergue na VIRADA da phase, com o
+numero ja publicado — apertar o proprio criterio no fim da corrida, sabendo que passa, e movimento
+de trave, nao endurecimento. O piso `> 1` adotado em (c) nao e ratchet: ele so nega a suite vazia,
+nao codifica a medida desta fase.
