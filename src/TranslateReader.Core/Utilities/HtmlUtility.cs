@@ -101,9 +101,9 @@ public static partial class HtmlUtility
     private static bool CanInjectIntoHead(string html, bool headOpenFound, bool injectingBase) =>
         headOpenFound || (!injectingBase && html.Contains("</head>", StringComparison.OrdinalIgnoreCase));
 
-    // CSS goes right before </head> so it wins the cascade over the EPUB's own stylesheets;
-    // headOpenEnd is the fallback anchor and stays valid after the base tag insertion,
-    // which happens at that same offset.
+    // The reader stylesheet must come last inside the head element, otherwise the stylesheets
+    // shipped with the EPUB win the cascade. The head opening offset is the fallback anchor and
+    // stays valid after a base tag is inserted, because that insertion happens at the same offset.
     private static string InjectCss(string html, string css, int headOpenEnd)
     {
         var endHeadIndex = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
