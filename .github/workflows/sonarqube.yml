@@ -71,6 +71,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Setup Node
+        if: env.SONAR_TOKEN != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
       - name: Install dotnet-sonarscanner
         if: env.SONAR_TOKEN != ''
         run: dotnet tool install --global dotnet-sonarscanner
@@ -89,9 +95,17 @@ jobs:
           #                WCAG 1.4.4 ja atendido pela tipografia configuravel.
           #   css:S4667 -> <style id="reader-theme"> e vazio por design, populado em
           #                runtime pelo CSS que o ThemeEngine gera.
+          # sonar.exclusions: o scanner .NET indexa como fonte MAIN todo arquivo fora de
+          # csproj (e por isso que o JS de Resources/Raw e medido sem buildar o projeto
+          # MAUI). Sem esta exclusao as ~500 linhas de test/js entrariam no denominador de
+          # coverage a 0% - o Node exclui test file do relatorio por padrao - e tambem
+          # renderiam issues de analisador em codigo de teste. Nao contradiz
+          # D-2026-07-31-coverage-90-1, que rejeitou excluir o JS de PRODUCAO.
           args=(/k:"slipalison_TranslateReader" /o:"slipalison"
                 /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
                 /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+                /d:sonar.javascript.lcov.reportPaths=TestResults/js-lcov.info
+                /d:sonar.exclusions="test/js/**"
                 /d:sonar.issue.ignore.multicriteria=e1,e2
                 /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
                 /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
@@ -112,6 +126,15 @@ jobs:
       - name: Test with OpenCover coverage
         if: env.SONAR_TOKEN != ''
         run: dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --collect:"XPlat Code Coverage;Format=opencover" --results-directory TestResults
+
+      # Cobertura dos 4 scripts do WebView (D-2026-07-31-coverage-90-1/-2): eles sao fonte
+      # MAIN para o Sonar mas nao pertencem a nenhum csproj, entao o lcov do node:test e a
+      # unica origem possivel. O reporter nao cria o diretorio de destino.
+      - name: Test WebView scripts with lcov coverage
+        if: env.SONAR_TOKEN != ''
+        run: |
+          mkdir -p TestResults
+          node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=TestResults/js-lcov.info test/js/
 
       # Mecanismo anti-recorrencia (D-2026-07-30-sonar-zero-issues-2): com
       # sonar.qualitygate.wait=true o scanner espera o Quality Gate do SonarCloud e falha o
