@@ -1165,3 +1165,30 @@ O pragma permanece no codigo por higiene de build (suprime o aviso do compilador
 o porque no ponto exato; a exclusao cuida do lado do Sonar.
 Licao registrada tambem em `.jdi/todos.md`: um "waiver" so vale se for provado no sistema que
 levanta a issue — provar no compilador e provar a coisa errada.
+
+D-2026-07-30-sonar-zero-issues-13 (CORRECAO de D-...-12, medida no CI do PR #12 — a correcao
+anterior estava errada no remedio, certa no diagnostico): D-...-12 afirmou que mover o waiver de
+`SYSLIB1044` do `#pragma` (mecanismo c) para `sonar.issue.ignore.multicriteria` (mecanismo b)
+fecharia a issue no SonarCloud. **Nao fecha.** Medicao do run 30598994128:
+- o argumento `e3` CHEGOU ao scanner (o log ecoa
+  `/d:sonar.issue.ignore.multicriteria.e3.ruleKey="external_roslyn:SYSLIB1044"` e
+  `multicriteria=e1,e2,e3`);
+- as duas exclusoes de regra NATIVA do mesmo bloco funcionaram: consulta a API por
+  `rules=Web:S7926,css:S4667` no PR retorna **0** issues abertas;
+- a issue `external_roslyn:SYSLIB1044` em `HtmlUtility.cs:148` seguiu **aberta**.
+Conclusao medida: `sonar.issue.ignore.multicriteria` filtra issue levantada pelos analisadores do
+proprio Sonar, e NAO filtra issue importada de analisador externo (`external_roslyn:*`). Somado ao
+que D-...-12 ja provou sobre o `#pragma` (funciona no compilador — o build local e o do CI emitem
+zero SYSLIB1044 —, mas o importador ignora o estado de supressao), o resultado e que **nenhum dos
+dois mecanismos que esta phase tem no repo remove uma issue de analisador externo do SonarCloud**.
+A entrada `e3` foi REMOVIDA do workflow: config que nao faz o que promete e a mesma classe de
+defeito da regra Semgrep `translatereader-zip-slip` ja catalogada em `.jdi/todos.md` — da falsa
+sensacao de cobertura para quem ler o arquivo depois.
+Sobram exatamente dois caminhos, ambos decisao do humano e nenhum deles executavel por esta phase:
+(1) marcar a issue como *Accepted* na UI do SonarCloud — caminho canonico do produto, mantem o
+registro visivel e auditado, e acao fora do repositorio;
+(2) `<NoWarn>SYSLIB1044</NoWarn>` no csproj do Core — funcionaria (o diagnostico deixa de existir
+para o importador), mas e supressao no PROJETO INTEIRO, exatamente a "vassoura" que o gate (b) desta
+phase reprova: esconderia um SYSLIB1044 legitimo em qualquer outro regex futuro do Core.
+Estado final honesto da phase: 112 das 113 issues fora da analise; a ultima e um waiver INFO
+documentado, com Quality Gate OK (INFO nao move rating nenhum), aguardando a decisao acima.
