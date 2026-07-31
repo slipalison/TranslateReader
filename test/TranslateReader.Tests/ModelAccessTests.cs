@@ -154,7 +154,8 @@ public class ModelAccessTests : IDisposable
         await sut.DownloadModelAsync(ModelUrl, progress, CancellationToken.None);
 
         Assert.Equal(1.0, reports[^1]);
-        Assert.True(reports.Count < 334, $"expected throttled reporting, got {reports.Count}");
+        // 334 reads of 0.3% each: the 0.5% step throttles below one per read, never to the final report alone.
+        Assert.InRange(reports.Count, 100, 333);
         for (var i = 1; i < reports.Count; i++)
             Assert.True(reports[i] > reports[i - 1], "progress must be monotonic");
     }
