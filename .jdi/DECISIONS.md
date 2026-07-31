@@ -942,3 +942,101 @@ default nem literal na assinatura):
 - A ancora fixa a forma `private async Task <Nome>(`. Trocar tipo de retorno (`Task<T>`) ou
   visibilidade faz `grep -c` dar != 1 e o gate REPROVA — falha ruidosa e deliberada: mudanca de
   assinatura desses 2 metodos obriga revisitar este item do DoD em vez de passar silenciosamente.
+
+D-2026-07-30-sonar-zero-issues-9: O `Verify:` do item 9 do Definition of Done desta fase
+(CONTEXT.md - `TranslationManager.cs`, S107 + S3267) fica SUPERSEDED pelo comando registrado nesta
+decisao e copiado byte-a-byte para o CONTEXT.md. Ela NAO reescreve `D-2026-07-30-sonar-zero-issues-5`
+nem `-8` (append-only): o QUE deve ser feito segue identico - os 2 helpers privados
+`TranslateChaptersWithCacheAsync` e `TranslateSingleChapterAsync` declaram no maximo 7 parametros
+(S107) e o loop de `chapters` usa `.Select(chapter => chapter.HRef)` (S3267) - e as 3 propriedades
+que D-...-8 instalou (ancora na DECLARACAO exigida 1x, contagem de PARAMETROS e nao de virgulas de
+janela, limiar `-le 7` na unidade certa) continuam valendo integralmente. Muda UMA coisa: como o
+passe AWK trata COMENTARIO dentro da assinatura. Nenhuma linha de producao muda por causa desta
+decisao - as 2 assinaturas de hoje nao tem comentario algum; o que estava quebrado era a MEDIDA.
+
+Furo (W-1 da REVIEW iter 2, evasao EXECUTADA pelo reviewer e reproduzida de forma independente pelo
+DoD critic): o scanner char-a-char de D-...-8 le o texto cru da linha, entao um `)` dentro de um
+comentario na lista de parametros derruba a profundidade de parenteses a 0 e ENCERRA a varredura
+cedo. Medido nesta rodada: `IReadOnlyList<Chapter> chapters, // ver nota 2)` com 3 parametros extras
+(8 reais na DECLARACAO - exatamente a violacao S107 que o item existe para impedir) reporta N=3 e sai
+**exit 0**, falso PASS. Vale para os DOIS metodos (w1a, w1f) e para comentario de bloco de uma
+linha (`/* ver nota 2) fim */`) e multi-linha. Mesma familia ja fechada na phase `the-method-refactor`
+(D-2026-07-30-the-method-refactor-8): gate textual que conta estrutura tem de descartar comentario
+ANTES de contar.
+
+Correcao locked (nenhuma clausula removida ou afrouxada; das 3 clausulas do comando, 2 ficam
+BYTE-IDENTICAS - a ancora `grep -cE ... -eq 1` e `grep -q "chapters.Select(chapter => chapter.HRef)"`
+- e so o programa AWK muda): antes de contar, cada linha passa por um descarte de comentario de linha
+(`//`) e de bloco (`/* */`, com estado entre linhas), a MESMA tecnica do item 4 daquela phase. Duas
+diferencas deliberadas em relacao ao passe de la, ambas medidas: (1) a deteccao da ancora e a
+varredura rodam sobre a linha JA limpa, entao uma declaracao comentada nao ancora nada e o gate
+reprova por ausencia de medida (`test -n "$N"`); (2) o corte no `//` so acontece com PARIDADE PAR de
+aspas a esquerda - sem essa guarda, um default `string url = "https://x"` teria a virgula do
+parametro descartada junto com a falsa "abertura de comentario", subcontando 1 separador (fail-OPEN
+novo). Com a guarda, o mutante `res_url_in_sig` mede 6 no comando novo e no velho, identicos.
+
+Containment formal (provado por medida, nao alegado): em TODA entrada cujas duas assinaturas nao
+contenham comentario, o descarte e no-op sobre a regiao varrida e os dois comandos computam o MESMO
+N - verificado nos 14 mutantes sem comentario na assinatura (m0, m1, m2, m8, m9, ok_generic,
+ok_attribute, ok_default, ok_oneline, ok2_xmldoc_above, ok2_block_above, ok2_block_ml_above,
+res_url_in_sig, e o repo real), N identico em 14/14. Ou seja: nesse dominio inteiro - que inclui o
+codigo de hoje e todo mutante que o comando anterior ja pegava - as duas versoes sao a MESMA funcao,
+logo nenhuma protecao foi perdida. Fora dele (comentario DENTRO da assinatura) o comando anterior
+erra nas duas direcoes e o novo acerta: subconta com `)` no comentario (w1a/w1b/w1c/w1d/w1f: OLD le
+3, real 8/8/8/5/8) e superconta com virgula no comentario (div: OLD le 8, real 7). O UNICO caso em
+que o novo passa e o anterior reprova (`div_comma_in_comment_7real`) e uma REPROVACAO FALSA do
+anterior, residuo que D-...-8 ja declarava por escrito ("idem para virgula dentro de comentario `//`
+escrito no meio da assinatura ... direcao SEGURA (superestima): so pode causar reprovacao falsa"):
+sao 7 parametros DECLARADOS, e `exit 0` e o veredito CORRETO para o criterio. Remover um erro de
+medida nao afrouxa o criterio.
+
+Comando novo (byte-a-byte igual ao que vai para o CONTEXT.md):
+`F=src/TranslateReader.Core/Business/Managers/TranslationManager.cs; for M in TranslateChaptersWithCacheAsync TranslateSingleChapterAsync; do test $(grep -cE "^[[:space:]]*private async Task $M\(" "$F") -eq 1 || exit 1; N=$(awk -v m="private async Task $M(" '{l=$0; if(g){i=index(l,"*/"); if(i){l=substr(l,i+2); g=0} else next} o=0; while((z=index(substr(l,o+1),"//"))>0){z+=o; pre=substr(l,1,z-1); if(gsub(/"/,"&",pre)%2==0){l=substr(l,1,z-1); break} o=z+1} while(i=index(l,"/*")){r=substr(l,i+2); j=index(r,"*/"); if(j){l=substr(l,1,i-1) substr(r,j+2)} else {l=substr(l,1,i-1); g=1; break}} if(index(l,m))f=1; if(f){for(i=1;i<=length(l);i++){h=substr(l,i,1); if(h=="("){p++} else if(h==")"){p--; if(p==0){print (s?k+1:0); exit}} else if(h=="<"){if(pc!=" ")a++} else if(h==">"){if(a>0)a--} else if(h=="["){b++} else if(h=="]"){if(b>0)b--} else if(h=="{"){c++} else if(h=="}"){if(c>0)c--} else if(h==","){if(p==1&&a==0&&b==0&&c==0)k++} else if(p>=1&&h!=" "&&h!="\t"){s=1} pc=h}}}' "$F"); test -n "$N" && test "$N" -le 7 || exit 1; done && grep -q "chapters.Select(chapter => chapter.HRef)" "$F"`
+
+Prova por mutacao (20 mutantes; copias em scratchpad, repo real NUNCA mutado - `git status
+--porcelain` vazio ao final; `Nc/Ns` = parametros medidos em
+`TranslateChaptersWithCacheAsync`/`TranslateSingleChapterAsync`):
+
+| Var | Mutante | NEW | OLD | Nc/Ns NEW | Nc/Ns OLD |
+|---|---|---|---|---|---|
+| w1a | **evasao do reviewer**: 8 params na DECL + `// ver nota 2)` na assinatura | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1f | a mesma evasao no OUTRO metodo (`...SingleChapter`) | **`exit 1`** | `exit 0` | 5/8 | 5/3 |
+| w1b | 8 params + comentario de BLOCO `/* ver nota 2) fim */` na assinatura | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1c | 8 params + bloco `/* ... ) ... */` quebrado em 2 linhas | **`exit 1`** | `exit 0` | 8/5 | 3/5 |
+| w1d | so o comentario `// ver nota 2)`, 5 params reais | `exit 0` | `exit 0` | 5/5 | 3/5 |
+| w1g | `(` desbalanceado no comentario + 8 params | `exit 1` | `exit 1` | 5/8 | none |
+| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| m1 | 8 params na DECL de `...ChaptersWithCache` | `exit 1` | `exit 1` | 8/5 | 8/5 |
+| m2 | 8 params na DECL de `...SingleChapter` | `exit 1` | `exit 1` | 5/8 | 5/8 |
+| m8 | clausula S3267 revertida (`chapters.Select(c => c.HRef)`) | `exit 1` | `exit 1` | 5/5 | 5/5 |
+| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | none/5 | none/5 |
+| ok | 6o param generico `IReadOnlyDictionary<string, int>` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | 6o param com atributo `[CallerMemberName] string caller = ""` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | 6o param com default `string extra = ""` | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| ok | assinatura inteira colapsada em UMA linha | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | `/// <summary>` imediatamente acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | `/* helper */` de uma linha acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| ok2 | bloco `/*` ... `)` ... `*/` multi-linha acima da declaracao | `exit 0` | `exit 0` | 5/5 | 5/5 |
+| res | 6o param com default `string url = "https://x"` (guarda de aspas) | `exit 0` | `exit 0` | 6/5 | 6/5 |
+| div | 7 params reais + `// nota, com virgula` na assinatura | `exit 0` | **`exit 1`** | 7/5 | 8/5 |
+
+w1a/w1f/w1b/w1c fecham o furo (OLD dava falso PASS nos quatro). m1/m2/m8/m9 provam zero regressao de
+gate. As 8 formas legitimas (ok/ok2/res + repo real) seguem `exit 0` - zero falso positivo novo,
+inclusive nas tres que um descarte de comentario mal feito quebraria (doc `///`, bloco acima da
+declaracao, `//` dentro de literal de string).
+
+Residuos DECLARADOS (nenhum silenciado; nenhum ocorre nas 2 assinaturas de hoje):
+- Verbatim/raw string com aspas escapadas na assinatura pode inverter a paridade da guarda e impedir
+  o corte no `//` - a linha volta a ser tratada como o comando ANTERIOR a tratava, nunca pior que o
+  estado locked por D-...-8. C# exige constante em valor default, entao literal exotico em assinatura
+  e teoricamente possivel e praticamente inexistente.
+- `/*` dentro de literal de string na assinatura nao tem guarda de aspas (so o `//` tem): abriria
+  estado de bloco e engoliria linhas ate um `*/`, fazendo a ancora sumir e `test -n "$N"` reprovar.
+  Direcao FAIL-CLOSED (reprovacao ruidosa), nunca aprovacao falsa.
+- Os residuos de D-...-8 que nao sao de comentario continuam valendo como la escrito (virgula dentro
+  de literal de string num default; `<` colado a identificador num default; ancora fixa na forma
+  `private async Task <Nome>(`, cuja ausencia REPROVA de proposito).
+- Evasao que exige parser C# de verdade (`#if`, texto da assinatura dentro de string) continua fora
+  de alcance de qualquer gate textual - jurisprudencia locked em D-2026-07-30-the-method-refactor-9.
+  Backstop semantico: o S107 do proprio SonarCloud (analisador Roslyn) rodando com
+  `sonar.qualitygate.wait=true` em New Code, mais o PR review humano.
