@@ -1,110 +1,112 @@
 # Phase 14: Zerar as issues do SonarQube e travar a regressao — Summary  (slug: sonar-zero-issues)
 
-**Status:** complete · **Tasks:** 8/8, 0 blocked · **Base:** `6132078` (main) — branch `jdi/sonar-zero-issues`
+**Status:** complete · **Tasks:** 8/8 · **Base:** `6132078` (main) · branch `jdi/sonar-zero-issues`
 
 ## Iter 1 — entrega das 8 tasks
 
-Commits (1 task = 1 commit, escopo `(sonar-zero-issues)`, tipos variados): `8e6200f` T-1 chore
-remove vendored dotnet-install.ps1 · `294d316` T-2 refactor modernize WebView DOM access in JS ·
-`ddda060` T-3 fix lang+title in index.html + waivers · `2bbdaee` T-4 refactor HtmlUtility →
-GeneratedRegex + split InjectTags · `d84f3e9` T-5 fix dispose pattern + test-project smells ·
-`df53909` T-6 fix async I/O, invariant date parser, named parameter constant · `229fe5d` T-7
-refactor group per-book translation context + simplify rebuild loop · `6cc6200` T-8 ci fail the
-build when the SonarCloud Quality Gate fails.
+8 commits, 1 task = 1 commit, escopo `(sonar-zero-issues)`, tipo por natureza (D-4): `8e6200f` T-1
+chore · `294d316` T-2 JS · `ddda060` T-3 index.html · `2bbdaee` T-4 HtmlUtility · `d84f3e9` T-5
+dispose · `df53909` T-6 async I/O · `229fe5d` T-7 TranslationRun · `6cc6200` T-8 ci.
 
-**Destino das 113 issues** (taxonomia D-...-3, nenhuma silenciada sem registro): **67 FIX**
-(15 `HtmlUtility`, 17 JS, 2 BUG `index.html`, 4 `ParsingEngine`, 3 `TranslationManager`, 9 nos 4
-`*Access`, 2 `TranslationEngine`, 15 em testes) · **41 REMOCAO** (`dotnet-install.ps1` deletado) ·
-**2 EXCLUSAO** multicriteria (`Web:S7926`+`css:S4667`, D-...-4) · **3 WAIVER** `#pragma`
-(`SYSLIB1044` + 2x `xUnit1004`). Soma exata: 113.
+**Destino das 113 issues** (taxonomia D-...-3; cruzamento item a item na secao (e) da REVIEW):
+**67 FIX** · **41 REMOCAO** (`dotnet-install.ps1`) · **2 EXCLUSAO** multicriteria (`Web:S7926` +
+`css:S4667`, D-...-4) · **3 WAIVER** `#pragma` = **113**. O diff tem exatamente 2 pares `#pragma
+disable/restore` e zero `NoWarn`/`SuppressMessage`/`sonar.exclusions`.
 
-**Gates:** build **0 erros** / 64 avisos (todos `MVVMTK0045` pre-existentes do app MAUI); testes
-**256 (254p / 2s / 0f)** vs baseline 229 (227/2) = **+27, 0 deletado, 0 afrouxado**; cobertura D-6
-sobre linhas ALTERADAS de producao **68/68 = 100,0%**; `dotnet format` 9 violacoes, **todas fora do
-diff da fase** (legado, D-2). DoD: 10/10 `Verify:` exit 0.
+**Gates:** build **0 erros** / 64 avisos (`MVVMTK0045` pre-existentes do app MAUI); testes **256
+(254p/2s/0f)** vs baseline 229 (227/2) = **+27, 0 deletado, 0 afrouxado**; cobertura D-6 das linhas
+ALTERADAS de producao **68/68 = 100,0%**; `dotnet format` 9 violacoes **todas fora do diff** (D-2);
+DoD 10/10.
 
-**Mutacao T-1/T-6** (executada, tree restaurado a cada mutante): `Verify:` novo do item 1 registrado
-em `D-...-7` (permissao readicionada -> exit 1; script restaurado -> exit 1) · `await using var
-writer`→`var writer` **PEGO** (1 falha) · `stream.SetLength(0)` removido **PEGO** (1) ·
-`OpfTitleRegex().Replace` removido **PEGO** (2) · `CommitAsync()` removido **PEGO** (6).
-**Prova negativa declarada:** remover `CultureInfo.InvariantCulture` dos 3 caminhos de LEITURA
-**NAO e pego** (12/12 passam) — o formato "O" e culture-invariant por especificacao (probe em
-ar-SA/th-TH/fa-IR/he-IL/ja-JP); a metade REAL do risco (escrita `ToString("O")`→`ToString()`)
-**e pega** (6 falhas), presa por `CultureRoundTripTests.cs`. Aqui InvariantCulture e conformidade
-de regra (S6580), nao correcao de comportamento.
+**Mutacao T-1/T-6:** `await using`→`var` writer, `stream.SetLength(0)`, `OpfTitleRegex().Replace` e
+`CommitAsync()` — os 4 **PEGOS**. **Prova negativa declarada:** remover `InvariantCulture` dos 3
+caminhos de LEITURA **NAO e pego** (o formato "O" e culture-invariant por especificacao; probe em 5
+locales); a metade REAL do risco (escrita `ToString("O")`→`ToString()`) **e pega** (6 falhas).
 
-**Desvios declarados:** T-6 usa I/O de disco em 3 testes novos (autorizado pelo PLAN — fixture
-`TestData/` ja existente, sem infra nova, limpeza em `finally`); assert do `<dc:title>` sobre texto
-interno; `HybridWebViewContractTests.cs:196-197` ajuste mecanico `items[i].x`→`item.x` acompanhando
-`for`→`for-of`; `GC.SuppressFinalize(this)` como 1a instrucao em `TranslationEngine.Dispose()`;
-T-7 declarou `TranslateSingleChapterAsync` antes do chamador para a janela do `awk` do DoD 9 cair
-sobre a declaracao — **este ultimo virou o blocker do DoD critic, tratado na iter 2**.
+**Desvio load-bearing:** T-7 declarou `TranslateSingleChapterAsync` antes do chamador para a janela
+do `awk` do DoD 9 cair sobre a declaracao — **virou o blocker do critic, tratado na iter 2**.
 
-**Fora de escopo (inalterado):** Quality Gate real no SonarCloud, confirmacao funcional do WebView e
-julgamento UX de `user-scalable=no` seguem em `Deferred to PR review`; o job Sonar nao compila
-`src/TranslateReader`, entao o C# do app segue invisivel ao scan (D-...-6, `todos.md`).
+## Iter 2 — fix do blocker do DoD critic (item 9, S107)
 
-## Iter 2 — fix do blocker do DoD critic
+**Blocker:** o `awk` do item 9 nao media parametros — achava a PRIMEIRA linha com `<Nome>(` e
+contava virgulas ate a proxima terminada em `)`. Para `TranslateChaptersWithCacheAsync` a primeira
+ocorrencia e o CALL SITE (`:59`), nao a declaracao (`:147`): o gate media o chamador. Contra-exemplo
+executado pelo critico — 8 params na DECLARACAO — saia **exit 0**.
 
-**Blocker (unico, objetivo):** o `Verify:` do item 9 do DoD nao media parametros. O `awk` antigo
-achava a PRIMEIRA linha com `<Nome>(`, concatenava ate a proxima terminada em `)` e contava as
-virgulas dessa janela. Para `TranslateChaptersWithCacheAsync` a primeira ocorrencia e o CALL SITE
-(`:59`), nao a declaracao (`:147`) — o gate media o chamador. O critico executou o contra-exemplo:
-copia com 3 params extras na DECLARACAO (8 no total, a violacao S107 que o item existe para
-impedir) saia **exit 0**. O desvio #1 da iter 1 confirmava: o gate era POSICIONAL, nao semantico.
+**Fix: o gate, nao o codigo — zero linha de producao ou teste alterada.** Decisao NOVA append-only
+`D-2026-07-30-sonar-zero-issues-8`, so depois a linha do CONTEXT.md; comando byte-identico nos 2
+arquivos. O novo ancora em `^[[:space:]]*private async Task <Nome>(` exigida 1x (call site
+nunca casa) e conta PARAMETROS declarados — virgula em profundidade 1 de parenteses, com
+`<>`/`[]`/`{}` em 0 — contra `-le 7`, nao mais virgulas de uma janela textual contra `-le 6`.
 
-**Fix: o gate, nao o codigo. Zero linha de producao ou teste alterada nesta iter** —
-`git diff HEAD -- src test` vazio. A iter 1 ja entrega 5 parametros reais em cada metodo via
-`TranslationRun`; o quebrado era a PROVA.
+**Matriz (NEW/OLD):** intacto 0/0 · **m1 contra-exemplo do critico 1/0** · m11 a mesma violacao em
+UMA linha **1/0** · **m3 REORDER puro 0/1** (gate deixou de ser posicional; permutacao provada por
+`sort`+`cmp`) · m2/m4 1/1 · m12 fronteira 7 params 0/0 · m5/m7/m10 formas legitimas 0/0 · m8 S3267
+revertido 1/1 · m9 decl renomeada 1/1 — os 2 ultimos provam zero regressao (a clausula
+`chapters.Select(chapter => chapter.HRef)` ficou BYTE-IDENTICA).
 
-Caminho seguido (o mesmo de `D-...-7`): decisao NOVA append-only
-**`D-2026-07-30-sonar-zero-issues-8`**, citando o contra-exemplo do critico e supersedendo APENAS o
-`Verify:`; so depois a linha do item 9 do `CONTEXT.md` foi trocada. Nenhuma decisao reescrita —
-`git diff .jdi/DECISIONS.md | grep -c '^-[^-]'` = **0** (858→944 linhas, 1 unico hunk no fim). O
-comando gravado nos 2 arquivos foi conferido byte-identico por `cmp`.
+## Iter 3 — rodada de warnings (/jdi-issue)
 
-**O que o comando novo mede** (3 mudancas de natureza, nao de limiar): (1) ancora em
-`^[[:space:]]*private async Task <Nome>(`, exigida EXATAMENTE 1 vez — call site nunca casa esse
-prefixo; (2) varre caractere a caractere ate o `)` que fecha a assinatura e conta SEPARADORES de
-parametro (virgulas em profundidade de parenteses 1, com `<>`/`[]`/`{}` em profundidade 0),
-params = separadores + 1; (3) limiar `-le 7` PARAMETROS (o antigo era `-le 6` VIRGULAS).
+Loop ja convergido na iter 2; esta rodada ataca os 5 warnings da REVIEW. **Diff em `src/` e `test/`:
+VAZIO** (`git diff HEAD~3 HEAD -- src/ test/` = 0 linhas) — so gate, CI e doc. Commits: `54cbacc` fix
+(gate item 9) · `d31a05c` ci (guard do token) · `af28696` docs (todos).
 
-**Matriz de mutacao** (repo real NUNCA mutado — copias em `/tmp/s107/<var>/`, `git status
---porcelain` limpo ao final; `Nc/Ns` = params medidos em `...ChaptersWithCache`/`...SingleChapter`):
+**W-1 — FECHADO.** Furo: `)` dentro de comentario na assinatura fechava a profundidade de parenteses
+e encerrava a varredura cedo; com 8 params reais saia **exit 0** (falso PASS). Fix
+(`D-2026-07-30-sonar-zero-issues-9`, append-only, supersede so o `Verify:` do item 9): descartar
+comentario de linha e de bloco antes de contar — MESMA tecnica do item 4 de `the-method-refactor` —
+mais guarda de PARIDADE DE ASPAS, sem a qual um default `string url = "https://x"` perderia a
+virgula do parametro (fail-open novo; com a guarda mede 6, igual ao comando velho).
+**20 mutantes, repo real nunca mutado.** Alvo: evasao exata do reviewer (`// ver nota 2)` + 8
+params) OLD **0** / NEW **1**; a mesma no OUTRO metodo 0/1; bloco `/* ... ) ... */` de 1 e de 2
+linhas 0/1. Nao-regressao: m1/m2/m8/m9 seguem NEW 1. Zero falso positivo em 8 formas legitimas
+(generico, `[CallerMemberName]`, default vazio, assinatura em 1 linha, doc `///` e bloco acima da
+decl, `//` em literal de string, repo real) — 8/8 exit 0. **Containment medido, nao alegado:** 2 das
+3 clausulas ficam byte-identicas e, nos 14 mutantes SEM comentario na assinatura, o N e IDENTICO nos
+dois comandos (14/14) — nesse dominio inteiro sao a mesma funcao. A unica divergencia em que NEW
+passa e OLD reprova (7 params reais + `// nota, com virgula`) e REPROVACAO FALSA do OLD, residuo ja
+declarado por escrito em D-...-8. Zero linha de producao.
 
-| Var | Mutante | NEW | OLD | Nc/Ns |
-|---|---|---|---|---|
-| m0 | copia intacta do arquivo entregue | `exit 0` | `exit 0` | 5/5 |
-| m1 | **contra-exemplo do critico**: 8 params na DECL de `...ChaptersWithCache` | **`exit 1`** | `exit 0` | 8/5 |
-| m2 | 8 params na DECL de `...SingleChapter` | **`exit 1`** | `exit 1` | 5/8 |
-| m3 | **REORDER puro**: as 2 decls movidas para DEPOIS dos chamadores | `exit 0` | **`exit 1`** | 5/5 |
-| m4 | m3 + 8 params na DECL de `...SingleChapter` | **`exit 1`** | `exit 1` | 5/8 |
-| m11 | a mesma violacao de 8 params colapsada em UMA linha | **`exit 1`** | `exit 0` | 8/5 |
-| m12 | fronteira: exatamente 7 params | `exit 0` | `exit 0` | 7/5 |
-| m5 | 6o param `Dictionary<string, int>` (virgula de generico) | `exit 0` | `exit 0` | 6/5 |
-| m7 | 6o param com default `1 > 0 ? 1 : 0` (`>` sem par) | `exit 0` | `exit 0` | 6/5 |
-| m10 | 6o param com default `1 < 2 ? 1 : 0` (`<` sem par) | `exit 0` | `exit 0` | 6/5 |
-| m8 | clausula S3267 revertida para `foreach (var chapter in chapters)` | `exit 1` | `exit 1` | 5/5 |
-| m9 | declaracao renomeada (ancora ausente) | `exit 1` | `exit 1` | — |
+**W-2 — NAO FECHADO (nao fechavel localmente).** O Quality Gate real so existe apos push+CI; a API
+do SonarCloud da 404 para a branch. Confirmado no `## Deferred to PR review` do CONTEXT.md. Nao ha
+como simular sem inventar evidencia.
 
-m1/m11 fecham o furo (OLD dava falso PASS). m3 prova que o gate deixou de ser posicional:
-reordenacao pura — mesmo multiset de linhas, conferido por `sort`+`cmp` — NAO muda o NEW e DERRUBA
-o OLD. m8/m9 provam **zero regressao de gate**: a clausula `chapters.Select(chapter => chapter.HRef)`
-ficou BYTE-IDENTICA e continua presa. O desvio #1 da iter 1 **nao foi revertido** — apenas deixou
-de importar, como m3 demonstra.
+**W-3(a)/(b) — NAO FECHADO (fora do repo).** "Sonar way" so mede New Code: issue nova em linha
+legada nao alterada e smell abaixo do debt ratio nao reprovam. As duas condicoes vivem no Quality
+Gate do SonarCloud — config de projeto, nao versionavel, inalcancavel por commit ou `Verify:`. Mudar
+e politica com custo real (todo o legado reprovaria de uma vez, exatamente o que D-2 isenta) e cabe
+ao dono do projeto. Registrado em `todos.md`.
 
-**Residuos DECLARADOS** (nenhum ocorre nos 2 metodos de hoje, que nao tem default nem literal na
-assinatura): virgula dentro de literal de string num valor default (`string x = "a,b"`) conta como
-separador — medido em m6: 6 params reais reportados como **7**; direcao SEGURA (superestima): so
-causa reprovacao falsa, nunca aprovacao falsa; idem virgula em comentario `//`. `<` colado a
-identificador dentro de um default (`1<2`, sem espaco) subestimaria — as 2 variantes com formatacao
-normal foram fechadas e medidas (`>` por clamp `if(a>0)a--`, m7 = 6; `<` pela guarda `if(pc!=" ")`,
-m10 = 6). A ancora fixa a forma `private async Task <Nome>(`: mudar tipo de retorno ou visibilidade
-faz o gate REPROVAR — falha ruidosa deliberada, obriga revisitar o item do DoD.
+**W-3(c) — NAO FECHADO (D-...-6).** Job Sonar em `windows-latest` com workload MAUI e infra nova, ja
+fora de escopo. Registro em `todos.md` conferido.
 
-**Gates re-rodados (numeros reais, iter 2):** `dotnet build TranslateReader.slnx -c Release` →
-**0 erros**, 64 avisos (identico a iter 1) · `dotnet test -c Release` → **256 total / 254 aprovados /
-2 ignorados / 0 falhas** · atributos `[Fact]`/`[Theory]` vivos = **235**, `Fact(Skip` = **2**
-(baseline preservado, nada deletado ou afrouxado) · `dotnet format --verify-no-changes` → as mesmas
-**9** violacoes pre-existentes fora do diff da fase · **10/10 `Verify:` do DoD extraidos LITERALMENTE
-do `CONTEXT.md` vigente saem exit 0** (item 9 agora com o comando novo).
+**W-3(d) — FECHADO.** `if: env.SONAR_TOKEN != ''` nos 7 steps fazia o mecanismo virar no-op
+SILENCIOSO atras de um required check — verde sem escanear e pior que check nenhum. Guard
+(`D-2026-07-30-sonar-zero-issues-10`), gated em `== ''`: **falha** onde o secret DEVE existir (repo
+de origem: push, PR do proprio repo, `workflow_dispatch`) e emite `::warning` alto onde a ausencia e
+legitima e nao ha o que consertar — PR de fork e Dependabot, a quem o GitHub deliberadamente nao
+entrega secrets do repo (`.github/dependabot.yml` tem 2 ecossistemas semanais). Falhar neles
+deixaria todo PR externo e todo bump semanal vermelho para sempre — dai o carve-out, ele proprio
+preso pelo gate. Item 10 do DoD endurecido: o comando anterior e **prefixo literal** do novo, entao
+NEW exit 0 implica OLD exit 0 por construcao. **9 mutantes do yml** — guard deletado, `exit 1`
+virando `echo`, `if:` invertido, `TOKEN_EXPECTED` fixo em `false`, carve-outs de fork e de
+Dependabot removidos, guard duplicado: os 7 OLD **0** / NEW **1**; `sonar.qualitygate.wait=true`
+removido 1/1 (protecao original intacta); intacto 0/0.
+
+**W-4 — NAO FECHADO (D-2).** As 9 violacoes de `dotnet format` seguem 9, nos mesmos 4 arquivos
+legados fora do diff. Endereco ja existe: a phase `baseline-de-estilo` do ROADMAP, dona do
+`.editorconfig`. Consertar aqui e refactor de legado por estilo, proibido por D-2.
+
+**W-5 — NAO FECHADO (D-2), agora ENUMERADO.** `catch { }` em `ReaderPage.xaml.cs:326,434`;
+`catch (OperationCanceledException) { }` sem rethrow em `LibraryPageModel.cs:183`,
+`ReaderPageModel.cs:222`, `ReaderPage.xaml.cs:308`; static mutavel em `TranslationEngine.cs:16`;
+eventos `+=`/`-=` 5/4. Todos pre-existentes em `main`, fora do diff. So existiam no corpo da review
+— foram para `todos.md` com file:line e com o motivo de nao serem tocados: vivem no head MAUI, fora
+da rede de testes (D-2026-07-30-regression-suite-2), e mexer sem rede troca cheiro conhecido por bug
+desconhecido — o "rewrite amplo" que o escopo das phases deste repo proibe.
+
+**Gates re-rodados (iter 3):** build `-c Release` **0 erros**, 64 avisos (identico as iters 1-2) ·
+`dotnet test -c Release` **256 / 254p / 2s / 0f** · atributos vivos 233 + 2 `Fact(Skip` = **235**
+(baseline intacto — diff de `test/` vazio) · `dotnet format --verify-no-changes` as mesmas **9**
+legadas · **10/10 `Verify:` extraidos LITERALMENTE do CONTEXT.md vigente saem exit 0** (itens 9 e 10
+com os comandos novos) · `.jdi/DECISIONS.md` append-only: **0 linhas removidas** nos 2 appends.
