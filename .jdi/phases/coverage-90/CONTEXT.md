@@ -82,11 +82,14 @@ nenhuma issue nova — partindo de 75,9% em `main` (1428 lines to cover, 329 des
 
 - [ ] CI wiring para cobertura JS: `sonarqube.yml` ganha `actions/setup-node`, o comando de
       teste JS com lcov, e `sonar.javascript.lcov.reportPaths` apontando pro arquivo certo.
-      **Verify:** `W=.github/workflows/sonarqube.yml && P=$(grep -oE 'sonar\.javascript\.lcov\.reportPaths=[^ ")]+' "$W" | head -1 | cut -d= -f2) && D=$(grep -oE -- '--test-reporter-destination=[^ ]+' "$W" | head -1 | cut -d= -f2) && test -n "$P" && test "$P" = "$D" && grep -qE 'uses: actions/setup-node@[0-9a-f]{40}' "$W" && grep -q -- '--experimental-test-coverage' "$W" && grep -q -- '--test-reporter=lcov' "$W"`
-      **Source:** CONTEXT (D-...-2); comando superseded por D-2026-07-31-coverage-90-8
-      (PROVA a correspondencia entre o caminho que o Sonar le e o que o reporter escreve, em vez
-      de so constatar presenca das duas strings; `setup-node` exigido SHA-pinned por regex de 40
-      hex; mesmo conjunto de flags do comando antigo)
+      **Verify:** `W=.github/workflows/sonarqube.yml && P=$(grep -oE 'sonar\.javascript\.lcov\.reportPaths=[^ ")]+' "$W" | head -1 | cut -d= -f2) && D=$(grep -oE -- '--test-reporter-destination=[^ ]+' "$W" | head -1 | cut -d= -f2) && test -n "$P" && test "$P" = "$D" && test "$P" = "TestResults/js-lcov.info" && grep -qE 'uses: actions/setup-node@[0-9a-f]{40}' "$W" && grep -q -- '--experimental-test-coverage' "$W" && grep -q -- '--test-reporter=lcov' "$W"`
+      **Source:** CONTEXT (D-...-2); comando superseded por D-2026-07-31-coverage-90-8 e depois
+      por D-2026-07-31-coverage-90-9 (PROVA a correspondencia entre o caminho que o Sonar le e o
+      que o reporter escreve, em vez de so constatar presenca das duas strings; `setup-node`
+      exigido SHA-pinned por regex de 40 hex; mesmo conjunto de flags do comando antigo; -9 pina
+      TAMBEM o literal `TestResults/js-lcov.info`, de modo que uma renomeacao COORDENADA dos dois
+      lados do YAML — que mantinha `P = D` verde enquanto o item 2 media o caminho hardcoded —
+      passa a reprovar; aditivo, nenhum piso ou criterio alterado)
 
 ### Manual
 - _(none)_
