@@ -1,9 +1,11 @@
 # Phase 18: Traducao interativa cega a paragrafo em `<div>` (leitura) — Summary  (slug: div-paragraph-reading)
 
-**Status:** complete · **Tasks:** 6/6 · **Blocked:** 0 · **Iter:** 2 (ralph)
+**Status:** complete · **Tasks:** 6/6 · **Blocked:** 0 · **Iter:** 3 (ralph)
 
 Iter 1 entregou o codigo (secoes abaixo). Iter 2 nao tocou em `src/` nem `test/` — consertou os
-`Verify:` ocos do DoD apontados pelo `## DoD Critic` do REVIEW.md (`## Iter 2` no fim deste arquivo).
+`Verify:` ocos do DoD apontados pelo `## DoD Critic` do REVIEW.md (`# Iter 2` no meio deste
+arquivo). Iter 3 nao tocou em `src/` nem no CONTEXT.md — fechou por COMPORTAMENTO o mutante M-E que
+o DoD critic da iter 2 deixou passar (`## Iter 3` no fim deste arquivo).
 
 # Iter 1 — o fix
 
@@ -245,3 +247,98 @@ W-2 (harness falha ABERTO para aspas dentro de valor de atributo, `harness.js:31
 de `main`) e W-3 (branch `chapter?.Title`, `TranslationManager.cs:265`, 83,3% de branch, divida
 pre-existente — o irmao intocado `TranslateParagraphsAsync` tem o mesmo 0,8333) seguem em
 `.jdi/todos/`, como na iter 1. Nenhum e alcancado por esta iter, que nao tocou codigo.
+
+## Iter 3 — fecha M-E por comportamento
+
+**Escopo:** 1 commit, 1 arquivo, `+53` linhas em `test/js/translation.test.js`. **ZERO linha de
+`src/`** — `translation.js` esta correto, M-E e um mutante hipotetico. **ZERO linha de
+`CONTEXT.md`/`.jdi/decisions/`** — nenhuma decisao nova foi necessaria (justificativa abaixo).
+Blocker unico do `## DoD Critic (enhanced)`: a suite tinha `getVisibleParagraphs` sobre
+`CALIBRE_BODY` e `clearTranslations` sobre div unico, mas **nao tinha `applyTranslations` sobre um
+corpo capaz de DESSINCRONIZAR**. O teste de apply existente
+(`applyTranslations writes into the calibre div the reported index points at`) roda sobre
+`<p>one</p><div>two</div><p>three</p>`, forma em que TODO elemento e paragrafo — qualquer seletor
+ingenuo coincide com o helper, entao o teste nao discrimina.
+
+### Os 2 testes novos (ambos com `calibre` no nome, `test('` na coluna 0)
+
+| Teste | O que amarra |
+|---|---|
+| `applyTranslations writes each calibre index into the element getVisibleParagraphs read it from` | Paridade elemento a elemento sobre `CALIBRE_BODY`: cada indice devolvido pelo read escreve no MESMO elemento (`textContent` + `dataset.original` dos 5 blocos do capitulo, na ordem), e os 2 blocos nunca reportados (div-`<img>`, div-`&#8226;`) ficam intactos |
+| `applyTranslations leaves the calibre wrapper alone instead of collapsing the chapter` | O wrapper nao recebe `dataset.original`, o capitulo mantem seus 5 blocos, e a lista relida DEPOIS da escrita e identica a lida ANTES (paridade read↔write) |
+
+Helper `elementChildren(node)` (filtra `nodeType === 1`) porque o fixture e `join('\n')` e o wrapper
+tambem carrega text nodes.
+
+### Matriz RED-first (`.claude/rules/csharp.md` §6)
+
+Lab **descartavel** em scratchpad (`lab-me`: copia dos 4 scripts de producao + `test/js`, estrutura
+de pastas preservada porque `harness.js` resolve `SCRIPT_DIR` por caminho relativo). **Repo real
+nunca mutado** — `git status` durante toda a iter: so `test/js/translation.test.js` (+ `.gitignore`
+do usuario, fora de commit). Mutante M-E aplicado SO no lab: em `applyTranslations`,
+`var ps = _translatableCandidates(pg);` -> `var ps = pg.querySelectorAll('[data-original], p, div');`
+precedido de comentario de BLOCO multi-linha contendo `_translatableCandidates(pg)`, para repor a
+contagem do grep estrutural.
+
+| Codigo | Suite | `node --test test/js/` | DoD item 1 | DoD item 2 |
+|---|---|---|---|---|
+| **M-E (lab)** | ANTIGA (`HEAD~1`) | `# tests 73 / # pass 73 / # fail 0` — **exit 0** | **exit 0** | **exit 0** |
+| **M-E (lab)** | NOVA | `# tests 75 / # pass 73 / # fail 2` — **exit 1** | exit 0 | **exit 1** |
+| **REAL (repo)** | NOVA | `# tests 75 / # pass 75 / # fail 0` — **exit 0** | exit 0 | exit 0 |
+
+As 2 falhas sob M-E sao EXATAMENTE os 2 testes novos — nenhum teste da era anterior quebra sob
+mutante (o mutante coincide com o helper nos corpos antigos, por isso ele passava). O assert que
+disparou nomeia o bug de usuario: `the wrapper div itself was translated` /
+`actual: 'First calibre paragraph...\nSecond calibre paragraph...\n&#8226;\nThird paragraph...'` —
+i.e. o capitulo inteiro colapsado em um bloco, exatamente o `CHAPTER_COLLAPSED: true` do critico.
+
+Reproducao confirmada da premissa do critico (linha 1 da matriz): M-E realmente saia exit 0 nos
+gates e verde na suite. Depois do fix, **os itens 2 e 3 do DoD deixam de ser ocos para M-E** — item
+2 vai de exit 0 para exit 1 sob o mutante (item 3 roda a suite inteira com `# fail 0`, mesma
+consequencia). A mitigacao do W-2 da review ("os itens 2/3 pegam o desvio real"), que o critico
+falsificou, passa a ser verdadeira **por teste**, nao por redacao.
+
+### Item 1 do DoD: por que NAO mexi (argumento, nao omissao)
+
+O `sed -e 's://.*::' -e 's:/\*.*\*/::'` do item 1 e por LINHA e nunca cobrira comentario de bloco
+multi-linha nem string literal — fechar isso de verdade exige um tokenizador de JS, nao mais um
+`sed`; qualquer `sed` multi-linha seria outra aproximacao com o proximo bypass do lado de fora.
+O `**Source:**` do item 1 ja declara, desde a iter 2, que ele e gate **ESTRUTURAL** de fonte unica e
+que a prova de **COMPORTAMENTO** e delegada aos itens 2 e 3. Ate a iter 2 essa delegacao era falsa
+(M-E provou); com os 2 testes novos ela e verdadeira e **medida** (tabela acima). Endurecer o grep
+depois disso seria trocar prova comportamental por aproximacao textual — custo de uma decisao nova
++ edicao de CONTEXT + re-rodada dos 7 gates, sem fechar nenhum mutante que os itens 2/3 ja nao
+peguem. Por isso: `.jdi/decisions/` **inalterado nesta iter** (zero A/M/D), CONTEXT.md
+byte-identico, caminho append-only nao acionado. O proprio critico pediu isso: "Endurecimento
+minimo para fechar: 1 teste JS de `applyTranslations` sobre `CALIBRE_BODY`".
+
+### Itens 4 e 6: seguem WARNING com backstop nomeado (registrado, nao fechado)
+
+- **Item 4** — desvio para extrator renomeado com a linha genuina em `/* */` sai exit 0, mas o
+  extrator defeituoso teria de existir para compilar e o **item 5** (`dotnet test` real do filtro
+  `TranslateChapterAsync`, com o teste calibre provado RED-first na iter 1 contra exatamente esse
+  extrator) fica VERMELHO. Backstop comportamental real, ja executado nesta phase.
+- **Item 6** — o `comm` do lado HEAD vem de grep ESTATICO (metodo que perde o `[Fact]` continua no
+  arquivo e nunca mais roda). Assimetria conhecida e documentada; direcao do erro futuro
+  (`MemberData`/`ClassData`) e SUBcontagem, i.e. piso frouxo, nunca gate impossivel. Fechar exige
+  trocar a fonte do lado HEAD por lista de testes EXECUTADOS (`--list-tests`), o que muda o comando
+  de novo — desproporcional para uma phase que ja gastou 2 iters em prova, e sem mutante aberto
+  contra ela nesta phase. Fica anotado aqui como divida de gate para a proxima phase que reescrever
+  DoD de C#.
+
+### Gates finais (saida real, repo real, iter 3)
+
+| Gate | Resultado |
+|---|---|
+| `node --test test/js/` | `# tests 75 / # pass 75 / # fail 0 / # skipped 0` (era 73/73; **+2**, zero deletado/renomeado/pulado) |
+| `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release` | `Passed! - Failed: 0, Passed: 336, Skipped: 2, Total: 338` — identico ao baseline da phase |
+| 7 `Verify:` extraidos por `sed` do `CONTEXT.md` COMMITADO | **7/7 exit 0** |
+| Evidencia interna | item 2: `# tests 8 / # pass 8` (`N` calibre = 8, piso 4); item 3: `# tests 22 / # pass 22 / # fail 0 / # skipped 0`, `comm -23` vs `main` vazio, piso `B+4 = 17` |
+| `git diff --stat main..HEAD -- src/` | inalterado desde a iter 1 (so `Resources/Raw/wwwroot/js/translation.js` + Core) |
+| `.gitignore` | alteracao local do usuario, **fora do commit** |
+
+### Commit
+
+| sha | subject |
+|---|---|
+| `ec037f6` | test(div-paragraph-reading): close the apply/read desync gap on calibre bodies |
