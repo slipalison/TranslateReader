@@ -7,22 +7,10 @@ namespace TranslateReader.Tests;
 
 public class HtmlUtilityTests
 {
-    // Fixture A of the phase CONTEXT: calibre exports wrap every paragraph in a <div class="calibreN">
-    // and never emit a single <p>. The container div, the image-only div and the bullet-only div must
-    // stay out of the block list.
-    private const string CalibreBody = """
-        <div class="calibre1">
-        <div class="calibre2">First calibre paragraph with real text.</div>
-        <div class="calibre2">Second calibre paragraph with more text.</div>
-        <div class="calibre3"><img src="fig1.png"/></div>
-        <div class="calibre2">&#8226;</div>
-        <div class="calibre2">Third paragraph, letters only matter here.</div>
-        </div>
-        """;
-
-    // Fixture B of the phase CONTEXT: every non-space character lives inside the single leaf div.
-    private const string FullyCoveredCalibreBody =
-        "<div class=\"calibre2\">Only paragraph, fully covered by the leaf div.</div>";
+    // Fixtures A and B of the phase CONTEXT, shared with TranslationManagerTests so the block
+    // selection asserted here and the coverage ratio asserted there can never drift apart.
+    private const string CalibreBody = CalibreFixtures.PartiallyCoveredBody;
+    private const string FullyCoveredCalibreBody = CalibreFixtures.FullyCoveredBody;
 
     [Fact]
     public void ExtractTextBlocks_ForCalibreStyleBody_ExtractsLeafDivsWithLetters()
