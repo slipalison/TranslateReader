@@ -115,3 +115,98 @@ Iter 1: `.jdi/DECISIONS.md`, `CONTEXT.md`, `PLAN.md`, `SUMMARY.md`, `HtmlUtility
 `ExtractTextBlocksBaselineTests.cs` (novo).
 Iter 2: `.jdi/DECISIONS.md` (append), `CONTEXT.md` (`## Definition of Done`), `SUMMARY.md`,
 `TranslationManager.cs`, `TranslationManagerTests.cs`.
+
+## Iter 3 — rodada de warnings (/jdi-issue)
+
+O loop JA convergiu na iter 2 (`APPROVED_WITH_WARNINGS`, reviewer: "nenhum pede acao antes do
+ship"). Esta rodada existe porque o modo autonomo nao aceita "ship assim mesmo" sem tentar limpar.
+**Zero linha de producao tocada.** Veredito de `D-2026-08-01-div-paragraph-translation-10`
+(append-only: `git diff main..HEAD -- .jdi/DECISIONS.md | grep -c '^-[^-]'` = **0**).
+
+### W-2 (perf, `CountBlockChars` re-strip) — NAO FECHADO, agora com numero
+
+`.claude/rules/csharp.md` §2 exige medir antes de otimizar. Medi, em vez de opinar: probe
+descartavel FORA do repo contra `TranslateReader.Core.dll` Release, corpo sintetico de
+**534.890 chars / 2.000 blocos-folha** (ordem de grandeza do livro do bug: 1.910 blocos), media de
+20 corridas apos 3 de aquecimento, alocacao por `GC.GetAllocatedBytesForCurrentThread()`:
+
+| Variante | ms / rebuild de livro | bytes / rebuild |
+|---|---|---|
+| atual (`CountTextChars` -> `StripHtmlTags` por bloco) | **2,154 ms** | **2 B** |
+| hipotetica sem re-strip (conta nao-espaco direto) | 0,266 ms | 2 B |
+
+Tres motivos para nao mexer, nesta ordem:
+1. **O ganho e ~1,9 ms por livro inteiro**, contra 2.000 blocos de inferencia LLM local (minutos a
+   horas — a propria phase mede ~8x de aumento na duracao da corrida). Otimizar isso e ruido.
+2. **A premissa de alocacao do warning esta errada:** `Regex.Replace` devolve a MESMA instancia
+   quando o padrao nao casa nada (`ReferenceEquals` = True, medido) e bloco ja stripped nao tem
+   `<...>` sobrando. A "alocacao O(texto do livro)" nao existe — sao ~0 B nas duas variantes. O
+   warning superestimava o proprio custo.
+3. **A variante barata nao e equivalente:** ela diverge exatamente em HTML malformado com `<` cru,
+   que e a classe de entrada que produziu o W-1 e hoje depende do clamp. Trocar o caminho de
+   contagem de um sinal que ja teve defeito de borda, por 1,9 ms, e trade ruim.
+
+Registrado em `.jdi/todos.md` com o numero junto e com o aviso para quem for mexer
+(`TranslateBookAsync_CoveredTextRatio_IsNeverAboveOneOnMalformedHtml` tem de continuar verde).
+
+### W-7 (literais/fixture duplicada em teste) — FECHADO na parte que era risco real
+
+A metade que importava era a **fixture calibre duplicada**: `HtmlUtilityTests.cs` asserta QUAIS
+blocos saem dela, `TranslationManagerTests.cs` asserta a razao **106/113** derivada dos MESMOS
+caracteres. Editar uma copia deixava a outra verde sobre markup obsoleto, em silencio — divergencia
+que nao falha, so mente. Agora ha **uma copia so**, em `test/TranslateReader.Tests/CalibreFixtures.cs`;
+os documentos de capitulo sao compostos por concatenacao de `const`
+(`"<html><body>" + ... + "</body></html>"`), **byte-identicos** aos literais anteriores.
+Zero assercao alterada, zero nome de teste alterado (os `Verify:` grepam nome literal e contam
+ocorrencia), zero `[Fact]` a mais ou a menos. `dotnet format` nao acusa nada nos 3 arquivos.
+
+**NAO fechado:** `"/dest/out.epub"`. Numeros medidos (a REVIEW dizia "x5"; o split real e outro —
+ver `D-...-10-CORRECAO`): **10** ocorrencias ja existiam em `main`, HEAD tem **17**, e **7** linhas
+com o literal foram adicionadas/tocadas pela phase (as 2 a mais que os 5 da review sao as linhas
+mecanicas `result` -> `result.EpubPath`). Extrair exigiria editar as **10** linhas legadas
+anteriores a `4285f25` — proibido por `D-2` — e
+S1192 e regra de escopo MAIN: o projeto de teste e auto-detectado como test pelo scanner .NET,
+entao `csharpsquid` de escopo MAIN nao dispara la. (O precedente de issue do Sonar em teste, as 2
+`CA1826` do PR #12, veio do importador `external_roslyn`, que le diagnostico do log do MSBuild —
+outro pipeline, outra regra.)
+
+### W-3, W-4, W-5 (legados, D-2) — NAO FECHADOS, por regra; os 3 agora registrados com file:line
+
+Corrigir aqui seria refactor de legado no head MAUI, que esta fora da rede de testes
+(`D-2026-07-30-regression-suite-2`): trocar cheiro conhecido por bug desconhecido, sem rede.
+
+- **W-3 (whitespace do `dotnet format`)** — lista RE-MEDIDA nesta iter, identica a da review:
+  `ThemeEngine.cs:12,14`; `ReaderPage.xaml.cs:122,124`; `ThemeEngineTests.cs:12`;
+  `TranslationManagerTests.cs:528-529`. **Nao estava em `.jdi/todos.md`** (so no corpo da review) —
+  registrado agora com file:line e com o encaminhamento: a phase `baseline-de-estilo` (ROADMAP 1)
+  roda `dotnet format` uma vez no repo inteiro, depois do `.editorconfig`; corrigir avulso e churn
+  sem criterio locked. Confirmado que meus 3 arquivos nao somam violacao nova.
+- **W-4 (2 Managers no mesmo `[RelayCommand]`)** — **nao estava em `.jdi/todos.md`**; registrado
+  agora, com os file:line CONFERIDOS no arquivo (a review nao trazia numero):
+  `LibraryPageModel.cs:105-106` (`[RelayCommand] TranslateBookAsync`), `:111` e `:171`
+  (`translationManager`), `:175` (`libraryManager.ImportBookAsync`) e `:45` via `LoadBooksAsync`.
+- **W-5 (`catch` que engolem cancelamento)** — **ja estava** registrado, no item `[LEGADO/D-2]` de
+  `## De sonar-zero-issues`, com os 5 file:line (`ReaderPage.xaml.cs:326,434,308`,
+  `LibraryPageModel.cs:183`, `ReaderPageModel.cs:222`). Nada a fazer.
+
+### Nota de processo — CONFIRMADA, nao tocada
+
+`LOOP.md` da phase le hoje `iter: 2 / status: converged` (o orquestrador ja corrigiu o
+`iter: 1 / status: running` que a reviewer viu). Arquivo nao editado por mim.
+
+### Gates da iter 3 (medidos apos as mudancas)
+
+- `dotnet build TranslateReader.slnx -c Release`: **0 Error(s)**, 32 warnings legados
+  (MVVMTK0045/CS0618/CS0414 — sao mais que os 8 da review porque a slnx builda os 4 TFMs, nao so o
+  de Windows)
+- `dotnet test -c Release`: **Failed: 0, Passed: 320, Skipped: 2, Total: 322** (baseline mantido)
+- `node --test test/js/`: **tests 60, pass 60, fail 0** (intocados)
+- **DoD 8/8 PASS**, comandos extraidos LITERALMENTE de `## Definition of Done` do CONTEXT vigente
+- `dotnet format --verify-no-changes`: so as 9 violacoes legadas do W-3, nenhuma em linha tocada
+- `.gitignore` (mod local do usuario) fora dos 3 commits
+
+### Commits da iter 3
+
+`d237263` test (fixture compartilhada) · `76a25a2` docs (`D-...-10` + registros em `todos.md`) ·
+`c31597b` docs (`D-...-10-CORRECAO`: split real do literal `/dest/out.epub`, medido depois de eu
+ter escrito o numero errado em `D-...-10` e na mensagem de `d237263`) · este SUMMARY.
