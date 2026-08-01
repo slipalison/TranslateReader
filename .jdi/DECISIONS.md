@@ -1538,3 +1538,55 @@ por item e devolveria exatamente a falha que o critico explorou (binario velho a
 quebrada). REJEITADO substituir os 7 por um unico gate "roda a suite inteira": um item de DoD tem
 de reprovar pelo motivo DELE, entao cada item mantem filtro e piso proprios e a regressao aponta o
 criterio violado em vez de "algo quebrou".
+
+D-2026-08-01-div-paragraph-translation-10 (rodada de warnings da iter 3: W-2 medido e NAO
+otimizado, W-7 fechado por extracao de fixture) — a REVIEW da iter 2 fechou
+APPROVED_WITH_WARNINGS com 5 warnings abertos e recomendacao explicita de nao agir antes do ship.
+O modo autonomo (`/jdi-issue`) exige uma tentativa de limpeza mesmo assim; esta decisao registra o
+veredito de cada um para que nenhum seja reaberto por intuicao.
+
+**W-2 (`CountBlockChars` re-aplica `StripHtmlTags` a blocos ja stripped) — NAO otimizado, agora
+com numero.** `.claude/rules/csharp.md` §2 exige medir antes de otimizar; a infra de medicao
+(BenchmarkDotNet) nao existe no repo (`.jdi/todos.md`, `[PERF/INFRA]` de `the-method-refactor`),
+entao a medicao foi feita com `Stopwatch` + `GC.GetAllocatedBytesForCurrentThread()` num probe
+descartavel fora do repo, contra `TranslateReader.Core.dll` -c Release, sobre um corpo sintetico
+de 534.890 chars / 2.000 blocos-folha (ordem de grandeza do livro que originou o bug: 1.910
+blocos). Medido, media de 20 corridas apos 3 de aquecimento:
+
+| Variante | ms por rebuild de livro | bytes alocados por rebuild |
+|---|---|---|
+| atual (`CountTextChars` -> `StripHtmlTags` por bloco) | **2,154 ms** | **2 B** |
+| hipotetica sem re-strip (conta nao-espaco direto) | 0,266 ms | 2 B |
+
+Duas conclusoes fecham o caso. (1) O ganho seria **~1,9 ms por livro inteiro**, contra uma corrida
+de traducao de 2.000 blocos de inferencia LLM local (minutos a horas — a propria phase mede ~8x de
+aumento de duracao). (2) A premissa de ALOCACAO do warning esta errada: `Regex.Replace` devolve a
+**mesma instancia** quando o padrao nao casa nada (`ReferenceEquals` = True, medido), e bloco ja
+stripped nao tem `<...>` sobrando — nao existe a "alocacao O(texto do livro)" descrita; sao ~0 B
+nas duas variantes. Alem disso a variante direta NAO e equivalente em geral: ela diverge
+exatamente em HTML malformado com `<` cru, que e a classe de entrada que produziu o W-1 e hoje
+depende do clamp. Trocar o caminho de contagem por 1,9 ms, num sinal que ja teve um defeito de
+borda, e trade ruim. Fica registrado em `.jdi/todos.md` como item de perf com o numero junto.
+
+**W-7 (literais repetidos em teste) — parcialmente fechado.** A parte que era risco real de
+DIVERGENCIA foi fechada: as Fixtures A e B do CONTEXT existiam em copia dupla, em
+`HtmlUtilityTests.cs` (que asserta QUAIS blocos saem) e em `TranslationManagerTests.cs` (que
+asserta a RAZAO 106/113 derivada dos mesmos caracteres). Editar uma copia deixaria a outra verde
+sobre markup obsoleto, em silencio. Agora ha uma copia so, em
+`test/TranslateReader.Tests/CalibreFixtures.cs`, e `TranslationManagerTests` compoe o documento de
+capitulo por concatenacao de `const` (`"<html><body>" + ... + "</body></html>"`), byte-identico ao
+literal anterior. Zero assercao alterada, zero nome de teste alterado (os `Verify:` do DoD
+grepam nome literal), suite segue **Failed: 0, Passed: 320, Total: 322**. A parte NAO fechada e a
+repeticao de `"/dest/out.epub"` (17 ocorrencias em `TranslationManagerTests.cs`, das quais so 5
+sao desta phase): extrair exigiria editar linhas legadas anteriores a `4285f25`, o que `D-2`
+proibe, e S1192 e regra de escopo MAIN — o projeto de teste e auto-detectado como test pelo
+scanner .NET, entao `csharpsquid` de escopo MAIN nao dispara la. (O precedente de issue do Sonar
+em codigo de teste, as 2 `CA1826` do PR #12, veio do importador `external_roslyn`, que le
+diagnostico do log do MSBuild — pipeline diferente, regra diferente.)
+
+**W-3, W-4, W-5 — nao corrigidos, por regra.** Todos legados, cobertos por `D-2`, todos fora do
+diff da phase (W-4 so teve a leitura do retorno trocada). Corrigi-los aqui seria refactor de
+legado no head MAUI, que hoje esta fora da rede de testes
+(`D-2026-07-30-regression-suite-2`) — trocar cheiro conhecido por bug desconhecido, sem rede.
+Os tres passam a estar registrados em `.jdi/todos.md` com `file:line` (W-5 ja estava, no item
+`[LEGADO/D-2]` de `sonar-zero-issues`).

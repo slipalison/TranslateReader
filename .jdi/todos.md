@@ -331,3 +331,52 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   fallback de div-folha (D-2026-08-01-div-paragraph-translation-1) a `ExtractParagraphs`, ou
   fazer `TranslateChapterAsync` reusar `ExtractTextBlocks` diretamente (precisa avaliar impacto
   na granularidade do streaming por paragrafo visivel no ReaderPage).
+
+## De `div-paragraph-translation` — rodada de warnings da iter 3 (2026-08-01)
+
+- **[PERF] `TranslationManager.CountBlockChars` re-aplica `StripHtmlTags` a blocos que ja vem
+  stripped.** `src/TranslateReader.Core/Business/Managers/TranslationManager.cs:207-213` chama
+  `HtmlUtility.CountTextChars(block)` (`src/TranslateReader.Core/Utilities/HtmlUtility.cs:87-95`)
+  para cada bloco devolvido por `ExtractTextBlocks`, e esses blocos ja passaram por
+  `StripHtmlTags` em `BlockText` (`HtmlUtility.cs:64-65`) — uma segunda passada de regex por
+  bloco. **MEDIDO na iter 3** (probe descartavel fora do repo, `TranslateReader.Core.dll` Release,
+  corpo de 534.890 chars / 2.000 blocos-folha, media de 20 corridas apos aquecimento, ver
+  `D-2026-08-01-div-paragraph-translation-10`): atual **2,154 ms e 2 B alocados** por rebuild de
+  livro; variante sem re-strip **0,266 ms e 2 B**. Ou seja o ganho e ~1,9 ms num livro cuja
+  traducao leva minutos a horas de inferencia LLM, e a "alocacao O(texto do livro)" descrita no
+  warning original NAO existe — `Regex.Replace` devolve a mesma instancia quando nao casa nada
+  (`ReferenceEquals` = True, medido). Nao corrigido por `.claude/rules/csharp.md` §2 (medir antes
+  de otimizar; medido, nao paga). Cuidado para quem for mexer: contar nao-espaco direto NAO e
+  equivalente em HTML malformado com `<` cru — e a classe de entrada do W-1, hoje contida pelo
+  clamp `Math.Min(1.0, ...)` (`TranslationManager.cs:217-218`). Qualquer mudanca aqui precisa
+  manter `TranslateBookAsync_CoveredTextRatio_IsNeverAboveOneOnMalformedHtml` verde.
+
+- **[LEGADO/ESTILO, D-2] Violacoes de WHITESPACE do `dotnet format --verify-no-changes`, todas em
+  linha legada, nenhuma tocada por phase alguma ate aqui** (W-3 da REVIEW iter 2 desta phase, aqui
+  com `file:line` porque so existia no corpo da review):
+  `src/TranslateReader.Core/Business/Engines/ThemeEngine.cs:12` e `:14`;
+  `src/TranslateReader/Pages/ReaderPage.xaml.cs:122` e `:124`;
+  `test/TranslateReader.Tests/ThemeEngineTests.cs:12`;
+  `test/TranslateReader.Tests/TranslationManagerTests.cs:528-529`. O gate fica em `exit 2`
+  permanentemente enquanto isso viver. Destrava na phase `baseline-de-estilo` (ROADMAP posicao 1,
+  `sem .editorconfig, sem .gitattributes, sem analyzers configurados`): sem `.editorconfig` o
+  `dotnet format` roda com regra default e formatar essas linhas agora seria churn de legado sem
+  criterio locked. Nao corrigir avulso — a phase de estilo deve rodar `dotnet format` uma vez, no
+  repo inteiro, num commit proprio.
+
+- **[LEGADO/THE-METHOD, D-2] `LibraryPageModel.TranslateBookAsync` usa 2 Managers no mesmo
+  `[RelayCommand]`.** `src/TranslateReader/PageModels/LibraryPageModel.cs:105-106`
+  (`[RelayCommand] private async Task TranslateBookAsync`) chama
+  `translationManager.GetActiveTranslationJobAsync` (`:111`) e
+  `translationManager.TranslateBookAsync` (`:171`) e tambem `libraryManager.ImportBookAsync`
+  (`:175`) + `LoadBooksAsync` -> `libraryManager.ListBookSummariesAsync` (`:45`) no mesmo caso de
+  uso, contra `CLAUDE.md` regra 1 ("PageModels chamam NO MAXIMO 1
+  Manager por caso de uso"). Pre-existente em `main`; esta phase so trocou a leitura do retorno
+  (`translation.EpubPath`), 3 linhas mecanicas. Corrigir exige mover a sequencia
+  "traduz -> importa o EPUB traduzido" para tras de um unico Manager (candidato: uma operacao em
+  `ITranslationManager` que ja devolva o livro importado, ou o padrao Manager->Manager assincrono
+  que `CLAUDE.md` permite), ou seja, mudanca de contrato publico + de seam de producao no head
+  MAUI, que hoje esta fora da rede de testes (`D-2026-07-30-regression-suite-2`). Candidato
+  natural a phase de higiene do head MAUI, junto com o item `[LEGADO/D-2]` de
+  `sonar-zero-issues` (os `catch` que engolem cancelamento — W-5, ja registrado la com file:line)
+  e a varredura do item `[AUDITORIA]` de `the-method-refactor`.
