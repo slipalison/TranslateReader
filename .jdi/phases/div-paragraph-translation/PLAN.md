@@ -70,7 +70,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
   - `.gitignore` (alteracao local do usuario) fora do commit.
 - **Dependencies:** none
 - **Test:** n/a (doc) — provado por diff sem delecao + `Verify:` dos 7 itens ainda validos
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 (parallel-eligible)
 
@@ -92,7 +92,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
     existente editado, renomeado ou removido.
 - **Dependencies:** T-1
 - **Test:** os proprios (xUnit, strings literais — `D-...-5`)
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: Caracterizacao dos 3 fixtures reais (baseline, verde desde o inicio)
 - **Specialist:** jdi-doer-translatereader
@@ -106,7 +106,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
   - Verdes antes de T-4; o EPUB do usuario nao e citado em nenhum arquivo.
 - **Dependencies:** T-1
 - **Test:** os proprios
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3
 
@@ -132,7 +132,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
     waivered (backreference `\1` mantida; comentario do waiver atualizado).
 - **Dependencies:** T-2, T-3
 - **Test:** T-2 + T-3 verdes na mesma corrida
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 
@@ -156,7 +156,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
     `result.EpubPath`; os outros 11 `TranslateBookAsync` nao leem retorno e ficam intocados.
 - **Dependencies:** T-4
 - **Test:** suite existente compila e passa; ramos do ratio cobertos em T-6
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 5 (parallel-eligible)
 
@@ -174,7 +174,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
     `--collect:"XPlat Code Coverage"`.
 - **Dependencies:** T-5
 - **Test:** os proprios (NSubstitute sobre `Contracts/`, zero I/O)
-- **Status:** pending
+- **Status:** completed
 
 #### T-7: Ajuste mecanico do consumidor MAUI + corrida final (DoD 7)
 - **Specialist:** jdi-doer-translatereader
@@ -189,7 +189,7 @@ tem de compartilhar selecao E predicado de filtro. Vira `D-...-8`.
     novos), 60 testes JS intocados.
 - **Dependencies:** T-5
 - **Test:** suite completa + build do TFM Windows
-- **Status:** pending
+- **Status:** completed
 
 ## Riscos nomeados
 - **R1 — consumidor nao mapeado (D-...-4).** `grep -rn "TranslateBookAsync" src/` = 3 hits:
