@@ -1602,3 +1602,30 @@ nao as linhas mecanicas `result` -> `result.EpubPath`). A CONCLUSAO nao muda e f
 10 linhas legadas, nao 12, e `D-2` cobre as 10 do mesmo jeito. A mensagem do commit `d237263`
 carrega a versao errada ("12 of its 17 occurrences predate 4285f25") — nao reescrita porque a
 correcao pertence aqui, no registro append-only, e nao a historia.
+
+D-2026-08-01-div-paragraph-translation-11 (issues novas do Sonar achadas so no CI do PR #15): a
+analise remota do PR acusou 9 issues, das quais 8 sao genuinamente novas desta phase e 1 e o waiver
+conhecido de `SYSLIB1044` que apenas mudou de linha (`HtmlUtility.cs:148` -> `:192`; ver
+`D-2026-07-30-sonar-zero-issues-13`, que ja registrou que nem `#pragma` nem
+`sonar.issue.ignore.multicriteria` removem issue de analisador externo do SonarCloud). As 8 novas,
+todas corrigidas neste commit:
+- `csharpsquid:S125` MAJOR (`HtmlUtility.cs:69`): o comentario que explica o predicado compartilhado
+  continha `translations[index++]` e `p/h/li`, e a heuristica leu como codigo comentado. Reescrito
+  como prosa, preservando a justificativa. **Terceira ocorrencia desta mesma classe na sessao** (as
+  outras em `sonar-zero-issues` e no proprio `HtmlUtility` da phase 14): comentario WHY que cita
+  identificador com sintaxe de codigo dispara S125.
+- `csharpsquid:S3267` MINOR x2 (`:80`, `:90`): `ContainsLetter` e `CountTextChars` usavam `foreach`
+  com `if` — viraram `text.Any(char.IsLetter)` e `.Count(c => !char.IsWhiteSpace(c))`. `char.IsLetter`
+  entra como method group (delegate estatico cacheado, sem closure), entao nao viola
+  `.claude/rules/csharp.md` §2.2.
+- `external_roslyn:CA1861` INFO x5 (`HtmlUtilityTests.cs:35,45,58,68,78`): `Assert.Equal(new[] {...},
+  blocks)` alocava array constante por chamada. Viraram
+  `Assert.Equal<IReadOnlyList<string>>([...], blocks)` — mesma assercao, mesma forca, sem alocacao
+  repetida.
+Verificado apos a correcao: build 0 erros, suite `Failed: 0, Passed: 320, Skipped: 2, Total: 322`
+(inalterada), os 8 `Verify:` do DoD exit 0, e o mutante do DoD critic (branch de div removido)
+continua reprovando em 5 dos 8 gates — a correcao cosmetica nao afrouxou a prova.
+LICAO (registrada tambem em `.jdi/todos.md`): os analisadores do SonarCloud nao rodam em
+`dotnet build`, entao esta classe de issue so aparece pos-push. Uma phase que promete "sem issue
+nova" precisa de um ciclo push+CI dentro do proprio escopo — ja registrado em
+`D-2026-07-30-sonar-zero-issues-12` e reincidente aqui.

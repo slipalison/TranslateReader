@@ -64,34 +64,22 @@ public static partial class HtmlUtility
     private static string BlockText(Match match) =>
         StripHtmlTags(match.Groups[TextGroup].Value).Trim();
 
-    // Selection and filtering are shared by extraction and replacement
-    // (D-2026-08-01-div-paragraph-translation-8): the two passes walk the same matches in document
-    // order, so `translations[index++]` keeps pairing block N with translation N. The div branch
-    // needs the stricter guard because calibre wraps images, bullets and stray numbers in the very
-    // same leaf div it uses for prose; the p/h/li branch keeps the whitespace filter it always had,
-    // since hardening it would change what the three real EPUB fixtures extract.
+    // Extraction and replacement share this predicate (decision
+    // D-2026-08-01-div-paragraph-translation-8). Both passes walk the same matches in document
+    // order, so block number N always pairs with translation number N. The div branch needs the
+    // stricter guard because calibre wraps images, bullets and stray numbers in the very same leaf
+    // div it uses for prose. The paragraph branch keeps the whitespace filter it always had, since
+    // hardening it would change what the three real EPUB fixtures extract.
     private static bool IsTranslatableBlock(Match match, string text) =>
         match.Groups[TagGroup].ValueSpan.Equals(DivTag, StringComparison.OrdinalIgnoreCase)
             ? ContainsLetter(text)
             : !string.IsNullOrWhiteSpace(text);
 
-    private static bool ContainsLetter(string text)
-    {
-        foreach (var c in text)
-        {
-            if (char.IsLetter(c)) return true;
-        }
-        return false;
-    }
+    private static bool ContainsLetter(string text) => text.Any(char.IsLetter);
 
     public static int CountTextChars(string html)
     {
-        var count = 0;
-        foreach (var c in StripHtmlTags(html))
-        {
-            if (!char.IsWhiteSpace(c)) count++;
-        }
-        return count;
+        return StripHtmlTags(html).Count(c => !char.IsWhiteSpace(c));
     }
 
     public static string StripHtmlTags(string html) =>

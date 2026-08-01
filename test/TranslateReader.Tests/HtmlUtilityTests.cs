@@ -32,7 +32,7 @@ public class HtmlUtilityTests
     {
         var blocks = HtmlUtility.ExtractTextBlocks(FullyCoveredCalibreBody);
 
-        Assert.Equal(new[] { "Only paragraph, fully covered by the leaf div." }, blocks);
+        Assert.Equal<IReadOnlyList<string>>(["Only paragraph, fully covered by the leaf div."], blocks);
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class HtmlUtilityTests
 
         var blocks = HtmlUtility.ExtractTextBlocks(body);
 
-        Assert.Equal(new[] { "Alpha paragraph", "Beta paragraph" }, blocks);
+        Assert.Equal<IReadOnlyList<string>>(["Alpha paragraph", "Beta paragraph"], blocks);
         Assert.Equal(1, blocks.Count(b => b.Contains("Alpha paragraph", StringComparison.Ordinal)));
         Assert.Equal(1, blocks.Count(b => b.Contains("Beta paragraph", StringComparison.Ordinal)));
     }
@@ -55,7 +55,7 @@ public class HtmlUtilityTests
 
         var blocks = HtmlUtility.ExtractTextBlocks(body);
 
-        Assert.Equal(new[] { "Has letters" }, blocks);
+        Assert.Equal<IReadOnlyList<string>>(["Has letters"], blocks);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class HtmlUtilityTests
 
         var blocks = HtmlUtility.ExtractTextBlocks(body);
 
-        Assert.Equal(new[] { "Alpha text", "Beta text" }, blocks);
+        Assert.Equal<IReadOnlyList<string>>(["Alpha text", "Beta text"], blocks);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class HtmlUtilityTests
 
         var blocks = HtmlUtility.ExtractTextBlocks(body);
 
-        Assert.Equal(new[] { "Line oneLine two" }, blocks);
+        Assert.Equal<IReadOnlyList<string>>(["Line oneLine two"], blocks);
     }
 
     [Fact]
