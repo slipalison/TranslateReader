@@ -1416,3 +1416,46 @@ usuario + inspecao do banco do app em `%LOCALAPPDATA%\...\translatereader.db`):
   sem nenhum sinal de que 89% do texto nao foi traduzido. Nao ha excecao, nao ha aviso, nao ha
   metrica exposta ao usuario.
 Escopo pedido pelo usuario nesta invocacao: os DOIS defeitos (extracao + sinal de cobertura).
+
+D-2026-08-01-div-paragraph-translation-1 (extracao): `ExtractTextBlocks` tenta `p|h1-6|li`
+(regex atual, intocada). SO quando isso devolve zero blocos PARA AQUELE CORPO, cai num fallback
+de div-folha (div sem `<div>` aninhado antes do fechamento — lookahead negativo por caractere,
+com `RegexTimeoutMilliseconds` que toda regex de `HtmlUtility` ja carrega, csharp.md §4/ReDoS).
+Bloco de div so conta se tiver >= 1 letra Unicode (`char.IsLetter`) apos `StripHtmlTags` — filtra
+imagem/bullet/numero isolado sem dependencia nova. REJEITADO: parser de HTML real (AngleSharp/
+HtmlAgilityPack) — mudaria a arquitetura 100%-regex de `HtmlUtility` de bugfix pra rewrite de
+Utility inteira (mesmo racional de `coverage-90`: zero dependencia nova quando da pra resolver
+sem); nesting real medido no livro do usuario e raso (`calibreN` direto), lookahead basta.
+Fallback e por CHAMADA (=por capitulo), sem heuristica de "livro inteiro".
+
+D-2026-08-01-div-paragraph-translation-2 (baseline): os 3 fixtures reais (`Wardley Maps`,
+`Righting software`, `Practice Makes Perfect`) nao tem `<div>` fora de `p|h1-6|li` hoje, entao o
+fallback nunca ativa neles — provado por teste de caracterizacao (fixa a contagem ATUAL antes da
+mudanca), nao so "codigo intocado".
+
+D-2026-08-01-div-paragraph-translation-3 (sinal de cobertura): `TranslateBookAsync` passa a
+devolver `BookTranslationResult(string EpubPath, double CoveredTextRatio)` em vez de `string`
+cru. `CoveredTextRatio` = caracteres NAO-espaco extraidos em blocos / caracteres NAO-espaco do
+corpo inteiro (`StripHtmlTags` + `char.IsWhiteSpace`), agregado por capitulo dentro de
+`RebuildAllTranslatedChaptersAsync` (ja itera todo capitulo — zero I/O novo); 1.0 se o corpo for
+vazio. NUNCA lanca excecao por cobertura baixa (csharp.md §1: formato inesperado e fluxo
+esperado, nao erro). `ILogger` REJEITADO como veiculo: nenhum Manager/Engine do Core injeta
+logger hoje — infra nova fora de escopo de bugfix. `IProgress<BookTranslationProgress>`
+REJEITADO como veiculo unico: o parametro pode ser `null`, e o ponto do defeito e nunca ficar em
+silencio.
+
+D-2026-08-01-div-paragraph-translation-4 (impacto em src/TranslateReader/): mudar o retorno
+obriga 1 ajuste MECANICO em `LibraryPageModel.TranslateBookAsync` (ler `result.EpubPath`) — nao
+e UI nova. Decidir SE/COMO avisar visualmente o usuario sobre `CoveredTextRatio` baixo fica em
+`## Deferred to PR review` do CONTEXT.md (decisao de produto/UX humana).
+
+D-2026-08-01-div-paragraph-translation-5 (fixture de teste): nem o EPUB do usuario (protegido,
+caminho pessoal, obra com direitos) nem um `.epub` sintetico novo tipo `CreateOrphanCoverEpub` —
+o defeito vive inteiro em `HtmlUtility.ExtractTextBlocks(string bodyContent)`, que nao toca
+arquivo. Teste usa STRING HTML literal reproduzindo a forma calibre — sem I/O, sem EPUB, sem
+questao de copyright, mais estreito que o precedente do brief. Corpos sinteticos (Fixture A/B)
+fixados em `## Notes` do CONTEXT.md.
+
+D-2026-08-01-div-paragraph-translation-6 (bugfix comeca vermelho): os testes de Fixture A/B e a
+caracterizacao dos 3 fixtures reais sao escritos ANTES do fallback existir — o de Fixture A fica
+vermelho (0 blocos) ate o fallback ser implementado.

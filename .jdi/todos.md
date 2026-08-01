@@ -316,3 +316,18 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `:316`; ao fazer isso, apertar `:196` para exigir `Assert.Null(cover)` (Warning 3 da REVIEW).
   Uma linha de producao — nao foi feita aqui porque `coverage-90` fechou `src/` por decisao de
   escopo, nao por dificuldade.
+
+## De `div-paragraph-translation` (2026-08-01)
+
+- **[EXTRACAO] `HtmlUtility.ExtractParagraphs`/`TranslationManager.TranslateChapterAsync`
+  (traducao interativa por paragrafo visivel, usada pelo ReaderPage) tem o MESMO defeito de
+  classe corrigido nesta fase para `ExtractTextBlocks`/`TranslateBookAsync`: `ExtractParagraphs`
+  so casa `<p\b[^>]*>(.*?)</p>` — um EPUB calibre com paragrafos so em `<div class="calibreN">`
+  (como o livro do usuario, D-2026-08-01-div-paragraph-translation-0) tambem devolveria zero
+  paragrafos para traducao interativa, sem sinal nenhum. Fora do escopo desta fase por decisao
+  explicita do usuario ("os DOIS defeitos" = extracao de `TranslateBookAsync` + sinal de
+  cobertura, nao a traducao interativa) — ver `## Out of scope` de
+  `.jdi/phases/div-paragraph-translation/CONTEXT.md`. Candidato a fase futura: aplicar o mesmo
+  fallback de div-folha (D-2026-08-01-div-paragraph-translation-1) a `ExtractParagraphs`, ou
+  fazer `TranslateChapterAsync` reusar `ExtractTextBlocks` diretamente (precisa avaliar impacto
+  na granularidade do streaming por paragrafo visivel no ReaderPage).
