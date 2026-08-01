@@ -1629,3 +1629,217 @@ LICAO (registrada tambem em `.jdi/todos.md`): os analisadores do SonarCloud nao 
 `dotnet build`, entao esta classe de issue so aparece pos-push. Uma phase que promete "sem issue
 nova" precisa de um ciclo push+CI dentro do proprio escopo — ja registrado em
 `D-2026-07-30-sonar-zero-issues-12` e reincidente aqui.
+D-2026-07-31-conversion-performance-0 (registro de phase): phase `conversion-performance` registrada
+na posicao 16 do ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-31 —
+"garanta que as funcionalidades esteja funcionado corretamente, como a conversao de livros, as
+imagens, download de modelos, inclusive valide que a conversao esteja funcionando tanto para livros
+curtos quanto para livros grandes, se necessario ajuste para que tenhamos performance na conversao
+tanto na biblioteca quanto na leitura" (texto colado, sem URL de tracker). Base: `main` @ `ad607ac`
+(apos o merge do PR #13).
+Evidencia medida no momento do registro (script sobre os 3 fixtures ja rastreados em
+`test/TranslateReader.Tests/TestData/`):
+| Fixture | zip | entries | html | imgs | descomprimido | RAM retida pelo dict de imagens | imgs >=85KB (LOH) |
+|---|---|---|---|---|---|---|---|
+| Practice (curto) | 1,7 MB | 45 | 27 | 12 | 2,6 MB | 1,9 MB | 4 |
+| Righting (medio) | 10,8 MB | 163 | 26 | 125 | 16,0 MB | 14,9 MB | 63 |
+| Wardley (grande) | 32,0 MB | 286 | 23 | 256 | 45,0 MB | **44,0 MB** | **229** |
+Achado ancora: `ParsingEngine.ExtractAllImagesAsync` (`ParsingEngine.cs:59-66`) devolve
+`IReadOnlyDictionary<string, byte[]>` com TODAS as imagens do livro carregadas de uma vez — 44 MB
+num unico dicionario no fixture grande, 229 arrays acima do limiar de 85 KB da LOH, maior imagem
+4,56 MB. Viola `.claude/rules/csharp.md` §2.3 ("Never materialize a GGUF model, full EPUB, or image
+into one byte[]"; LOH nao e compactada por padrao -> fragmentacao -> OOM em mobile). O consumidor
+(`ReadingManager.ExtractImagesIfNeededAsync`, `ReadingManager.cs:56-62`) apenas itera e escreve cada
+imagem em disco, entao o dicionario inteiro nunca precisou existir.
+Achado secundario medido (NAO superdimensionar): `CreateTranslatedEpubAsync` faz
+`archive.Entries.FirstOrDefault(...)` dentro do loop de capitulos — O(entries x capitulos), mas em
+numeros absolutos sao 1.215 / 4.238 / 6.578 comparacoes de string nos tres fixtures; e defeito de
+forma, nao gargalo dominante.
+D-2026-07-31-conversion-performance-1 (medicao — sessao de captura de contexto, asker):
+LOCKED entre as 3 opcoes do brief: **(b)** — teste in-process deterministico via
+`GC.GetTotalMemory(forceFullCollection: true)` (nao BenchmarkDotNet — opcao a, infra nova fora do
+estatuto desta fase; nao cronometro de parede — opcao c, notoriamente flaky em CI). Prova a
+PROPRIEDADE (pico de memoria retida durante a extracao das 229 imagens do fixture Wardley,
+44MB totais, fica bem abaixo do total) em vez de cronometrar a maquina. Ver `## Definition of Done`
+de `.jdi/phases/conversion-performance/CONTEXT.md`.
+
+D-2026-07-31-conversion-performance-2 (escopo): Core apenas (`ParsingEngine`, `ReadingManager`,
+`LibraryManager`, `ModelAccess`, `BooksAccess`/`ReadingStateAccess`) validado contra os 3 fixtures
+reais. UI MAUI (`Pages`/`PageModels`) e performance em device real (Android/iOS) NAO sao
+verificaveis neste ambiente — `## Deferred to PR review`, espelhando a fronteira ja travada em
+`D-2026-07-30-regression-suite-2`.
+
+D-2026-07-31-conversion-performance-3 (CORRECAO do diagnostico do achado ancora, pesquisado nesta
+sessao — vers-one/EpubReader docs): `ReadEpubSafeAsync` chama `EpubReader.ReadBookAsync`, API
+EAGER que carrega TODO o conteudo do livro (HTML, CSS e as 229 imagens = 44MB) na memoria durante o
+proprio parse — `EpubBook` nao tem lazy-load; a API lazy da biblioteca e `EpubReader.OpenBookAsync`
+(retorna `EpubBookRef`, le cada arquivo sob demanda, mantem o handle do EPUB aberto). Consequencia:
+o `Dictionary<string, byte[]>` de `ExtractAllImagesAsync` NAO e a causa raiz por si so — ele copia
+REFERENCIAS (nao bytes) de `epub.Content.Images.Local`, que ja estao residentes em memoria antes do
+dicionario existir. Uma correcao que so trocasse `Dictionary` por `IAsyncEnumerable` MANTENDO
+`ReadBookAsync` por baixo NAO reduziria o pico de memoria real — passaria em greps estruturais sem
+corrigir o problema medido, mesma familia de proxy-que-nao-prova ja catalogada varias vezes em
+`.jdi/todos.md` `[PROCESSO/DoD]`. Fix real LOCKED: `ExtractAllImagesAsync` passa a usar
+`EpubReader.OpenBookAsync` (com as MESMAS opcoes de tolerancia hoje aplicadas em
+`ReadEpubSafeAsync`, strict + fallback), lendo e emitindo UMA imagem por vez, descartando a
+referencia antes de ler a proxima, descartando o `EpubBookRef` ao fim. Escopo do lazy-switch fica
+LIMITADO a este metodo — os outros 5 metodos publicos de `IParsingEngine` continuam no caminho
+eager `ReadEpubSafeAsync` (menor risco/diff nesta fase); estender o lazy-switch a eles e achado
+nomeado, registrado em `.jdi/todos.md`, nao decidido aqui.
+
+D-2026-07-31-conversion-performance-4 (contrato): `IParsingEngine.ExtractAllImagesAsync` passa de
+`Task<IReadOnlyDictionary<string, byte[]>>` para `IAsyncEnumerable<ExtractedImage>` (novo record
+`ExtractedImage(string RelativePath, byte[] Content)` em `Models/`). Contagem de operacoes do
+contrato permanece 5 (sem crescimento — CLAUDE.md "3-5 operacoes por contrato"). Consumidor
+`ReadingManager.ExtractImagesIfNeededAsync` passa a `await foreach`, escrevendo e descartando cada
+imagem sem acumular colecao propria.
+
+D-2026-07-31-conversion-performance-5 (biblioteca/leitura — medido/raciocinado, sem fix nesta fase,
+resposta honesta exigida pelo brief): (a) `LibraryManager.ListBookSummariesAsync` tem N+1
+estrutural real — 1 round-trip SQLite por livro via `readingStateAccess.FetchProgressAsync` dentro
+do `foreach` — mas sem evidencia de impacto perceptivel em escala realista (SQLite local em
+arquivo, biblioteca pessoal tipicamente de dezenas de livros, nao milhares); registrado em
+`.jdi/todos.md` como candidato futuro SE a biblioteca crescer — "medimos e nao ha gargalo
+confirmado" e a resposta pedida pelo brief quando a medicao nao sustenta a otimizacao. (b) TODOS os
+metodos publicos de `ParsingEngine` reabrem e reparseiam o EPUB inteiro a cada chamada
+(`ReadEpubSafeAsync`, eager) — `ExtractChapterContentAsync`, chamado 1x por navegacao de capitulo
+via `ReadingManager.LoadChapterContentAsync`, reparseia o livro TODO a cada troca de capitulo.
+Achado real e nomeado para "leitura", mesma causa raiz do achado ancora (D-...-3), mas corrigi-lo
+exigiria cachear `EpubBook`/`EpubBookRef` com gestao de ciclo de vida, disposal e concorrencia
+(`.claude/rules/csharp.md` §3) — escopo maior que esta fase comporta (a fase e finding-driven sobre
+o achado ancora, nao rewrite do parsing). Registrado em `.jdi/todos.md` como achado NOMEADO para
+fase futura, explicitamente NAO descartado em silencio.
+
+D-2026-07-31-conversion-performance-6 (dois defeitos ja registrados em `todos.md § coverage-90`):
+(a) `ExtractCoverImageAsync` retorna `byte[0]` em vez de `null` quando a capa do manifesto aponta
+pra arquivo ausente (`ParsingEngine.cs:316`) — CORRIGIDO nesta fase: guarda `Length > 0` igual as
+duas fontes irmas do mesmo metodo (linhas 72 e 75); mesmo arquivo ja tocado por D-...-3/D-...-4,
+risco baixo, uma linha. Teste de caracterizacao existente
+(`ParsingEngineEdgeCaseTests.cs:185`) aperta `Assert.Empty(cover ?? [])` -> `Assert.Null(cover)`.
+(b) `ReadEpubSafeAsync` deixa o handle do zip aberto quando o fallback e acionado
+(`ParsingEngine.cs:138-190`) — DEFERIDO: exige investigar o comportamento interno do VersOne.Epub
+(possivel bug da propria lib) alem do orcamento de pesquisa desta fase (2 lookups ja usados em
+D-...-3); so ocorre no caminho de FALLBACK (EPUB malformado), nao exercitado pelos 3 fixtures reais
+usados na validacao desta fase. Continua registrado em `.jdi/todos.md § coverage-90`.
+
+D-2026-07-31-conversion-performance-7 (higiene explicitamente fora de escopo): o
+`archive.Entries.FirstOrDefault(...)` O(entries×capitulos) de `CreateTranslatedEpubAsync`,
+ja medido no achado secundario de D-...-0 (1.215-6.578 comparacoes de string nos 3 fixtures),
+confirmado NAO dominante — per o proprio brief, "se entrar no escopo, entra como higiene, nao como
+otimizacao de performance". Decisao: fica FORA de escopo integralmente nesta fase (nem como
+higiene), para nao diluir o achado ancora — registrado em `.jdi/todos.md` como candidato de
+higiene futuro.
+
+D-2026-07-31-conversion-performance-8 (endurecimento dos `Verify:` fracos do DoD desta phase):
+SUPERSEDE **somente** as linhas `**Verify:**` dos itens 1, 4, 6 e 7 do `## Definition of Done` de
+`.jdi/phases/conversion-performance/CONTEXT.md`. Os itens 2, 3 e 5 ficam INTOCADOS — ja provam
+propriedade ESTRUTURAL por grep sobre o codigo, nao "o runner terminou".
+Motivo nomeado: `dotnet test --filter X` sozinho NAO prova nada. Um filtro que casa ZERO teste sai
+com exit 0 ("No test matches the given testcase filter"), entao um item de DoD escrito assim passa
+vazio — inclusive quando o arquivo de teste nem existe. E mesmo casando testes, "o runner terminou"
+nao prova que existe assercao de MEMORIA dentro deles. Mesma familia de proxy-que-nao-prova ja
+catalogada em `.jdi/todos.md § [PROCESSO/DoD]` e nos Learnings de
+`.jdi/phases/coverage-90/SHIPPED.md` ("ao extrair um `Verify:` para ataque adversarial, remova o
+sufixo `|| echo`: senao o shell sempre retorna 0 e a prova nao vale nada").
+Endurecimento em tres eixos: (a) o filtro tem que casar um PISO de testes aprovados (`Passed: >= N`);
+(b) o ARQUIVO de teste tem que conter os literais que provam a assercao (o comparador de memoria) ou
+a densidade de assercao (validacao ponta-a-ponta); (c) a suite completa tem que bater um piso de
+`Total` com `Failed: 0`.
+RATCHET, fixado ANTES da corrida (per o pendente de `.jdi/todos.md § [PROCESSO/DoD]`): piso
+`Total >= 316` na suite completa = baseline publicada 304 (302 aprovados + 2 ignorados, medida em
+`main` @ `ad607ac`) + 12. Fixar o piso depois de contar o resultado seria numero decorativo.
+NOTA DE PORTABILIDADE (sem ela o gate nao vale nesta maquina): os quatro comandos recebem o prefixo
+`DOTNET_CLI_UI_LANGUAGE=en`. O `dotnet test` desta maquina emite o sumario localizado ("Aprovado!  –
+Com falha: 0, Aprovado: 302, ..."), entao `grep -q "Passed!"` daria FALSO NEGATIVO local e o gate so
+valeria num CI em ingles. Forcar a UI language torna o gate independente de locale — endurecimento,
+nao afrouxamento. Os placeholders `$P`/`PASS(f)` do plano ficam expandidos INLINE para o `Verify:`
+rodar sem setup previo.
+Verify que passam a valer:
+- Item 1 (ponta-a-ponta curto vs grande): `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineFixtureValidationTests" >/tmp/tr1.log 2>&1 && grep -q "Passed!" /tmp/tr1.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr1.log | head -1)" -ge 10 && test "$(grep -c 'Assert\.' test/TranslateReader.Tests/ParsingEngineFixtureValidationTests.cs)" -ge 20`
+- Item 4 (pico de memoria MEDIDO): `test "$(grep -c -e 'GC.GetTotalMemory(forceFullCollection: true)' -e 'MaxRetainedBytes = 20L \* 1024 \* 1024' -e 'peakRetainedDelta < MaxRetainedBytes' test/TranslateReader.Tests/ParsingEngineMemoryTests.cs)" -ge 3 && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineMemoryTests" >/tmp/tr4.log 2>&1 && grep -q "Passed!" /tmp/tr4.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr4.log | head -1)" -ge 1`
+- Item 6 (download de modelo streamado): `grep -q "HttpCompletionOption.ResponseHeadersRead" src/TranslateReader.Core/Access/ModelAccess.cs && ! grep -qE "ReadAsByteArrayAsync|ReadAsStringAsync" src/TranslateReader.Core/Access/ModelAccess.cs && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ModelAccessTests" >/tmp/tr6.log 2>&1 && grep -q "Passed!" /tmp/tr6.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr6.log | head -1)" -ge 15`
+- Item 7 (suite completa, sem regressao): `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release >/tmp/tr7.log 2>&1 && grep -q "Passed!" /tmp/tr7.log && test "$(sed -n 's/.*Failed: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -eq 0 && test "$(sed -n 's/.*Total: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -ge 316`
+Auto-teste registrado no momento da escrita: os itens 1 e 4 retornam exit != 0 AGORA (os arquivos
+`ParsingEngineFixtureValidationTests.cs` e `ParsingEngineMemoryTests.cs` ainda nao existem) — prova
+de que nao passam vazio.
+
+D-2026-07-31-conversion-performance-9 (correcao do `Verify:` do item 3 do DoD — descoberto NA
+corrida final, nao no planejamento): SUPERSEDE **somente** a linha `**Verify:**` do item 3 do
+`## Definition of Done` de `.jdi/phases/conversion-performance/CONTEXT.md`. Os itens 1, 2, 4, 5, 6 e
+7 seguem como estao (1/4/6/7 ja endurecidos por D-...-8).
+Defeito do comando antigo (`awk "/ExtractAllImagesAsync/,/^    }/" ... | grep -q "OpenBookAsync"`):
+ele exige que a chamada literal `OpenBookAsync` esteja DENTRO do corpo de `ExtractAllImagesAsync` —
+o que a propria decisao de design desta phase torna impossivel. C# proibe `yield return` dentro de
+`try`/`catch`, entao o par strict+fallback teve de sair para um `OpenEpubSafeAsync` separado (ver
+`## Riscos nomeados` 1 e a acceptance da T-2 em `PLAN.md`). O `Verify:` antigo, portanto, so passaria
+numa implementacao SEM fallback — reprovaria a implementacao correta e aprovaria uma inferior.
+Nao e afrouxamento: o comando novo prova a MESMA propriedade em dois saltos e ainda proibe
+explicitamente o caminho eager nos dois, coisa que o antigo nao fazia:
+`awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "OpenEpubSafeAsync" && ! awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "ReadEpubSafeAsync" && awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.OpenBookAsync" && ! awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.ReadBookAsync"`
+Salto 1: o iterador chama `OpenEpubSafeAsync` e NAO chama `ReadEpubSafeAsync`. Salto 2:
+`OpenEpubSafeAsync` chama `EpubReader.OpenBookAsync` e NAO chama `EpubReader.ReadBookAsync`.
+Guardrail que sustenta a decisao: o gate estrutural nunca foi a prova principal deste achado — a
+prova e o item 4 (medida). A mutacao registrada na T-7 (reverter o iterador para
+`ReadEpubSafeAsync` + dicionario atras da MESMA fachada `IAsyncEnumerable`) faz
+`ParsingEngineMemoryTests` falhar com 46 MB de pico retido contra 0,36 MB do caminho lazy — ou seja,
+uma implementacao que enganasse o grep continuaria reprovando na medicao.
+
+D-2026-07-31-conversion-performance-10 (CORRECAO DE REGISTRO — precisao de auditoria de D-...-9 e
+D-...-4, levantada pela review iter 1 (W-1/W-2) e medida nesta rodada): esta decisao NAO reescreve
+nenhuma das duas — append-only, supersedendo apenas as afirmacoes nomeadas abaixo. Precedente do
+mesmo mecanismo neste repo: `D-2026-07-30-sonar-zero-issues-13`, que corrigiu `D-...-12`.
+Nenhuma linha `**Verify:**` do `## Definition of Done` muda por esta decisao — os 7 gates seguem
+exatamente como estao, e foram rodados de novo nesta rodada, todos exit 0.
+
+(a) CORRECAO da JUSTIFICATIVA de D-...-9 (a conclusao continua valida; a palavra estava errada).
+D-...-9 escreveu que o comando antigo exigia algo "que a propria decisao de design torna
+impossivel (C# proibe `yield return` em `try`/`catch`)". Preciso: C# proibe `yield return` DENTRO
+de um bloco `try` que tenha `catch` — NAO proibe um `try/catch` inline colocado ANTES do laco de
+`yield`. Em C# puro, portanto, existiria uma forma que satisfaria o comando antigo (abrir o
+`EpubBookRef` num `try/catch` inline no proprio corpo do iterador e so depois iterar). O que
+elimina essa forma nao e a linguagem, e o DESIGN LOCKED: a acceptance da T-2 do `PLAN.md` exige o
+helper `OpenEpubSafeAsync` separado e os builders compartilhados
+(`BuildStrictOptions()`/`BuildFallbackOptions()`) — e essa estrutura compartilhada e justamente o
+que prova "as MESMAS opcoes de tolerancia" exigidas por D-...-3, prova que a forma inline nao daria.
+Termo correto: o comando antigo era **insatisfazivel dentro do design locked pela T-2**, nao
+"impossivel". A CONCLUSAO de D-...-9 fica intacta e continua medida: o comando antigo reprovaria a
+implementacao correta e aprovaria uma sem fallback, e o comando novo e ESTRITAMENTE mais forte —
+proibe `ReadEpubSafeAsync` no corpo do iterador e `EpubReader.ReadBookAsync` dentro de
+`OpenEpubSafeAsync`, dois saltos que o comando antigo nao tinha.
+
+(b) CORRECAO DE NUMERO em D-...-4 (a propriedade afirmada continua valida; a contagem estava
+errada). D-...-4 escreveu "Contagem de operacoes do contrato permanece 5 (sem crescimento)".
+Medido em `src/TranslateReader.Core/Contracts/Engines/IParsingEngine.cs`: o contrato tem **6**
+operacoes ANTES e 6 DEPOIS da phase. A propriedade "sem crescimento" esta CORRETA — a phase nao
+adicionou nem removeu operacao, so trocou o tipo de retorno de uma delas; o numero 5 e que esta
+errado. Origem provavel do erro: o proprio D-...-3 fala em "os OUTROS 5 metodos publicos" (os que
+seguem no caminho eager), o que soma 6 com `ExtractAllImagesAsync`. Consequencia registrada:
+`IParsingEngine` excede o "3-5 operacoes por contrato (ideal)" do `CLAUDE.md` — forma LEGADA
+anterior a `4285f25`, nao introduzida nem agravada por esta phase, coberta por `D-2`. Sem acao de
+codigo aqui (dividir contrato legado seria o rewrite amplo que o escopo finding-driven proibe);
+registrada em `.jdi/todos.md` como candidata a revisao quando o lazy-switch dos outros metodos
+(D-...-5b) for atacado.
+
+(c) DECISAO sobre W-3 (`CancellationToken` no caminho async novo): a assinatura
+`IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync(string filePath)` locked por D-...-4 fica
+COMO ESTA — sem `CancellationToken`, sem `[EnumeratorCancellation]`. Nao e reflexo, e medida:
+`.claude/rules/csharp.md` §3 exige que o token FLUA `PageModel -> Manager -> Engine -> Access`, e a
+cadeia de LEITURA inteira e token-free hoje — `IReadingManager` (5 operacoes) nao tem token,
+`IParsingEngine` (6 operacoes) nao tem token, e os 3 call sites de producao
+(`ReaderPageModel.cs:112,134,154` -> `readingManager.LoadChapterContentAsync(BookId, chapter.HRef)`)
+nao tem `CancellationTokenSource` algum no caminho de leitura (o unico CTS do PageModel,
+`_translationCts:63`, serve o caminho de TRADUCAO). Adicionar o token so no metodo do Engine faria o
+unico consumidor de producao (`ReadingManager.ExtractImagesIfNeededAsync`) passar `default` — um
+parametro que anuncia cancelamento e nao cancela nada, exatamente a familia
+proxy-que-nao-prova que esta phase ja catalogou em D-...-3. Fazer o token FLUIR de verdade exigiria
+alterar `IReadingManager` + `ReadingManager` + os 3 call sites em `src/TranslateReader/`
+(app MAUI), com ciclo de vida de CTS no PageModel (§2.4) — e o diff em `src/TranslateReader/` e
+zero por restricao desta phase, alem de ser escopo de fase propria. O contraste esta no proprio
+repo: `ITranslationManager`/`ITranslationEngine` mostram como e um fluxo §3 correto — token
+declarado em TODOS os niveis, com `[EnumeratorCancellation]` em `GenerateStreamingAsync` e
+`TranslateChapterAsync`. Risco residual medido e limitado: o `using var bookRef` dentro do iterador
+libera o handle do arquivo no `break` do consumidor e na propagacao de excecao — provado por
+`ParsingEngineEdgeCaseTests.ExtractAllImagesAsync_WhenTheConsumerBreaksEarly_ReleasesTheArchiveHandle`
+(`File.Delete` apos o `break` nao lanca). Ou seja, a lacuna e de LATENCIA de cancelamento (no maximo
+a leitura de uma imagem), nao de seguranca de recurso. Achado NOMEADO em `.jdi/todos.md`, amarrado a
+phase futura do lazy-switch (D-...-5b), onde a cadeia de leitura sera tocada de ponta a ponta e o
+token podera entrar em TODOS os niveis de uma vez, sem contrato meio-token/meio-nao.

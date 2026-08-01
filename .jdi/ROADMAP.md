@@ -75,6 +75,9 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 ### Phase 17: Traducao cega a paragrafo em `<div>` (EPUB de calibre)
 - **Slug:** div-paragraph-translation
 - **Goal:** traduzir o texto de EPUBs cujos paragrafos sao `<div>` e nao `<p>` — hoje `HtmlUtility.ExtractTextBlocks` casa so `p|h1-h6|li` e, num livro real do usuario, enxergou 360 de 2.274 blocos (11,2% do texto), gerou o EPUB "traduzido" com 48 de 53 documentos ainda em ingles e nao avisou nada; entrega tambem o sinal de cobertura de traducao, para que um livro de formato inesperado deixe de falhar em silencio
+### Phase 16: Validacao funcional e performance da conversao
+- **Slug:** conversion-performance
+- **Goal:** provar por teste que conversao de livro, extracao de imagens e download de modelo funcionam de ponta a ponta em livro CURTO e em livro GRANDE (fixtures de 1,7 MB / 27 capitulos e 32 MB / 256 imagens ja no repo), e corrigir os gargalos nomeados que a validacao expuser — comecando pelo `ExtractAllImagesAsync`, que hoje materializa 44 MB de imagens num unico dicionario (229 alocacoes na LOH), contra `.claude/rules/csharp.md` §2.3
 
 ## Evidencias de origem das phases
 

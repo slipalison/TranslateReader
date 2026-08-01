@@ -53,8 +53,7 @@ public class ReadingManager(
         if (fileUtility.DirectoryHasContent(imagesDir))
             return;
 
-        var images = await parsingEngine.ExtractAllImagesAsync(epubPath);
-        foreach (var (relativePath, content) in images)
+        await foreach (var (relativePath, content) in parsingEngine.ExtractAllImagesAsync(epubPath))
         {
             var outputPath = Path.Combine(imagesDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
             await fileUtility.WriteFileAsync(outputPath, content);

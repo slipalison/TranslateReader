@@ -135,6 +135,10 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   mensurado (nao so conformidade de regra), precisa desta infra primeiro — candidato a phase
   propria ou a sub-escopo de `llm-mobile` (onde o consumo de bateria/memoria em dispositivo real
   passa a importar de verdade).
+  **AINDA nao introduzida em `conversion-performance`** — ver
+  `D-2026-07-31-conversion-performance-1`: a fase resolveu a exigencia de medicao com um teste
+  in-process (`GC.GetTotalMemory`), nao com BenchmarkDotNet/dotnet-counters/dotnet-gcdump. Este
+  item continua aberto para quem precisar de profiling real (device Android/iOS, `llm-mobile`).
 
 - **[AUDITORIA] Esta fase e finding-driven e NAO exaustiva** (D-2026-07-30-the-method-refactor-1).
   3 achados de codigo foram fechados (ReadingManager/IFileUtility, TranslationManager/HtmlUtility,
@@ -186,6 +190,11 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   contagem de `[Fact]`/`[Theory]` de modo relevante (so `ModelAccessTests.cs` ganha 1 metodo de
   teste novo) — o ratchet do piso continua pendente para a proxima phase que reescrever esse
   DoD item de forma material.
+  **AINDA nao aplicado em `conversion-performance`**: esta fase ADICIONA testes novos
+  (`ParsingEngineFixtureValidationTests`, `ParsingEngineMemoryTests`) mas nao inclui um item de DoD
+  de contagem `[Fact]`/`[Theory]` — nao ha numero confiavel de baseline atual disponivel para o
+  asker sem executar o contador (sem ferramenta de shell na sessao de discuss); fica para quem
+  reescrever esse DoD item de forma material com acesso a execucao real.
 
 ## De `sonar-zero-issues` (2026-07-30)
 
@@ -297,6 +306,10 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   decisao de escopo; contra `.claude/rules/csharp.md` §2.4 ("Dispose what you own"). Candidato a
   phase de higiene do Core ou a sub-escopo de `epub-zip-slip` (mesmo arquivo, mesmo caminho de
   leitura de zip).
+  **AINDA nao fechado em `conversion-performance`** — ver `D-2026-07-31-conversion-performance-6b`:
+  a fase escolheu deliberadamente NAO corrigir este item (exige investigar internals do
+  VersOne.Epub, orcamento de pesquisa da fase ja usado no achado ancora), so ocorre no caminho de
+  fallback (nao exercitado pelos 3 fixtures reais usados na validacao). Continua aberto.
 
 - **[CODIGO/CONTRATO] `ExtractCoverImageAsync` devolve `byte[0]` em vez de `null` quando a capa do
   manifesto aponta para arquivo ausente.** Mesmo achado/mesma origem do item acima (SUMMARY de
@@ -380,3 +393,78 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   natural a phase de higiene do head MAUI, junto com o item `[LEGADO/D-2]` de
   `sonar-zero-issues` (os `catch` que engolem cancelamento — W-5, ja registrado la com file:line)
   e a varredura do item `[AUDITORIA]` de `the-method-refactor`.
+  **RESOLVIDO em `conversion-performance`** — ver `D-2026-07-31-conversion-performance-6a`: guarda
+  `Length > 0` aplicada, `ParsingEngineEdgeCaseTests.cs:196` apertado para `Assert.Null(cover)`.
+
+## De `conversion-performance` (2026-07-31)
+
+- **[PERF] `LibraryManager.ListBookSummariesAsync` tem N+1 de query real** — 1 round-trip SQLite
+  (`readingStateAccess.FetchProgressAsync`) por livro dentro do `foreach`, `LibraryManager.cs:
+  21-38`. Nao fixado nesta fase: sem evidencia de impacto perceptivel em escala realista (SQLite
+  local, biblioteca pessoal tipicamente de dezenas de livros) — "medimos e nao ha gargalo
+  confirmado" (D-2026-07-31-conversion-performance-5a). Candidato a fase futura SE a biblioteca
+  crescer (ex.: import em lote, catalogo compartilhado). Fix natural: um metodo de batch em
+  `IReadingStateAccess` (`FetchProgressForBooksAsync(IEnumerable<int> bookIds)`), com atencao ao
+  limite "3-5 operacoes por contrato" do CLAUDE.md — a interface ja tem 6 operacoes hoje.
+
+- **[PERF] Todos os metodos publicos de `ParsingEngine` reparseiam o EPUB inteiro a cada chamada**
+  (`ReadEpubSafeAsync`, eager `EpubReader.ReadBookAsync`) — `ExtractChapterContentAsync`, chamado
+  1x por navegacao de capitulo via `ReadingManager.LoadChapterContentAsync`, reparseia o livro
+  TODO (schema, manifest, spine, todas as imagens) a cada troca de capitulo. Mesma causa raiz do
+  achado ancora desta fase (`D-2026-07-31-conversion-performance-3` — `ReadBookAsync` e eager,
+  `OpenBookAsync` e lazy), mas o lazy-switch desta fase ficou LIMITADO a `ExtractAllImagesAsync`.
+  Estender a `ExtractChapterContentAsync`/`ExtractChaptersAsync`/`ExtractMetadataAsync`/
+  `ExtractCoverImageAsync`/`CreateTranslatedEpubAsync` exige cachear `EpubBook`/`EpubBookRef` por
+  livro com gestao de ciclo de vida, disposal (handle de arquivo aberto em `EpubBookRef`) e
+  concorrencia (`.claude/rules/csharp.md` §3 — acesso simultaneo de troca-rapida-de-capitulo) —
+  escopo maior que uma unica phase finding-driven comporta. Candidato a fase propria de
+  performance de leitura, ou sub-escopo de `llm-mobile` (onde volta a importar de verdade em
+  device). Ver `D-2026-07-31-conversion-performance-5b`.
+
+- **[HIGIENE] `CreateTranslatedEpubAsync`'s `archive.Entries.FirstOrDefault(...)` dentro do loop
+  de capitulos e O(entries×capitulos)** — medido em `D-2026-07-31-conversion-performance-0`:
+  1.215/4.238/6.578 comparacoes de string nos 3 fixtures (Practice/Righting/Wardley). Confirmado
+  NAO dominante — fica fora de escopo integralmente em `conversion-performance`
+  (D-2026-07-31-conversion-performance-7), nem como higiene, para nao diluir o achado ancora.
+  Candidato a limpeza pontual (indexar `archive.Entries` por `FullName` normalizado uma vez, fora
+  do loop) numa fase futura de higiene do Core.
+
+- **[PERF/INFRA] Infraestrutura de medicao formal (BenchmarkDotNet/`dotnet-counters`/
+  `dotnet-gcdump`) segue nao introduzida** — mesma lacuna ja registrada em `## De
+  the-method-refactor`. Esta fase resolveu a exigencia local de "measure before optimizing" com
+  um teste in-process (`GC.GetTotalMemory(forceFullCollection: true)`), suficiente para provar a
+  propriedade "nao materializa o livro inteiro", mas nao substitui profiling real de CPU/tempo em
+  device — continua candidato para quando `llm-mobile` precisar de numeros de bateria/memoria
+  reais em Android/iOS.
+
+- **[DESIGN/§3] `IParsingEngine.ExtractAllImagesAsync` streama sem `CancellationToken` nem
+  `[EnumeratorCancellation]`** (`Contracts/Engines/IParsingEngine.cs:15`) — achado NOMEADO da review
+  iter 1 (W-3), regra citada: `.claude/rules/csharp.md` §3 ("`CancellationToken` flui PageModel ->
+  Manager -> Engine -> Access"), e o metodo e codigo NOVO (pos-`4285f25`), nao legado. Efeito real:
+  um livro de 256 imagens agora e enumerado incrementalmente e um consumidor que desista so para no
+  `break`, sem sinalizar cancelamento para dentro do stream. **NAO fixado em `conversion-performance`
+  e o porque esta medido** (D-2026-07-31-conversion-performance-10c): a cadeia de LEITURA inteira e
+  token-free — `IReadingManager` (5 operacoes) e `IParsingEngine` (6) nao tem token, e os 3 call
+  sites de producao (`ReaderPageModel.cs:112,134,154`) nao tem CTS no caminho de leitura (o unico
+  CTS do PageModel, `:63`, e do caminho de TRADUCAO). Colocar o token so neste membro faria o unico
+  consumidor de producao (`ReadingManager.ExtractImagesIfNeededAsync`) passar `default`: uma
+  assinatura que anuncia cancelamento e nao cancela nada — pior que a ausencia, porque parece
+  coberto. Fazer o token FLUIR exigiria mudar `IReadingManager` + `ReadingManager` + os 3 call sites
+  em `src/TranslateReader/` (app MAUI, diff proibido nesta phase) com ciclo de vida de CTS no
+  PageModel (§2.4). Referencia de como e um fluxo §3 correto, no proprio repo:
+  `ITranslationManager`/`ITranslationEngine`, com token em todos os niveis e
+  `[EnumeratorCancellation]` em `GenerateStreamingAsync`/`TranslateChapterAsync`. Risco residual
+  hoje e de LATENCIA (no maximo a leitura de uma imagem), nao de recurso: o `using var bookRef`
+  libera o handle no `break` e na propagacao de excecao — provado por
+  `ParsingEngineEdgeCaseTests.ExtractAllImagesAsync_WhenTheConsumerBreaksEarly_ReleasesTheArchiveHandle`.
+  **Amarrado a phase futura do lazy-switch (D-2026-07-31-conversion-performance-5b)**, onde a cadeia
+  de leitura sera tocada ponta a ponta e o token entra em TODOS os niveis de uma vez.
+
+- **[DESIGN] `IParsingEngine` tem 6 operacoes, acima do "3-5 por contrato (ideal)" do `CLAUDE.md`**
+  (`Contracts/Engines/IParsingEngine.cs`) — achado da review iter 1 (W-2), com o numero corrigido em
+  `D-2026-07-31-conversion-performance-10b` (D-...-4 registrou "permanece 5"; sao 6 antes e 6 depois,
+  a phase nao fez crescer). Forma LEGADA anterior a `4285f25`, coberta por `D-2` — dividir contrato
+  legado seria o rewrite amplo que o escopo finding-driven proibe. Revisitar junto com o lazy-switch
+  (D-...-5b), que ja vai mexer nos outros 5 metodos: a divisao natural separa leitura de conteudo
+  (metadata/chapters/chapter-content/cover) de producao de EPUB (`CreateTranslatedEpubAsync`).
+  Mesma classe de item ja anotado para `IReadingStateAccess` (6 operacoes) no bloco do N+1 acima.

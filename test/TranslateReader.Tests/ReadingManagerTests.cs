@@ -51,8 +51,7 @@ public class ReadingManagerTests
         var book = new Book { Id = 1, FilePath = "/tmp/livro.epub" };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _fileUtility.DirectoryHasContent(Arg.Any<string>()).Returns(false);
-        _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub")
-            .Returns(new Dictionary<string, byte[]>());
+        _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(AsAsync());
         _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
             .Returns("<p>Texto</p>");
 
@@ -117,11 +116,9 @@ public class ReadingManagerTests
         var book = new Book { Id = 7, FilePath = "/tmp/livro.epub" };
         _booksAccess.FetchBookAsync(7).Returns(book);
         _fileUtility.DirectoryHasContent(Arg.Any<string>()).Returns(false);
-        _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(new Dictionary<string, byte[]>
-        {
-            ["cover.jpg"] = cover,
-            ["images/fig1.png"] = illustration
-        });
+        _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(AsAsync(
+            new ExtractedImage("cover.jpg", cover),
+            new ExtractedImage("images/fig1.png", illustration)));
         _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
             .Returns("<p>Texto</p>");
 
@@ -146,7 +143,16 @@ public class ReadingManagerTests
         var result = await _sut.LoadChapterContentAsync(7, "cap1.html");
 
         Assert.Equal("<p>Texto</p>", result.Html);
-        await _parsingEngine.DidNotReceive().ExtractAllImagesAsync(Arg.Any<string>());
+        _parsingEngine.DidNotReceive().ExtractAllImagesAsync(Arg.Any<string>());
         await _fileUtility.DidNotReceive().WriteFileAsync(Arg.Any<string>(), Arg.Any<byte[]>());
+    }
+
+    // IAsyncEnumerable stubs cannot come from Task-returning helpers; an async iterator is the
+    // only shape NSubstitute can hand back. Task.Yield keeps it a real iterator (no CS1998).
+    private static async IAsyncEnumerable<ExtractedImage> AsAsync(params ExtractedImage[] items)
+    {
+        await Task.Yield();
+        foreach (var item in items)
+            yield return item;
     }
 }
