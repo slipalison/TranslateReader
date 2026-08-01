@@ -197,7 +197,9 @@ test('getVisibleParagraphs returns every calibre leaf div that holds letters', (
 
     const visible = env.window.getVisibleParagraphs();
 
-    assert.deepStrictEqual(visible.map((paragraph) => paragraph.text), [
+    // Array.from rebuilds the list in this realm: getVisibleParagraphs runs inside the vm context,
+    // so its arrays and objects carry that realm's prototypes and deepStrictEqual would reject them.
+    assert.deepStrictEqual(Array.from(visible, (paragraph) => paragraph.text), [
         'First calibre paragraph with real text.',
         'Second calibre paragraph with more text.',
         'Third paragraph, letters only matter here.',
@@ -223,11 +225,13 @@ test('getVisibleParagraphs indexes p and calibre div elements in document order'
 
     const visible = env.window.getVisibleParagraphs();
 
-    assert.deepStrictEqual(visible, [
-        { index: 0, text: 'one' },
-        { index: 1, text: 'two' },
-        { index: 2, text: 'three' },
-    ]);
+    assert.deepStrictEqual(
+        Array.from(visible, (paragraph) => ({ index: paragraph.index, text: paragraph.text })),
+        [
+            { index: 0, text: 'one' },
+            { index: 1, text: 'two' },
+            { index: 2, text: 'three' },
+        ]);
 });
 
 test('applyTranslations writes into the calibre div the reported index points at', () => {
