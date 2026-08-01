@@ -342,3 +342,102 @@ minimo para fechar: 1 teste JS de `applyTranslations` sobre `CALIBRE_BODY`".
 | sha | subject |
 |---|---|
 | `ec037f6` | test(div-paragraph-reading): close the apply/read desync gap on calibre bodies |
+
+---
+
+## Iter 4 — rodada de warnings
+
+Rodada de warnings do `/jdi-issue` sobre o `## Warnings` do REVIEW da iter 3 (o loop ja tinha
+convergido `APPROVED_WITH_WARNINGS`). **1 de 6 fechado.** Producao (`src/`) intocada: nenhum dos 6
+warnings pedia mudanca de codigo de producao.
+
+### W-5 — harness falha ABERTO com aspas no valor do atributo → **FECHADO**
+
+Unico com fix barato e real, e o de maior relevancia de seguranca: `scroll.js:32` monta
+`'[data-chapter-href="' + href + '"]'` com `href` vindo do EPUB — input NAO confiavel
+(`.claude/rules/csharp.md` secao 4).
+
+**Defeito medido antes do fix** (`test/js/harness.js`, `parseSimpleSelector`): o loop de
+`SELECTOR_PART_RE` era `exec` global e PULAVA o texto que nao conseguia ler. Quando nada casava,
+sobrava `{ tag: null, classes: [], attributes: [] }` — e matcher vazio casa com TODO elemento:
+
+| selector construido pelo shape do `scroll.js:32` | antes | depois |
+|---|---|---|
+| `[data-chapter-href="ch"1"]` (href com aspas) | **`BODY,DIV,SPAN`** (casou o documento inteiro) | `SyntaxError` |
+| `[data-chapter-href="ch"1.xhtml"]` | `(none)` — `.xhtml` virou "classe" | `SyntaxError` |
+| `]]garbage((` | **`BODY,DIV,SPAN`** | `SyntaxError` |
+| `[data-chapter-href="a,b].xhtml"]` (virgula + `]` no valor) | `alvo` (ja correto) | `alvo` (preservado) |
+| `[data-chapter-href="ok.xhtml"]` | `DIV` | `DIV` |
+
+Uma WebView real REJEITA o seletor invalido; o harness aprovava. Isso e falha ABERTA: teste verde
+podia assinar embaixo de codigo que na WebView seleciona o capitulo errado (ou o documento inteiro).
+
+**Fix (comportamento, nao redacao):** `parseSimpleSelector` agora presta contas de CADA caractere
+da parte (`match.index === cursor` + `cursor === rest.length`) e lanca `SyntaxError` quando nao
+consegue — o mesmo contrato do DOM real. `querySelector` tambem lanca em vez de devolver `null`,
+senao o `if (!ch) return;` do `scrollToChapter` engoliria o seletor invalido como no-op silencioso.
+
+**RED-first (transcript real):**
+
+```
+# ANTES do fix — node --test test/js/harness.test.js
+✔ querySelectorAll keeps an attribute value holding a comma and a bracket in one selector
+✖ querySelectorAll refuses an unparseable selector instead of matching every element
+✖ querySelector refuses an unparseable selector instead of reporting not-found
+✖ querySelectorAll refuses an empty part of a selector group
+ℹ tests 10 / ℹ pass 7 / ℹ fail 3        (AssertionError: Missing expected exception (SyntaxError))
+
+# DEPOIS do fix — node --test test/js/  (suite JS INTEIRA)
+ℹ tests 79 / ℹ pass 79 / ℹ fail 0 / ℹ cancelled 0 / ℹ skipped 0 / ℹ todo 0   -> exit 0
+```
+
+**Sem regressao, nome a nome:** os 75 nomes de teste do HEAD anterior comparados por `comm -23`
+contra a lista de `✔` do HEAD novo → **0 ausentes**; os 4 extras sao os 4 testes novos. Nenhum
+teste deletado, renomeado ou pulado. Escopo do fix: so `test/js/` (bridge/paginated/scroll/
+translation seguem verdes com o harness novo).
+
+Commit: `a57b916` — `fix(div-paragraph-reading): make the JS harness reject unparseable selectors`.
+
+### W-1 — 9 WHITESPACE do `dotnet format` (legado) → **NAO FECHADO**
+
+Dono e D-2 + a phase `baseline-de-estilo`. **Registro confirmado**: `.jdi/todos/LEGACY.md:367-377`
+ja descreve os hits e a regra ("Nao corrigir avulso — a phase de estilo deve rodar `dotnet format`
+uma vez, no escopo dela"). Nada a acrescentar; seguido.
+
+### W-2 / W-3 — limite dos gates textuais dos itens 1 / 4 / 6 → **NAO FECHADO (registrado)**
+
+O DoD critic ja confirmou que os sobreviventes sao mutantes EQUIVALENTES (item 1) ou tem backstop
+comportamental provado por execucao (itens 4/5 e 6). Fechar por texto exigiria tokenizador de JS e
+de C# — cada aproximacao `sed`/`grep` adicional teria o proximo bypass do lado de fora. Nao estava
+registrado em `.jdi/todos/`; **registrado agora** com a acao concreta para o item 6 (derivar o lado
+HEAD de `dotnet test --list-tests` em vez de grep estatico).
+
+Commit: `e6a5b46` — `docs(div-paragraph-reading): register the textual DoD gate debt`.
+
+### W-4 — branch 83,33% em `chapter?.Title` → **NAO FECHADO**
+
+Divida pre-existente, `TranslationManager.cs:265` — linha que esta phase NAO tocou (o diff toca so
+a 244), e o irmao intocado `TranslateParagraphsAsync` tem o mesmo `0,8333`. D-2 exime legado. Ja
+registrado em `.jdi/todos/2026-08-01-div-paragraph-reading.md` com o custo de fechar (1 teste).
+
+### W-6 — `console.warn` invisivel ao usuario → **NAO FECHADO**
+
+Decisao de UX (toast/badge) DEFERIDA ao PR review por `D-2026-08-01-div-paragraph-reading-5`
+(`## Deferred to PR review`). E escolha do humano, nao do doer.
+
+### Gates finais (saida real, repo real, iter 4)
+
+| Gate | Resultado |
+|---|---|
+| `node --test test/js/` | `ℹ tests 79 / ℹ pass 79 / ℹ fail 0 / ℹ skipped 0` → exit 0 (era 75/75; **+4**, zero perdido) |
+| `DOTNET_CLI_UI_LANGUAGE=en dotnet test ... -c Release` | `Passed! - Failed: 0, Passed: 336, Skipped: 2, Total: 338` → exit 0 (identico ao baseline) |
+| 7 `Verify:` extraidos por `sed` do `CONTEXT.md` COMMITADO | **7/7 exit 0** |
+| `git diff --name-only 8eff13c..HEAD -- src/` | **vazio** — zero diff de producao nesta iter |
+| `.gitignore` | alteracao local do usuario, **fora de todo commit** |
+
+### Commits da iter 4
+
+| sha | subject |
+|---|---|
+| `a57b916` | fix(div-paragraph-reading): make the JS harness reject unparseable selectors |
+| `e6a5b46` | docs(div-paragraph-reading): register the textual DoD gate debt |
