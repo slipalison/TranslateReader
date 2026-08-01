@@ -1590,3 +1590,15 @@ legado no head MAUI, que hoje esta fora da rede de testes
 (`D-2026-07-30-regression-suite-2`) — trocar cheiro conhecido por bug desconhecido, sem rede.
 Os tres passam a estar registrados em `.jdi/todos.md` com `file:line` (W-5 ja estava, no item
 `[LEGADO/D-2]` de `sonar-zero-issues`).
+
+D-2026-08-01-div-paragraph-translation-10-CORRECAO (numero errado no proprio D-...-10, medido
+depois de escrito) — o paragrafo do W-7 acima diz "17 ocorrencias de `"/dest/out.epub"` em
+`TranslationManagerTests.cs`, das quais so 5 sao desta phase". O total (17) esta certo, o SPLIT
+esta errado. Medido: `git show main:test/.../TranslationManagerTests.cs | grep -c` = **10**
+ocorrencias pre-existentes em `main`; `grep -c` no HEAD = **17**;
+`git diff main -- ... | grep -cE '^\+.*/dest/out\.epub'` = **7** linhas com o literal
+adicionadas/tocadas pela phase (o numero 5 da REVIEW iter 2 contava so os testes de ratio novos,
+nao as linhas mecanicas `result` -> `result.EpubPath`). A CONCLUSAO nao muda e fica reforcada: sao
+10 linhas legadas, nao 12, e `D-2` cobre as 10 do mesmo jeito. A mensagem do commit `d237263`
+carrega a versao errada ("12 of its 17 occurrences predate 4285f25") — nao reescrita porque a
+correcao pertence aqui, no registro append-only, e nao a historia.
