@@ -285,7 +285,34 @@ function* descendantElements(root) {
     }
 }
 
-function parseSelector(selector) {
+// A comma only separates a selector group at the top level: scroll.js builds
+// `[data-chapter-href="<href>"]` from an EPUB href, which is untrusted input, so a href holding a
+// comma must stay one selector instead of silently becoming two broken ones.
+function splitSelectorGroup(selector) {
+    const parts = [];
+    let start = 0;
+    let depth = 0;
+    let quoted = false;
+    for (let i = 0; i < selector.length; i++) {
+        const character = selector[i];
+        if (character === '"') {
+            quoted = !quoted;
+        } else if (quoted) {
+            continue;
+        } else if (character === '[') {
+            depth++;
+        } else if (character === ']') {
+            depth--;
+        } else if (character === ',' && depth === 0) {
+            parts.push(selector.slice(start, i));
+            start = i + 1;
+        }
+    }
+    parts.push(selector.slice(start));
+    return parts;
+}
+
+function parseSimpleSelector(selector) {
     const trimmed = selector.trim();
     const tagMatch = /^[a-zA-Z][\w-]*/.exec(trimmed);
     const tag = tagMatch === null ? null : tagMatch[0].toUpperCase();
@@ -303,6 +330,10 @@ function parseSelector(selector) {
         match = SELECTOR_PART_RE.exec(rest);
     }
     return { tag, classes, attributes };
+}
+
+function parseSelector(selector) {
+    return splitSelectorGroup(selector).map(parseSimpleSelector);
 }
 
 function readAttribute(element, name) {
@@ -335,11 +366,23 @@ function matches(element, parsed) {
     return true;
 }
 
+function matchesAnyPart(element, parsedParts) {
+    for (const parsed of parsedParts) {
+        if (matches(element, parsed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ONE walk over the descendants, testing every part of the group against each element. Looping the
+// group outside and concatenating would return every `p` and then every `div` instead of document
+// order, and translation.js pairs a paragraph with its translation by index into this very list.
 function matchDescendants(root, selector) {
-    const parsed = parseSelector(selector);
+    const parsedParts = parseSelector(selector);
     const found = [];
     for (const element of descendantElements(root)) {
-        if (matches(element, parsed)) {
+        if (matchesAnyPart(element, parsedParts)) {
             found.push(element);
         }
     }
