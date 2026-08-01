@@ -212,8 +212,10 @@ public class TranslationManager(
         return covered;
     }
 
+    // Clamped because malformed chapter HTML (a raw '<' inside a block) can strip down to more
+    // characters than the whole body does, and a coverage signal above 100% would just be a lie.
     private static double CoveredRatio(long coveredChars, long totalChars) =>
-        totalChars == 0 ? 1.0 : (double)coveredChars / totalChars;
+        totalChars == 0 ? 1.0 : Math.Min(1.0, (double)coveredChars / totalChars);
 
     private async Task<List<string>> FetchTranslationsFromCacheAsync(
         int bookId, string chapterHRef, List<string> textBlocks,
