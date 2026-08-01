@@ -64,6 +64,11 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
   arquivo de teste e piso de `Total` (`>= 316` = baseline 304 + 12, ratchet fixado ANTES da corrida)
   com `Failed: 0`, e recebem `DOTNET_CLI_UI_LANGUAGE=en` porque o `dotnet test` local emite o sumario
   em pt-BR ("Aprovado!") e `grep "Passed!"` daria falso negativo. `$P`/`PASS(f)` expandidos inline.
+- D-2026-07-31-conversion-performance-9: corrige a linha `**Verify:**` do item 3. O comando antigo
+  exigia `OpenBookAsync` literalmente dentro do corpo de `ExtractAllImagesAsync`, o que a propria
+  decisao de design torna impossivel (C# proibe `yield return` em `try`/`catch`, entao o par
+  strict+fallback vive em `OpenEpubSafeAsync`) — reprovaria a implementacao correta e aprovaria uma
+  sem fallback. O comando novo prova a mesma cadeia em dois saltos e proibe o caminho eager nos dois.
 
 ## Canonical refs
 - Card colado via `/jdi-issue` em 2026-07-31 (sem tracker/URL) — ver D-...-0.
@@ -98,8 +103,8 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
 
 - [ ] `ExtractAllImagesAsync` usa `OpenBookAsync` (lazy), nao herda o eager-load de
       `ReadEpubSafeAsync` — a causa raiz real do achado ancora.
-      **Verify:** `awk "/ExtractAllImagesAsync/,/^    }/" src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "OpenBookAsync"`
-      **Source:** CONTEXT (D-...-3)
+      **Verify:** `awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "OpenEpubSafeAsync" && ! awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "ReadEpubSafeAsync" && awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.OpenBookAsync" && ! awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.ReadBookAsync"`
+      **Source:** CONTEXT (D-...-3), corrigido por D-...-9
 
 - [ ] Pico de memoria retida ao extrair as 229 imagens do fixture Wardley (44MB totais) fica
       limitado (nao materializa o livro inteiro de uma vez) — prova MEDIDA, nao so estrutural.

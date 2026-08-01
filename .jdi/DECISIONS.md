@@ -1525,3 +1525,24 @@ Verify que passam a valer:
 Auto-teste registrado no momento da escrita: os itens 1 e 4 retornam exit != 0 AGORA (os arquivos
 `ParsingEngineFixtureValidationTests.cs` e `ParsingEngineMemoryTests.cs` ainda nao existem) — prova
 de que nao passam vazio.
+
+D-2026-07-31-conversion-performance-9 (correcao do `Verify:` do item 3 do DoD — descoberto NA
+corrida final, nao no planejamento): SUPERSEDE **somente** a linha `**Verify:**` do item 3 do
+`## Definition of Done` de `.jdi/phases/conversion-performance/CONTEXT.md`. Os itens 1, 2, 4, 5, 6 e
+7 seguem como estao (1/4/6/7 ja endurecidos por D-...-8).
+Defeito do comando antigo (`awk "/ExtractAllImagesAsync/,/^    }/" ... | grep -q "OpenBookAsync"`):
+ele exige que a chamada literal `OpenBookAsync` esteja DENTRO do corpo de `ExtractAllImagesAsync` —
+o que a propria decisao de design desta phase torna impossivel. C# proibe `yield return` dentro de
+`try`/`catch`, entao o par strict+fallback teve de sair para um `OpenEpubSafeAsync` separado (ver
+`## Riscos nomeados` 1 e a acceptance da T-2 em `PLAN.md`). O `Verify:` antigo, portanto, so passaria
+numa implementacao SEM fallback — reprovaria a implementacao correta e aprovaria uma inferior.
+Nao e afrouxamento: o comando novo prova a MESMA propriedade em dois saltos e ainda proibe
+explicitamente o caminho eager nos dois, coisa que o antigo nao fazia:
+`awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "OpenEpubSafeAsync" && ! awk '/IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "ReadEpubSafeAsync" && awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.OpenBookAsync" && ! awk '/private static async Task<EpubBookRef> OpenEpubSafeAsync/,/^    }/' src/TranslateReader.Core/Business/Engines/ParsingEngine.cs | grep -q "EpubReader.ReadBookAsync"`
+Salto 1: o iterador chama `OpenEpubSafeAsync` e NAO chama `ReadEpubSafeAsync`. Salto 2:
+`OpenEpubSafeAsync` chama `EpubReader.OpenBookAsync` e NAO chama `EpubReader.ReadBookAsync`.
+Guardrail que sustenta a decisao: o gate estrutural nunca foi a prova principal deste achado — a
+prova e o item 4 (medida). A mutacao registrada na T-7 (reverter o iterador para
+`ReadEpubSafeAsync` + dicionario atras da MESMA fachada `IAsyncEnumerable`) faz
+`ParsingEngineMemoryTests` falhar com 46 MB de pico retido contra 0,36 MB do caminho lazy — ou seja,
+uma implementacao que enganasse o grep continuaria reprovando na medicao.
