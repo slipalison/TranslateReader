@@ -52,7 +52,7 @@ public class ReadingManagerTests
         _booksAccess.FetchBookAsync(1).Returns(book);
         _fileUtility.DirectoryHasContent(Arg.Any<string>()).Returns(false);
         _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(AsAsync());
-        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<p>Texto</p>");
 
         var result = await _sut.LoadChapterContentAsync(1, "cap1.html");
@@ -60,7 +60,7 @@ public class ReadingManagerTests
         Assert.Equal("<p>Texto</p>", result.Html);
         Assert.Contains("images", result.BaseDirectory);
         await _parsingEngine.Received(1).ExtractChapterContentAsync(
-            "/tmp/livro.epub", "cap1.html", Arg.Is<string>(s => s.Contains("images")));
+            "/tmp/livro.epub", "cap1.html", Arg.Is<string>(s => s.Contains("images")), Arg.Any<ChapterContentPurpose>());
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class ReadingManagerTests
         _parsingEngine.ExtractAllImagesAsync("/tmp/livro.epub").Returns(AsAsync(
             new ExtractedImage("cover.jpg", cover),
             new ExtractedImage("images/fig1.png", illustration)));
-        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<p>Texto</p>");
 
         await sut.LoadChapterContentAsync(7, "cap1.html");
@@ -137,7 +137,7 @@ public class ReadingManagerTests
         var book = new Book { Id = 7, FilePath = "/tmp/livro.epub" };
         _booksAccess.FetchBookAsync(7).Returns(book);
         _fileUtility.DirectoryHasContent(Path.Combine("/tmp/books", "images", "7")).Returns(true);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/livro.epub", "cap1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<p>Texto</p>");
 
         var result = await _sut.LoadChapterContentAsync(7, "cap1.html");

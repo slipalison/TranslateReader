@@ -27,7 +27,8 @@ public class ReadingManager(
         var book = await booksAccess.FetchBookAsync(bookId);
         var imagesDir = Path.Combine(booksDirectory, "images", bookId.ToString());
         await ExtractImagesIfNeededAsync(book.FilePath, imagesDir);
-        var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapterHRef, imagesDir);
+        var html = await parsingEngine.ExtractChapterContentAsync(
+            book.FilePath, chapterHRef, imagesDir, ChapterContentPurpose.Display);
         return new ChapterHtmlResult(html, imagesDir);
     }
 

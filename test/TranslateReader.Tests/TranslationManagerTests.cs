@@ -344,9 +344,9 @@ public class TranslationManagerTests
         };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>Hello</p></body></html>");
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>World</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(
@@ -378,7 +378,7 @@ public class TranslationManagerTests
         var chapters = new List<Chapter> { new() { HRef = "ch1.html", Title = "Chapter 1" } };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>First</p><p>Second</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(
@@ -407,7 +407,7 @@ public class TranslationManagerTests
         var chapters = new List<Chapter> { new() { HRef = "ch1.html", Title = "Chapter 1" } };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>Hello</p><p>World</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(
@@ -439,7 +439,7 @@ public class TranslationManagerTests
         var chapters = new List<Chapter> { new() { HRef = "ch1.html", Title = "Chapter 1" } };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><h1>Title</h1><p>Hello</p><li>Item</li></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(
@@ -481,7 +481,7 @@ public class TranslationManagerTests
         var chapters = new List<Chapter> { new() { HRef = "ch1.html", Title = "Chapter 1" } };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns(html);
     }
 
@@ -551,9 +551,9 @@ public class TranslationManagerTests
         };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>Hello</p></body></html>");
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>World</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns(new BookTranslationJob
         {
@@ -589,9 +589,9 @@ public class TranslationManagerTests
         };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>Hello</p></body></html>");
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch2.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>World</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(
@@ -673,7 +673,7 @@ public class TranslationManagerTests
         };
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", Arg.Any<string>(), Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns("<html><body><p>Hello</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns(new BookTranslationJob
         {
@@ -874,7 +874,7 @@ public class TranslationManagerTests
         chapters = [new() { HRef = "ch1.html", Title = "Chapter 1" }];
         _booksAccess.FetchBookAsync(1).Returns(book);
         _parsingEngine.ExtractChaptersAsync("/tmp/test.epub").Returns(chapters);
-        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>())
+        _parsingEngine.ExtractChapterContentAsync("/tmp/test.epub", "ch1.html", Arg.Any<string>(), Arg.Any<ChapterContentPurpose>())
             .Returns(html);
         _jobAccess.FetchActiveJobAsync(1).Returns((BookTranslationJob?)null);
         _promptUtility.BuildTranslationMessages(

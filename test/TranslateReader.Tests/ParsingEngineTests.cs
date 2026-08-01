@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using TranslateReader.Business.Engines;
+using TranslateReader.Models;
 using TranslateReader.Utilities;
 
 namespace TranslateReader.Tests;
@@ -80,7 +81,7 @@ public class ParsingEngineTests
         var chapterWithImage = chapters.First(c =>
             c.HRef.Contains("cover") || c.HRef.Contains("ad") || c.HRef.Contains("title"));
 
-        var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapterWithImage.HRef, ImagesDir);
+        var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapterWithImage.HRef, ImagesDir, ChapterContentPurpose.Display);
 
         Assert.Contains("https://epub-images/", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
@@ -93,9 +94,39 @@ public class ParsingEngineTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapter.HRef, ImagesDir);
+            var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapter.HRef, ImagesDir, ChapterContentPurpose.Display);
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    // Byte-for-byte against the entry read straight out of the zip, outside the pipeline: proves
+    // that neither RewriteImagePaths nor InlineCssLinks runs under Export, without having to know
+    // what the fixture contains (D-2026-08-01-translated-epub-images-3).
+    [Fact]
+    public async Task Practice_ExtractChapterContentAsync_ForExport_MatchesRawZipEntryForEveryChapter()
+    {
+        var chapters = await _sut.ExtractChaptersAsync(PracticeEpub);
+        using var archive = ZipFile.OpenRead(PracticeEpub);
+
+        foreach (var chapter in chapters)
+        {
+            var exported = await _sut.ExtractChapterContentAsync(
+                PracticeEpub, chapter.HRef, string.Empty, ChapterContentPurpose.Export);
+
+            Assert.Equal(ReadEntry(archive, chapter.HRef), exported);
+        }
+    }
+
+    // The historic root cause was Display running with an empty images directory, which produced
+    // https://epub-images//path. The guard turns that into an unreachable state.
+    [Fact]
+    public async Task Practice_ExtractChapterContentAsync_DisplayWithEmptyImagesDirectory_ThrowsInvalidOperationException()
+    {
+        var chapter = (await _sut.ExtractChaptersAsync(PracticeEpub))[0];
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _sut.ExtractChapterContentAsync(
+                PracticeEpub, chapter.HRef, string.Empty, ChapterContentPurpose.Display));
     }
 
     [Fact]
@@ -149,7 +180,7 @@ public class ParsingEngineTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(RightingEpub, chapter.HRef, ImagesDir);
+            var html = await _sut.ExtractChapterContentAsync(RightingEpub, chapter.HRef, ImagesDir, ChapterContentPurpose.Display);
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -223,7 +254,7 @@ public class ParsingEngineTests
         if (titlePage is null)
             return;
 
-        var html = await _sut.ExtractChapterContentAsync(WardleyEpub, titlePage.HRef, ImagesDir);
+        var html = await _sut.ExtractChapterContentAsync(WardleyEpub, titlePage.HRef, ImagesDir, ChapterContentPurpose.Display);
 
         if (html.Contains("<image", StringComparison.OrdinalIgnoreCase))
         {
@@ -239,7 +270,7 @@ public class ParsingEngineTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(WardleyEpub, chapter.HRef, ImagesDir);
+            var html = await _sut.ExtractChapterContentAsync(WardleyEpub, chapter.HRef, ImagesDir, ChapterContentPurpose.Display);
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -374,7 +405,7 @@ public class ParsingEngineTests
 
         foreach (var href in chapters.Select(c => c.HRef))
         {
-            var html = await _sut.ExtractChapterContentAsync(epubPath, href, string.Empty);
+            var html = await _sut.ExtractChapterContentAsync(epubPath, href, string.Empty, ChapterContentPurpose.Export);
             var blocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
             rebuilt[href] = HtmlUtility.ReplaceTextBlocksInHtml(html, blocks);
         }

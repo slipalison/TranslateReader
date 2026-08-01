@@ -1,4 +1,5 @@
 using TranslateReader.Business.Engines;
+using TranslateReader.Models;
 using TranslateReader.Utilities;
 
 namespace TranslateReader.Tests;
@@ -59,7 +60,7 @@ public class ExtractTextBlocksBaselineTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(epubPath, chapter.HRef, string.Empty);
+            var html = await _sut.ExtractChapterContentAsync(epubPath, chapter.HRef, string.Empty, ChapterContentPurpose.Export);
             foreach (var block in HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html)))
             {
                 blockCount++;

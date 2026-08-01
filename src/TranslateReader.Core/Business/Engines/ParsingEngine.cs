@@ -44,13 +44,25 @@ public partial class ParsingEngine : IParsingEngine
             .ToList();
     }
 
-    public async Task<string> ExtractChapterContentAsync(string filePath, string chapterHRef, string imagesDirectory)
+    public async Task<string> ExtractChapterContentAsync(
+        string filePath,
+        string chapterHRef,
+        string imagesDirectory,
+        ChapterContentPurpose purpose)
     {
         var epub = await ReadEpubSafeAsync(filePath);
         var item = epub.ReadingOrder.FirstOrDefault(r => r.FilePath == chapterHRef)
             ?? throw new InvalidOperationException($"Chapter '{chapterHRef}' not found in EPUB.");
         if (string.IsNullOrEmpty(item.Content))
             throw new InvalidOperationException($"Chapter '{chapterHRef}' has no content.");
+        if (purpose == ChapterContentPurpose.Display && string.IsNullOrWhiteSpace(imagesDirectory))
+            throw new InvalidOperationException("Display purpose requires a non-empty images directory.");
+
+        // Both rewrites below emit app-only artifacts (the epub-images virtual host, an inlined
+        // <style>) that are dead weight in a file leaving the app, so Export skips them entirely.
+        if (purpose == ChapterContentPurpose.Export)
+            return item.Content;
+
         var html = RewriteImagePaths(item.Content, item.FilePath, epub, imagesDirectory);
         html = InlineCssLinks(html, item.FilePath, epub);
         return html;

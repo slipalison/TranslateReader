@@ -115,7 +115,7 @@ public class ParsingEngineEdgeCaseTests : IDisposable
         var path = CreateRichEpub();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.ExtractChapterContentAsync(path, "text/nope.xhtml", _tempDir));
+            () => _sut.ExtractChapterContentAsync(path, "text/nope.xhtml", _tempDir, ChapterContentPurpose.Display));
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class ParsingEngineEdgeCaseTests : IDisposable
         var path = CreateRichEpub();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.ExtractChapterContentAsync(path, "OEBPS/text/empty.xhtml", _tempDir));
+            () => _sut.ExtractChapterContentAsync(path, "OEBPS/text/empty.xhtml", _tempDir, ChapterContentPurpose.Display));
 
         Assert.Contains("no content", exception.Message, StringComparison.Ordinal);
     }
@@ -134,7 +134,7 @@ public class ParsingEngineEdgeCaseTests : IDisposable
     {
         var path = CreateRichEpub();
 
-        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/chapter1.xhtml", _tempDir);
+        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/chapter1.xhtml", _tempDir, ChapterContentPurpose.Display);
 
         Assert.Contains("<style type=\"text/css\">body { color: red; }</style>", html, StringComparison.Ordinal);
         Assert.Contains("rel=\"icon\"", html, StringComparison.Ordinal);
@@ -147,7 +147,7 @@ public class ParsingEngineEdgeCaseTests : IDisposable
     {
         var path = CreateRichEpub();
 
-        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/chapter1.xhtml", _tempDir);
+        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/chapter1.xhtml", _tempDir, ChapterContentPurpose.Display);
 
         var bookDir = Path.GetFileName(_tempDir);
         Assert.Contains($"https://epub-images/{bookDir}/OEBPS/images/pic.png", html, StringComparison.Ordinal);
@@ -161,7 +161,7 @@ public class ParsingEngineEdgeCaseTests : IDisposable
     {
         var path = CreateRichEpub();
 
-        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/svg.xhtml", _tempDir);
+        var html = await _sut.ExtractChapterContentAsync(path, "OEBPS/text/svg.xhtml", _tempDir, ChapterContentPurpose.Display);
 
         var bookDir = Path.GetFileName(_tempDir);
         Assert.Equal(2, CountOccurrences(html, $"https://epub-images/{bookDir}/OEBPS/images/pic.png"));

@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.IO.Compression;
 using System.Xml;
 using TranslateReader.Business.Engines;
+using TranslateReader.Models;
 
 namespace TranslateReader.Tests;
 
@@ -61,7 +62,7 @@ public class ParsingEngineFixtureValidationTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapter.HRef, ImagesDir);
+            var html = await _sut.ExtractChapterContentAsync(PracticeEpub, chapter.HRef, ImagesDir, ChapterContentPurpose.Display);
 
             Assert.False(string.IsNullOrWhiteSpace(html), $"Capitulo vazio: {chapter.HRef}");
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
@@ -128,7 +129,7 @@ public class ParsingEngineFixtureValidationTests
 
         foreach (var chapter in chapters)
         {
-            var html = await _sut.ExtractChapterContentAsync(WardleyEpub, chapter.HRef, ImagesDir);
+            var html = await _sut.ExtractChapterContentAsync(WardleyEpub, chapter.HRef, ImagesDir, ChapterContentPurpose.Display);
 
             Assert.False(string.IsNullOrWhiteSpace(html), $"Capitulo vazio: {chapter.HRef}");
             Assert.DoesNotContain("src=\"../", html, StringComparison.OrdinalIgnoreCase);
