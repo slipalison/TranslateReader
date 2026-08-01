@@ -1,23 +1,26 @@
-# Phase 18: Review  (slug: translated-epub-images)
+# Phase 18: Review (slug: translated-epub-images)
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
-Iter 1 (ralph loop). Diff revisado: `origin/main` (`05f3670`) → HEAD (`68f208e`),
-branch `jdi/translated-epub-images`. Toda evidência abaixo foi **re-executada por esta
-revisora** — nada foi aceito do SUMMARY sem prova própria.
+Review FINAL da phase (iter 2, re-verify da rodada de warnings do `/jdi-issue`). Regenerada do
+zero e auto-suficiente: cobre o diff completo `origin/main` (`05f3670`) → HEAD (`58f341a`) na
+branch `jdi/translated-epub-images` (12 commits), incluindo a iter 1 (fix + testes) e a iter 2
+(fechamento do W-2 por `D-2026-08-01-translated-epub-images-10`, zero linha de `src/`/`test/`).
+Toda evidencia abaixo foi reproduzida por esta revisora nesta sessao — nada e auto-reportado
+pelo doer.
 
 ## Gates
 
 | Gate | Status | Details |
 |---|---|---|
-| Build | PASS | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` → exit 0, `0 Erro(s)` (warnings MVVMTK0045 pré-existentes) |
-| Tests | PASS | `Failed: 0, Passed: 341, Skipped: 2, Total: 343` — baseline `main` 336/2/338 (+5), baseline legado 167 preservado |
-| Coverage | PASS | Agregado 93,18% (contexto). Arquivos novos pós-`4285f25`: `BookTranslationResult.cs` 100%, `ExtractedImage.cs` 100%, `ChapterContentPurpose.cs` ausente do report (enum puro, zero linhas cobríveis). Arquivos de produção ALTERADOS na fase: `ParsingEngine.cs`, `TranslationManager.cs`, `ReadingManager.cs` todos com `line-rate="1"` (100%) — acima do piso 90% (D-6) |
-| Lint | WARN | `dotnet format --verify-no-changes` exit 2 — 100% legado (ver W-1); nenhuma linha tocada pela fase |
-| Security/Layer | PASS | 5.1/5.2/5.10/5.15b/5.16/5.17 sem hit; 5.3 só auto-interface; 5.11 baseline 5/4 inalterado; 5.12 só o static legado conhecido; OCE-swallow em Pages/PageModels é legado não tocado pela fase |
-| Consistency | PASS | 5 commits da fase atômicos, Conventional Commits com scope correto, tipos variados (`docs`/`test`/`fix`), files_modified do PLAN = commits reais |
-| UI Validation | SKIPPED | has_frontend=false (cliente MAUI nativo) |
-| DoD | PASS | 6/6 auto PASS (re-executados literalmente por esta revisora), 0 manual |
+| Build | PASS | `TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0`: `0 Error(s)` (via DoD 6, rodado nesta sessao) |
+| Tests | PASS | `Failed: 0, Passed: 341, Skipped: 2, Total: 343` (baseline D-2 = 167, piso derivado da base = 343, ambos atendidos); JS `node --test test/js/`: `pass 79, fail 0` |
+| Coverage | PASS | Escopo new/changed: `ParsingEngine.cs` 100%, `TranslationManager.cs` 100%, `ReadingManager.cs` 100% line-rate; `ChapterContentPurpose.cs` e enum puro (sem linha executavel, ausente do report — esperado). Agregado 93.18% (contexto, nao e o gate). Threshold 90% (D-6) atendido |
+| Lint | WARN | `dotnet format --verify-no-changes` exit 2: 9 erros WHITESPACE, todos em linhas do commit legado `4285f25` (provado por `git blame` — inclusive `TranslationManagerTests.cs:560-561`, arquivo tocado pela phase mas linhas NAO tocadas). D-2 exime; dono = phase `baseline-de-estilo` (W-1) |
+| Security/Layer | PASS | 5.1/5.2/5.10/5.15b/5.16/5.17: zero hit. 5.3: so auto-interface. 5.11: `+=`5/`-=`4 == baseline bootstrap. 5.12: so o static legado conhecido (`TranslationEngine.cs:16`). `catch(OCE)` em `TranslationManager.cs:61` faz `throw;` (correto, e pre-existente). Empty catches em `Pages/PageModels` sao legado intocado (diff de `src/TranslateReader/` = vazio). Teste do artefato prova que nenhuma URL do app vaza pro EPUB exportado |
+| Consistency | PASS | 12 commits, Conventional Commits com scope = slug, tipos adequados (`chore`/`docs`/`test`/`fix`); arquivos commitados == `files_modified` do PLAN (5 de producao + 6 de teste + `.jdi/`); 5/5 tasks completed, cada uma com teste correspondente |
+| UI Validation | SKIPPED | has_frontend=false (client MAUI nativo) |
+| DoD | PASS | 6/6 auto PASS (comandos extraidos por `sed` do CONTEXT.md commitado e rodados literalmente), 0 manual |
 
 ## Blockers
 
@@ -25,159 +28,112 @@ Nenhum.
 
 ## Warnings
 
-- **W-1 (lint, legado — não bloqueia por D-2):** `dotnet format --verify-no-changes` sai 2 com
-  erros `WHITESPACE` em `src/TranslateReader.Core/Business/Engines/ThemeEngine.cs:12,14`,
-  `src/TranslateReader/Pages/ReaderPage.xaml.cs:122,124`,
-  `test/TranslateReader.Tests/ThemeEngineTests.cs:12` e
-  `test/TranslateReader.Tests/TranslationManagerTests.cs:560-561`. Verifiquei: a linha 560 existe
-  VERBATIM em `origin/main` na mesma posição e nenhum hunk da fase toca essas linhas — a alegação
-  do doer ("saída idêntica antes e depois") confere. Resolve-se na phase `baseline-de-estilo`.
-  Regra: Gate 4 (WARN até `.editorconfig` existir).
-- **W-2 (fragilidade de gate):** os `Verify:` dos itens 5 e 6 do DoD dependem do ref **LOCAL**
-  `main` (`.jdi/phases/translated-epub-images/CONTEXT.md:158,164`). A sessão do doer precisou de
-  `git update-ref` para o gate não reprovar código correto — o fast-forward foi legítimo (ver
-  veredito (f)), mas um gate que exige pré-sincronização manual de ref local falha nos DOIS
-  sentidos: ref velho reprova código correto; `main` que avance além da base do branch também.
-  Recomendação para DoDs futuros: ancorar em `origin/main` ou em `git merge-base origin/main HEAD`.
-  Regra: Gate 8 (robustez do `Verify:`).
+- **W-1 (herdado da iter 1, nao-corrigivel nesta phase por regra):** `dotnet format` exit 2 com 9
+  violacoes WHITESPACE legadas (`ThemeEngine.cs`, `ReaderPage.xaml.cs`, `ThemeEngineTests.cs`,
+  `TranslationManagerTests.cs:560-561`). Blame confirma: todas do commit `4285f25` (boundary D-2),
+  nenhuma em linha tocada pela phase. Dono: `baseline-de-estilo` (ROADMAP posicao 1); registro ja
+  existe em `.jdi/todos/LEGACY.md`. Decisao do doer de NAO corrigir esta correta (D-2).
+- **W-3 (NOVO, desta review):** a medicao do cenario (b) registrada em
+  `D-2026-08-01-translated-epub-images-10` para o item 5 ANTIGO esta **errada**. A decisao afirma
+  "item 5 ANTIGO -> exit 0 VAZIO ... sem emitir um unico erro". Reproduzido nesta sessao em clone
+  fresco sem `main` local: o comando ANTIGO sai **exit 1**, nao 0 — a derivacao degrada oca como
+  descrito (`B=0`, `S=0`, `names_main=0`, `comm` trivialmente vazio, e 3x `fatal: unable to
+  resolve revision: main` SAO emitidos no stderr) e o `dotnet test` roda verde, mas o awk final
+  reprova em `Skipped(2) <= S(0)`. Ou seja: o gate ANTIGO falhava FECHADO por acidente (a suite
+  ter 2 testes `Skip =`), nao aberto. O risco de passe oco era real mas CONDICIONAL (so com suite
+  de 0 skips). Nada disso muda o veredito: a motivacao da troca permanece ((a)/(a')/(b) reprovam
+  codigo correto; a janela de oco condicional existia) e os comandos NOVOS foram verificados
+  independentemente (tabela abaixo). Recomendacao: uma linha de correcao de prosa em
+  `D-...-11` append-only — o mesmo tratamento que a `-10` deu ao "309 nomes" da `-9`. Nao
+  bloqueia ship.
 
-## Veredito dos itens céticos (a)–(h)
+## Verificacao cetica da iter 2 (evidencia propria, clone descartavel no scratchpad)
 
-- **(a) RED-first — CONFIRMADO.** Worktree descartável em `d001a75` (branch intocada):
-  `dotnet test --filter ...NoEntryContainsTheAppHost` → `Failed: 1, Passed: 0`, mensagem com
-  `ops/xhtml/ad.xhtml: contains 'epub-images' -> epub-images//ops/images/ad.jpg` (a barra dupla do
-  `bookDir` vazio) e `gained 'https://' -> https://opensource.org/licenses/MIT`. E
-  `git diff d001a75 036b2b6 -- test/` mostra que o commit de fix só fez o churn mecânico do 4º
-  argumento + 2 testes novos; no teste do artefato a ÚNICA linha alterada é o 4º argumento
-  `ChapterContentPurpose.Export` em `RebuildEveryChapterAsync` — o bloco `leaks`/`Assert.True` não
-  aparece no diff. Asserção intocada entre RED e GREEN.
-- **(b) Artefato limpo — CONFIRMADO por inspeção própria.** Sondei o EPUB-fonte Practice
-  (45 entradas): **1** `https://` nativo (`ops/styles/1266002537.css`, URL de licença MIT) e **0**
-  `epub-images` — exatamente o que o doer alegou. Gerei EU MESMA o artefato no worktree em HEAD
-  (persistindo a saída do caminho de produção `Export` → `CreateTranslatedEpubAsync`) e escaneei o
-  zip: 45 entradas, **0** com `epub-images`, `https://` presente APENAS em
-  `ops/styles/1266002537.css` — a mesma entrada nativa do fonte. Nenhuma entrada GANHOU `https://`.
-  A forma DIFERENCIAL do item 3 é necessária (a absoluta reprovaria código correto por causa do CSS
-  nativo) e suficiente (o RED provou que ela pega o vazamento nos capítulos).
-- **(c) Guarda fail-fast — NÃO quebra produção.** `git grep ExtractChapterContentAsync` em `src/`:
-  4 call sites exatos. O ÚNICO com `Display` é `ReadingManager.LoadChapterContentAsync`
-  (`ReadingManager.cs:28-31`), onde `imagesDir = Path.Combine(booksDirectory, "images",
-  bookId.ToString())` — estruturalmente não-vazio (contém o segmento `"images"` mesmo que
-  `booksDirectory` fosse vazio), e `booksDirectory` vem de `MauiProgram.cs:65`
-  (`Path.Combine(FileSystem.AppDataDirectory, "books")`). Os 3 call sites com `string.Empty` usam
-  `Export`, que ignora o parâmetro. Nenhum caminho legítimo alcança a exceção. Sem blocker.
-- **(d) Literais de caracterização — INTOCADOS.** Grep sobre o diff completo da fase em `test/`
-  por `6102|239075|1329|292254|2124|678242`: zero ocorrência (nenhum literal adicionado, removido
-  ou alterado). Os 4 pares seguem em `ExtractTextBlocksBaselineTests.cs:33-52`, agora rodando sob
-  `Export` — prova independente de que pular as 2 mutações não altera o texto extraído.
-- **(e) Prova por mutação — REFEITA E CONFIRMADA.** No worktree em HEAD (baseline 3/3 verde):
-  (a) removi o early-return de `Export` (grep antes=1/depois=0, `git diff` 2 deleções — mutação
-  APLICADA) → `Failed: 2` (`ForExport_MatchesRawZipEntry...` e `NoEntryContainsTheAppHost`),
-  exatamente os 2 esperados; (b) restaurei e removi a guarda (grep antes=1/depois=0) →
-  `Failed: 1` (`DisplayWithEmptyImagesDirectory_Throws...`). Ambas revertidas, worktree limpo e
-  removido. Os testes matam as duas mutações — o gate não é textual.
-- **(f) Ref `main` local — fast-forward LEGÍTIMO.** `git merge-base --is-ancestor 9e07c83 05f3670`
-  → verdadeiro; `main` == `origin/main` == `05f3670` agora; reflog consistente com update-ref sem
-  mexer na árvore. A dependência do `Verify:` em ref LOCAL fica registrada como fragilidade → W-2.
-- **(g) Derivação do item 5 — sólida, com lacuna residual conhecida.** `B=338` derivado de `main`
-  bate 1:1 com a corrida real de `main` (336+2); piso `Total >= B+5 = 343` é JUSTO (HEAD tem
-  exatamente 343 — nada de folga). `comm -23` cobre deleção E rename (nome antigo ausente do HEAD
-  → falha fechada); a extração pega métodos públicos não-teste também (superset conservador, falha
-  fechada). Lacuna residual: teste esvaziado mantendo o nome passaria no `comm` — mitigada porque
-  os 5 testes novos da fase são pinados individualmente pelos itens 1–4 (grep de nome + corrida
-  filtrada com piso numérico) e pela prova por mutação (e). Não é frouxo nem impossível hoje;
-  fragilidade do ref local coberta em W-2.
-- **(h) Escopo e The Method — LIMPO.** Enum novo em
-  `src/TranslateReader.Core/Models/ChapterContentPurpose.cs`, namespace `TranslateReader.Models`,
-  idêntico ao padrão de `ReadingMode.cs`/`Book.cs` — Models é a camada compartilhada de POCOs que
-  `Contracts/` já referencia (`Book`, `Chapter`); nenhuma violação de camada. `IParsingEngine`
-  permanece com 6 operações (parâmetro, não método novo — D-...-2), membro alterado com
-  `<summary>`. `src/TranslateReader/` (app MAUI): ZERO mudança. `.gitignore`: em 0 commits
-  (verificado no log completo da fase). `D-...-1..-8`: intocadas após seus commits de criação
-  (`git diff 3271fc3..HEAD -- .jdi/decisions/` mostra SÓ a adição de `D-...-9`);
-  `D-...-9` é arquivo NOVO em `0aa4320`. JS: `node --test test/js/` → 79/79 (== baseline).
+Clone `git clone -b jdi/translated-epub-images` do repo local (sem `main` local — estado exato de
+CI); repo real NUNCA mutado (`git status` final: so o `.gitignore` local pre-existente do usuario).
+OLD = `Verify:` dos itens 5/6 no CONTEXT.md de `141c63c` (iter 1); NEW = HEAD.
+
+| # | Verificacao | Resultado |
+|---|---|---|
+| a | Zero diff de codigo na iter 2 | `git diff --stat 141c63c..HEAD -- src/ test/` **vazio**; iter 2 = `D-...-10.md` (A) + `CONTEXT.md` + `SUMMARY.md` |
+| b | Regressao de gate (4 mutacoes, `main == origin/main`, melhor caso do OLD) | Arquivo a mais em `src/TranslateReader/`: OLD6=1/NEW6=1. Arquivo a mais no Core fora da lista fechada: OLD6=1/NEW6=1. Metodo de teste DELETADO: OLD5=1/NEW5=1 (`comm -23` nao-vazio). RENOMEADO: OLD5=1/NEW5=1. **Nenhum caso OLD=1/NEW=0** |
+| c1 | `main` local ATRASADO (`9e07c83`) | OLD6 exit 1 arrastando `.../js/translation.js` (PR #17); OLD5 afrouxa (`B=337`, `names_main=308`). NEW6 exit 0, `BASE=05f3670`. Confere com D-...-10(a) |
+| c2 | `main` local AUSENTE (clone de CI) | OLD6 exit 1 (`fatal: bad revision 'main'`); OLD5 exit **1** (ver W-3 — a D-...-10 alega 0); NEW5 exit 0 FULL RUN no clone (`BASE=05f3670`, `B=338`, `names_base=309`, suite 343) e NEW6 exit 0 |
+| c3 | Base AVANCA com PR aberto (commit de terceiro em `origin/main`) | OLD6 exit 1; NEW6 exit 0, `merge-base` fixo em `05f3670`. Confere com D-...-10(a') |
+| d | Guardas anti-oco | Sem `origin/main` no clone: `BASE=$(git merge-base origin/main HEAD)` sai exit **128** e o `&&` corta (NEW5=128, NEW6=128 — medido). `test "$B" -gt 0` e `test -s names-base.txt` fecham a janela residual de base ilegivel. Nenhum caso de exit 0 com `origin/main` ausente encontrado |
+| e | Append-only | `D-...-10.md` e arquivo NOVO (`A`); `-1..-10` todas `A` no diff vs `origin/main`, zero `M`/`D` em `.jdi/decisions/`; diff iter 2 do CONTEXT.md toca SO as linhas dos itens 5/6 (comando + prosa da ancora + `Source:`) |
+| f | Fix continua provado | DoD 1/3 verdes no repo real; no clone, remover as 2 linhas do early-return de `Export` (`ParsingEngine.cs:63-64`) derruba `..._ForExport_MatchesRawZipEntryForEveryChapter` E `..._NoEntryContainsTheAppHost`: `Failed: 2, Passed: 0`. O endurecimento nao mascarou nada |
+| g | Escopo | `.gitignore` em ZERO commits (`git log origin/main..HEAD -- .gitignore` vazio; a modificacao local do usuario segue fora); `git diff origin/main -- src/TranslateReader/` vazio |
+
+## Review do codigo (iter 1, diff de producao)
+
+- `ChapterContentPurpose` (enum novo em `Models/`, com `<summary>`) como 4o parametro OBRIGATORIO
+  de `ExtractChapterContentAsync` — `IParsingEngine` permanece com 6 operacoes (D-...-2),
+  `<summary>` atualizado no contrato. Conforme The Method: enum em Models (zero dependencia),
+  nada sobe de camada.
+- `Export` = early return de `item.Content` cru (nem `RewriteImagePaths` nem `InlineCssLinks` —
+  fecha `<img>` E `<link>` na mesma correcao, D-...-3); `Display` = comportamento de hoje + guarda
+  fail-fast `imagesDirectory` vazio → `InvalidOperationException` ao lado das 2 guardas existentes
+  (csharp.md §1). Comentario unico e um WHY legitimo.
+- Call sites conforme D-...-4: `TranslationManager` 3x `Export`/0x `Display`;
+  `ReadingManager` 1x `Display`/0x `Export` — verificado por grep E por teste NSubstitute
+  (`Received(2)`+`DidNotReceive`, `Received(1)`).
+- Testes novos de qualidade real: comparacao BYTE-A-BYTE contra a entrada crua do zip (todos os
+  capitulos), guarda, e teste de ARTEFATO reproduzindo o caminho de producao
+  (`RebuildEveryChapterAsync` → `CreateTranslatedEpubAsync` → reabre o zip), com forma DIFERENCIAL
+  de `https://` (D-...-9(B)) e `epub-images` absoluto; `StringComparison.Ordinal`; cleanup em
+  `finally`. I/O de disco so em `ParsingEngineTests.cs` (excecao nomeada D-2026-07-31-coverage-90-3).
+- RED→GREEN integro: assercao do teste do artefato identica antes/depois do fix (unica linha
+  alterada no corpo = o 4o argumento), conferido no diff `d001a75`→`036b2b6`.
 
 ## DoD Checklist (gate 8)
 
-Todos re-executados literalmente por esta revisora (bash, `DOTNET_CLI_UI_LANGUAGE=en`).
+Comandos extraidos do CONTEXT.md commitado (`sed -n 's/^ *\*\*Verify:\*\* ...`) e executados
+literalmente nesta sessao. `.jdi/PROJECT.md` nao possui secao `## Definition of Done` — o DoD da
+phase (CONTEXT.md) governa.
 
 | # | Criterion | Source | Type | Status | Evidence |
 |---|---|---|---|---|---|
-| 1 | `Export` == entrada crua do zip, todos os capítulos do Practice | CONTEXT (D-...-2/-3) | Auto | PASS | exit 0; `Failed: 0, Passed: 1` |
-| 2 | Guarda `Display`+dir vazio lança + regressão do rewrite `Display` | CONTEXT (D-...-3) | Auto | PASS | exit 0; `Failed: 0, Passed: 2` |
-| 3 | Artefato sem `epub-images` (absoluto) e sem `https://` GANHO (diferencial) | CONTEXT (D-...-2/-3/-4, D-...-9(B)) | Auto | PASS | exit 0; `Failed: 0, Passed: 1`; confirmado também por inspeção direta do zip (veredito (b)) |
-| 4 | Wiring: 3×`Export` no TranslationManager, 1×`Display` no ReadingManager | CONTEXT (D-...-4) | Auto | PASS | exit 0; greps estruturais 3/0/1/0 + `Failed: 0, Passed: 3` |
-| 5 | Suite sem regressão, piso derivado de `main` + `comm` nome a nome | CONTEXT (D-...-9(A)) | Auto | PASS | exit 0; `B=338 S=2`, nomes `main`=309 / HEAD=314, `comm -23` vazio; `Failed: 0, Passed: 341, Skipped: 2, Total: 343` (≥ 343) |
-| 6 | Escopo de diff fechado + app compila | CONTEXT (D-...-4/-7) | Auto | PASS | exit 0; `src/TranslateReader/` vazio; Core = exatamente os 5 arquivos previstos; build `0 Error(s)` |
+| 1 | `Export` == entrada crua do zip, todos os capitulos | CONTEXT (D-...-2/-3) | Auto | PASS | exit 0; `Failed: 0, Passed: 1` (`TestResults/dod1.log`) |
+| 2 | Guarda `Display`+dir vazio lanca; `Display` real segue reescrevendo | CONTEXT (D-...-3) | Auto | PASS | exit 0; `Failed: 0, Passed: 2` (`dod2.log`) |
+| 3 | Artefato sem `epub-images` (absoluto) e sem `https://` GANHO (diferencial) | CONTEXT (D-...-2/-3/-4) | Auto | PASS | exit 0; `Failed: 0, Passed: 1` (`dod3.log`) |
+| 4 | Wiring: 3x `Export` no TranslationManager, 1x `Display` no ReadingManager | CONTEXT (D-...-4) | Auto | PASS | exit 0; greps estruturais + `Failed: 0, Passed: 3` (`dod4.log`) |
+| 5 | Suite inteira: `Failed: 0`, `Total >= B+5`, `Skipped <= S`, `comm -23` vazio, ancora merge-base | CONTEXT (D-...-9(A), D-...-10) | Auto | PASS | exit 0; `B=338 S=2` derivados de `BASE=05f3670`; `343 >= 343`; `names_base=309`/`names_head=314`, `comm` vazio (`dod5.log`) |
+| 6 | Escopo fechado: app intocado, Core = 5 arquivos, app builda | CONTEXT (D-...-4/-7, D-...-10) | Auto | PASS | exit 0; diff app vazio; lista fechada confere; `0 Error(s)` (`dod6.log`) |
 
 **Totals:** 6 items | Auto: 6 (6 PASS, 0 FAIL) | Manual: 0 pending
 
 ## Estado final da phase
 
-- Bug corrigido na GERAÇÃO: `Export` devolve o capítulo byte-a-byte como o EPUB armazena; a causa
-  raiz histórica (`Display` com diretório vazio) virou estado inalcançável com guarda fail-fast
-  comprovadamente fora de qualquer caminho de produção.
-- RED→GREEN genuíno (falha reproduzida por esta revisora em worktree no commit RED), asserção
-  intocada entre os dois commits, mutações refeitas e mortas pelos testes.
-- Suite 343/343-2 verde (+5 sobre `main`), cobertura dos arquivos tocados 100%, JS 79/79,
-  escopo de diff fechado, `.gitignore` fora de todos os commits, decisões `-1..-8` intactas.
-- Sem itens manuais de DoD → nada pendente para `/jdi-confirm-dod`. Pronto para `/jdi-ship`.
+- Bug raiz (URL do virtual host `epub-images` gravada dentro do EPUB traduzido) corrigido na
+  GERACAO, provado no ARTEFATO, e o estado que o causava virou inalcancavel (guarda fail-fast).
+- Suite 343/343 (`Failed: 0`), 5 testes novos, zero teste deletado/renomeado/pulado; JS 79/79.
+- W-2 da iter 1 FECHADO de verdade: ancora `merge-base origin/main HEAD` + guardas anti-oco,
+  provada superior ao literal `main` nos 3 cenarios e sem regressao de deteccao (4/4 mutacoes).
+- Pendencias deliberadas registradas: regexes de forma e percent-encoding
+  (`.jdi/todos/2026-08-01-translated-epub-images.md`, D-...-6), lint legado
+  (`.jdi/todos/LEGACY.md`, W-1), migracao de livros quebrados NAO construida (D-...-7, YAGNI).
+- Warnings em aberto: W-1 (legado, dono e outra phase) e W-3 (prosa de medicao na D-...-10 —
+  correcao de uma linha, append-only, pode ser feita no proprio PR ou numa D-...-11).
 
 ## Para o revisor humano do PR
 
-1. **Livros já traduzidos ANTES do fix continuam quebrados por decisão explícita (D-...-7):** o
-   artefato é derivado e descartável; caminho do usuário = apagar da biblioteca e retraduzir
-   (cache `TranslationCache` sobrevive, regeneração rápida). Decisão de produto/UX de ONDE/COMO
-   comunicar isso está deliberadamente em aberto (`.jdi/todos/2026-08-01-translated-epub-images.md`).
-2. Confirmação visual em device/WebView real de que o livro traduzido abre sem imagem quebrada —
-   sem harness neste ambiente; recomendo smoke manual no Windows antes do merge.
-3. SonarCloud: só existe leitura após push+CI (limite já documentado em `sonar-zero-issues`).
-4. Nota menor: `D-...-9` diz "309 nomes em `main`, 309 no HEAD" — snapshot medido ANTES da
-   implementação; no HEAD final são 314 (309 + 5 novos). O gate (`comm -23`, só lado `main`) não é
-   afetado; é apenas prosa que envelheceu.
-5. `LOOP.md` da phase está untracked (artefato do orquestrador, não commitado) — decidir se entra
-   no commit de ship ou fica fora, como nas phases anteriores.
-6. W-2: considerar padronizar DoDs futuros para ancorar em `origin/main`/merge-base em vez de ref
-   local `main`.
+1. **Livros ja traduzidos ANTES da correcao continuam quebrados por decisao (D-...-7):** o
+   artefato e derivado e descartavel; o caminho do usuario e apagar da biblioteca e retraduzir
+   (TranslationCache quente). Decisao de produto/UX pendente: ONDE/COMO comunicar isso.
+2. **Confirmacao visual em device/WebView real** de que o EPUB traduzido abre com imagens — sem
+   harness neste ambiente (mesmo limite das phases anteriores).
+3. **SonarCloud** sem issue nova nos 5 arquivos tocados — so verificavel apos push+CI.
+4. **CI precisa de `fetch-depth: 0`** (ou `git fetch origin main`) para os `Verify:` dos itens
+   5/6 — pre-requisito novo da D-...-10; sem `origin/main` os gates falham FECHADOS (exit 128).
+5. **W-3:** ao ler a `D-...-10`, saiba que o sub-claim "(b) item 5 ANTIGO exit 0 VAZIO" nao
+   reproduz (o exit real e 1 pelo piso de `Skipped`); o resto da decisao foi reproduzido 1:1.
+6. O card pediu "mais pontos de vista": os 6 foram endereçados (1 e 3 corrigidos, 2 refutado com
+   evidencia, 4 e 6 confirmados e adiados com registro, 5 decidido explicitamente).
 
 ## Recommendation
 
-Aprovar com os warnings registrados. Nenhum item exige ação antes do ship; W-1 resolve-se em
-`baseline-de-estilo` e W-2 é diretriz para os próximos DoDs. Próximo passo: `/jdi-ship
-translated-epub-images` (ou o PR, mantendo os itens 1–2 acima na descrição para o revisor humano).
+Ship. Nenhum blocker; os 2 warnings tem dono e registro. Sugestao barata antes do merge: D-...-11
+de uma linha corrigindo a prosa da medicao (b) da D-...-10 (mesmo padrao que a -10 usou para a -9).
 
 **Verdict:** APPROVED_WITH_WARNINGS
-
-## DoD Critic (enhanced — forcado por /jdi-issue)
-
-Re-ataque dos 6 rows `Type=Auto`/`PASS` com worktree descartavel (repo real intocado).
-**Nenhuma linha oca.** Dois ataques executados no item central (o teste do artefato):
-
-- **Ataque 1 — vazamento em entrada NAO traduzida**: injetei `https://epub-images/leak` em
-  `ops/1266002537.opf` (entrada que nao passa por `translatedChapterHtml`). O teste **reprovou**
-  (`contains epub-images` + `gained https://`, `Failed: 1`) — `CollectAppUrlLeaks` varre
-  `artifact.Entries` INTEIRO (toc, opf, capa, binarios via Latin1), nao so os capitulos.
-- **Ataque 2 — ponto cego do diferencial**: `https://leak.example` NOVO dentro de
-  `ops/styles/1266002537.css` (a unica entrada com `https://` nativo) **passa**. E ponto cego
-  objetivo da forma diferencial por-entrada, mas inalcancavel da producao:
-  `CreateTranslatedEpubAsync` (`ParsingEngine.cs:105-122`) so escreve entradas casadas com hrefs de
-  capitulo e o `.opf`, e nenhum href de `ReadingOrder` e `.css`; alem disso qualquer vazamento do
-  app carrega `epub-images`, pego pelo check absoluto em QUALQUER entrada (provado pelo ataque 1).
-  Nao e furo real.
-
-- Item da guarda fail-fast: o filtro do `Verify:` roda os DOIS lados com piso `n=2` — o teste do
-  `throw` e o de regressao `RewritesImagePathsToVirtualHostUrl` (`Display` com diretorio valido
-  assertando a reescrita). Prova que dispara E que nao dispara no caminho legitimo.
-- Item de wiring: contagens `-eq` exatas (3x `Export` em `TranslationManager.cs:124,195,245`,
-  1x `Display` em `ReadingManager.cs:31`) falham FECHADO nas duas direcoes, com backstop
-  comportamental em `TranslationManagerTests.cs:888-891,905-908` e `ReadingManagerTests.cs:64-65`.
-- Item do piso de suite: rename cai (`comm -23` nao-vazio), `[Fact]` removido com metodo mantido cai
-  (`Total` 342 < piso 343, sem folga — o HEAD esta exatamente no piso), `Skip` novo cai
-  (`Skipped 3 > S=2`). Direcao aberta e o teste PRE-EXISTENTE esvaziado mantendo o nome — residual
-  explicitado no proprio texto do criterio, mitigado nos 5 testes novos pela prova por mutacao.
-- Item de escopo: a fragilidade do ref `main` LOCAL erra FECHADO (ref velho ADICIONA arquivos ao
-  diff e reprova — foi o que aconteceu na sessao do doer). Registrado como W-2.
-- Coerencia `D-...-9`: a prosa "309 nomes" envelheceu (o HEAD tem 314 = 309+5), mas o gate consome
-  so o lado `main` do `comm -23` — imprecisao de prosa, nenhum veredito muda.
-
-**Verdict:** APPROVED
