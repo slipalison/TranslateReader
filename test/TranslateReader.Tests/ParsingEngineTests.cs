@@ -99,14 +99,15 @@ public class ParsingEngineTests
     [Fact]
     public async Task Practice_ExtractAllImagesAsync_RetornaImagensDoEpub()
     {
-        var images = await _sut.ExtractAllImagesAsync(PracticeEpub);
-
-        Assert.True(images.Count > 0);
-        Assert.All(images, kvp =>
+        var count = 0;
+        await foreach (var image in _sut.ExtractAllImagesAsync(PracticeEpub))
         {
-            Assert.False(string.IsNullOrWhiteSpace(kvp.Key));
-            Assert.True(kvp.Value.Length > 0);
-        });
+            count++;
+            Assert.False(string.IsNullOrWhiteSpace(image.RelativePath));
+            Assert.True(image.Content.Length > 0);
+        }
+
+        Assert.True(count > 0);
     }
 
     // ── Righting Software ───────────────────────────────────────────────────
@@ -154,7 +155,12 @@ public class ParsingEngineTests
     [Fact]
     public async Task RightingSoftware_ExtractAllImagesAsync_NaoLancaExcecao()
     {
-        var ex = await Record.ExceptionAsync(() => _sut.ExtractAllImagesAsync(RightingEpub));
+        var ex = await Record.ExceptionAsync(async () =>
+        {
+            await foreach (var image in _sut.ExtractAllImagesAsync(RightingEpub))
+                Assert.NotNull(image.Content);
+        });
+
         Assert.Null(ex);
     }
 
@@ -193,14 +199,15 @@ public class ParsingEngineTests
     [Fact]
     public async Task WardleyMaps_ExtractAllImagesAsync_Retorna256Imagens()
     {
-        var images = await _sut.ExtractAllImagesAsync(WardleyEpub);
-
-        Assert.True(images.Count >= 100, $"Esperado >= 100 imagens, obtido {images.Count}");
-        Assert.All(images, kvp =>
+        var count = 0;
+        await foreach (var image in _sut.ExtractAllImagesAsync(WardleyEpub))
         {
-            Assert.False(string.IsNullOrWhiteSpace(kvp.Key));
-            Assert.True(kvp.Value.Length > 0);
-        });
+            count++;
+            Assert.False(string.IsNullOrWhiteSpace(image.RelativePath));
+            Assert.True(image.Content.Length > 0);
+        }
+
+        Assert.True(count >= 100, $"Esperado >= 100 imagens, obtido {count}");
     }
 
     [Fact]

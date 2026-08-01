@@ -7,7 +7,7 @@ public interface IParsingEngine
     Task<Book> ExtractMetadataAsync(string filePath);
     Task<IReadOnlyList<Chapter>> ExtractChaptersAsync(string filePath);
     Task<string> ExtractChapterContentAsync(string filePath, string chapterHRef, string imagesDirectory);
-    Task<IReadOnlyDictionary<string, byte[]>> ExtractAllImagesAsync(string filePath);
+    IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync(string filePath);
     Task<byte[]?> ExtractCoverImageAsync(string filePath);
     Task<string> CreateTranslatedEpubAsync(
         string originalFilePath,
