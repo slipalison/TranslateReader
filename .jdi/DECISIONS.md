@@ -1492,3 +1492,36 @@ confirmado NAO dominante — per o proprio brief, "se entrar no escopo, entra co
 otimizacao de performance". Decisao: fica FORA de escopo integralmente nesta fase (nem como
 higiene), para nao diluir o achado ancora — registrado em `.jdi/todos.md` como candidato de
 higiene futuro.
+
+D-2026-07-31-conversion-performance-8 (endurecimento dos `Verify:` fracos do DoD desta phase):
+SUPERSEDE **somente** as linhas `**Verify:**` dos itens 1, 4, 6 e 7 do `## Definition of Done` de
+`.jdi/phases/conversion-performance/CONTEXT.md`. Os itens 2, 3 e 5 ficam INTOCADOS — ja provam
+propriedade ESTRUTURAL por grep sobre o codigo, nao "o runner terminou".
+Motivo nomeado: `dotnet test --filter X` sozinho NAO prova nada. Um filtro que casa ZERO teste sai
+com exit 0 ("No test matches the given testcase filter"), entao um item de DoD escrito assim passa
+vazio — inclusive quando o arquivo de teste nem existe. E mesmo casando testes, "o runner terminou"
+nao prova que existe assercao de MEMORIA dentro deles. Mesma familia de proxy-que-nao-prova ja
+catalogada em `.jdi/todos.md § [PROCESSO/DoD]` e nos Learnings de
+`.jdi/phases/coverage-90/SHIPPED.md` ("ao extrair um `Verify:` para ataque adversarial, remova o
+sufixo `|| echo`: senao o shell sempre retorna 0 e a prova nao vale nada").
+Endurecimento em tres eixos: (a) o filtro tem que casar um PISO de testes aprovados (`Passed: >= N`);
+(b) o ARQUIVO de teste tem que conter os literais que provam a assercao (o comparador de memoria) ou
+a densidade de assercao (validacao ponta-a-ponta); (c) a suite completa tem que bater um piso de
+`Total` com `Failed: 0`.
+RATCHET, fixado ANTES da corrida (per o pendente de `.jdi/todos.md § [PROCESSO/DoD]`): piso
+`Total >= 316` na suite completa = baseline publicada 304 (302 aprovados + 2 ignorados, medida em
+`main` @ `ad607ac`) + 12. Fixar o piso depois de contar o resultado seria numero decorativo.
+NOTA DE PORTABILIDADE (sem ela o gate nao vale nesta maquina): os quatro comandos recebem o prefixo
+`DOTNET_CLI_UI_LANGUAGE=en`. O `dotnet test` desta maquina emite o sumario localizado ("Aprovado!  –
+Com falha: 0, Aprovado: 302, ..."), entao `grep -q "Passed!"` daria FALSO NEGATIVO local e o gate so
+valeria num CI em ingles. Forcar a UI language torna o gate independente de locale — endurecimento,
+nao afrouxamento. Os placeholders `$P`/`PASS(f)` do plano ficam expandidos INLINE para o `Verify:`
+rodar sem setup previo.
+Verify que passam a valer:
+- Item 1 (ponta-a-ponta curto vs grande): `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineFixtureValidationTests" >/tmp/tr1.log 2>&1 && grep -q "Passed!" /tmp/tr1.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr1.log | head -1)" -ge 10 && test "$(grep -c 'Assert\.' test/TranslateReader.Tests/ParsingEngineFixtureValidationTests.cs)" -ge 20`
+- Item 4 (pico de memoria MEDIDO): `test "$(grep -c -e 'GC.GetTotalMemory(forceFullCollection: true)' -e 'MaxRetainedBytes = 20L \* 1024 \* 1024' -e 'peakRetainedDelta < MaxRetainedBytes' test/TranslateReader.Tests/ParsingEngineMemoryTests.cs)" -ge 3 && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineMemoryTests" >/tmp/tr4.log 2>&1 && grep -q "Passed!" /tmp/tr4.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr4.log | head -1)" -ge 1`
+- Item 6 (download de modelo streamado): `grep -q "HttpCompletionOption.ResponseHeadersRead" src/TranslateReader.Core/Access/ModelAccess.cs && ! grep -qE "ReadAsByteArrayAsync|ReadAsStringAsync" src/TranslateReader.Core/Access/ModelAccess.cs && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ModelAccessTests" >/tmp/tr6.log 2>&1 && grep -q "Passed!" /tmp/tr6.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr6.log | head -1)" -ge 15`
+- Item 7 (suite completa, sem regressao): `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release >/tmp/tr7.log 2>&1 && grep -q "Passed!" /tmp/tr7.log && test "$(sed -n 's/.*Failed: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -eq 0 && test "$(sed -n 's/.*Total: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -ge 316`
+Auto-teste registrado no momento da escrita: os itens 1 e 4 retornam exit != 0 AGORA (os arquivos
+`ParsingEngineFixtureValidationTests.cs` e `ParsingEngineMemoryTests.cs` ainda nao existem) — prova
+de que nao passam vazio.

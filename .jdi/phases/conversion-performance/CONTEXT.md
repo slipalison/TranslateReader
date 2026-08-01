@@ -57,6 +57,13 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
 - D-2026-07-31-conversion-performance-7: `CreateTranslatedEpubAsync`'s `FirstOrDefault` O(entries×
   capitulos) confirmado NAO dominante (1.215-6.578 comparacoes de string nos 3 fixtures, per brief)
   — FORA de escopo integralmente (nem como higiene), registrado em `todos.md`.
+- D-2026-07-31-conversion-performance-8: SUPERSEDE so as linhas `**Verify:**` dos itens 1, 4, 6 e 7
+  do `## Definition of Done` abaixo (itens 2, 3 e 5 intocados — ja provam propriedade estrutural).
+  Motivo: `dotnet test --filter X` sozinho sai 0 mesmo casando ZERO teste, e "o runner terminou" nao
+  prova que existe assercao de memoria. Os 4 comandos passam a exigir piso de `Passed:`, literais no
+  arquivo de teste e piso de `Total` (`>= 316` = baseline 304 + 12, ratchet fixado ANTES da corrida)
+  com `Failed: 0`, e recebem `DOTNET_CLI_UI_LANGUAGE=en` porque o `dotnet test` local emite o sumario
+  em pt-BR ("Aprovado!") e `grep "Passed!"` daria falso negativo. `$P`/`PASS(f)` expandidos inline.
 
 ## Canonical refs
 - Card colado via `/jdi-issue` em 2026-07-31 (sem tracker/URL) — ver D-...-0.
@@ -81,8 +88,8 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
 ### Auto-verifiable
 - [ ] Conversao valida ponta-a-ponta nos fixtures CURTO (Practice) e GRANDE (Wardley): metadata,
       capitulos, conteudo de capitulo e imagens extraem sem excecao, contagens batem com o EPUB.
-      **Verify:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineFixtureValidationTests"`
-      **Source:** CONTEXT (D-...-0, D-...-2)
+      **Verify:** `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineFixtureValidationTests" >/tmp/tr1.log 2>&1 && grep -q "Passed!" /tmp/tr1.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr1.log | head -1)" -ge 10 && test "$(grep -c 'Assert\.' test/TranslateReader.Tests/ParsingEngineFixtureValidationTests.cs)" -ge 20`
+      **Source:** CONTEXT (D-...-0, D-...-2), endurecido por D-...-8
 
 - [ ] `IParsingEngine.ExtractAllImagesAsync` streama (`IAsyncEnumerable<ExtractedImage>`), nao
       materializa `IReadOnlyDictionary<string, byte[]>`.
@@ -96,8 +103,8 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
 
 - [ ] Pico de memoria retida ao extrair as 229 imagens do fixture Wardley (44MB totais) fica
       limitado (nao materializa o livro inteiro de uma vez) — prova MEDIDA, nao so estrutural.
-      **Verify:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineMemoryTests"`
-      **Source:** CONTEXT (D-...-1, D-...-3)
+      **Verify:** `test "$(grep -c -e 'GC.GetTotalMemory(forceFullCollection: true)' -e 'MaxRetainedBytes = 20L \* 1024 \* 1024' -e 'peakRetainedDelta < MaxRetainedBytes' test/TranslateReader.Tests/ParsingEngineMemoryTests.cs)" -ge 3 && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ParsingEngineMemoryTests" >/tmp/tr4.log 2>&1 && grep -q "Passed!" /tmp/tr4.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr4.log | head -1)" -ge 1`
+      **Source:** CONTEXT (D-...-1, D-...-3), endurecido por D-...-8
 
 - [ ] `ExtractCoverImageAsync` retorna `null` (nao `byte[0]`) quando a capa do manifesto aponta pra
       arquivo ausente — defeito de `todos.md § coverage-90` fechado.
@@ -107,12 +114,12 @@ que a validacao expuser — comecando pelo `ExtractAllImagesAsync`.
 - [ ] Download de modelo (`ModelAccess.DownloadModelAsync`) permanece validado (streaming
       bufferizado, sem materializar o arquivo inteiro) — suite existente de `coverage-90` continua
       verde.
-      **Verify:** `grep -q "DownloadModelAsync" test/TranslateReader.Tests/ModelAccessTests.cs && dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ModelAccessTests"`
-      **Source:** CONTEXT (D-...-2; teste ja existe desde D-2026-07-31-coverage-90-3)
+      **Verify:** `grep -q "HttpCompletionOption.ResponseHeadersRead" src/TranslateReader.Core/Access/ModelAccess.cs && ! grep -qE "ReadAsByteArrayAsync|ReadAsStringAsync" src/TranslateReader.Core/Access/ModelAccess.cs && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ModelAccessTests" >/tmp/tr6.log 2>&1 && grep -q "Passed!" /tmp/tr6.log && test "$(sed -n 's/.*Passed: *\([0-9]*\).*/\1/p' /tmp/tr6.log | head -1)" -ge 15`
+      **Source:** CONTEXT (D-...-2; teste ja existe desde D-2026-07-31-coverage-90-3), endurecido por D-...-8
 
 - [ ] Suite completa passa (nenhum teste existente regride ou e removido).
-      **Verify:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release`
-      **Source:** CONTEXT (guardrail de baseline)
+      **Verify:** `DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release >/tmp/tr7.log 2>&1 && grep -q "Passed!" /tmp/tr7.log && test "$(sed -n 's/.*Failed: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -eq 0 && test "$(sed -n 's/.*Total: *\([0-9]*\).*/\1/p' /tmp/tr7.log | head -1)" -ge 316`
+      **Source:** CONTEXT (guardrail de baseline), endurecido por D-...-8
 
 ### Manual
 - _(none)_
