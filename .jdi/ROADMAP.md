@@ -72,6 +72,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** coverage-90
 - **Goal:** escrever os testes que faltam ate a cobertura medida pelo SonarQube atingir 90%, sem introduzir nenhuma issue nova — partindo de 75,9% em `main` (1428 lines to cover, 329 descobertas, das quais 195 sao JS do WebView sem harness nenhum no repo)
 
+### Phase 16: Validacao funcional e performance da conversao
+- **Slug:** conversion-performance
+- **Goal:** provar por teste que conversao de livro, extracao de imagens e download de modelo funcionam de ponta a ponta em livro CURTO e em livro GRANDE (fixtures de 1,7 MB / 27 capitulos e 32 MB / 256 imagens ja no repo), e corrigir os gargalos nomeados que a validacao expuser — comecando pelo `ExtractAllImagesAsync`, que hoje materializa 44 MB de imagens num unico dicionario (229 alocacoes na LOH), contra `.claude/rules/csharp.md` §2.3
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

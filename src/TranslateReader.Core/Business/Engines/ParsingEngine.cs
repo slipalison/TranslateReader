@@ -56,13 +56,13 @@ public partial class ParsingEngine : IParsingEngine
         return html;
     }
 
-    public async Task<IReadOnlyDictionary<string, byte[]>> ExtractAllImagesAsync(string filePath)
+    // Streams one image at a time over the lazy EpubBookRef: the eager ReadEpubSafeAsync would
+    // already hold every image in memory before the first one is yielded (D-...-3).
+    public async IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync(string filePath)
     {
-        var epub = await ReadEpubSafeAsync(filePath);
-        var images = new Dictionary<string, byte[]>();
-        foreach (var img in epub.Content.Images.Local)
-            images[img.FilePath] = img.Content;
-        return images;
+        using var bookRef = await OpenEpubSafeAsync(filePath);
+        foreach (var image in bookRef.Content.Images.Local)
+            yield return new ExtractedImage(image.FilePath, await image.ReadContentAsBytesAsync());
     }
 
     public async Task<byte[]?> ExtractCoverImageAsync(string filePath)
@@ -137,57 +137,72 @@ public partial class ParsingEngine : IParsingEngine
 
     private static async Task<EpubBook> ReadEpubSafeAsync(string filePath)
     {
-        var options = new EpubReaderOptions
-        {
-            PackageReaderOptions = new PackageReaderOptions
-            {
-                SkipInvalidManifestItems = true,
-                SkipInvalidSpineItems = true,
-                IgnoreMissingToc = true
-            },
-            BookCoverReaderOptions = new BookCoverReaderOptions
-            {
-                Epub2MetadataIgnoreMissingManifestItem = true,
-                Epub2MetadataIgnoreMissingContentFile = true,
-                Epub3IgnoreMissingContentFile = true
-            },
-            ContentReaderOptions = new ContentReaderOptions
-            {
-                IgnoreMissingFileError = true
-            }
-        };
-
         try
         {
-            return (await EpubReader.ReadBookAsync(filePath, options))!;
+            return (await EpubReader.ReadBookAsync(filePath, BuildStrictOptions()))!;
         }
         catch (EpubPackageException)
         {
-            var fallbackOptions = new EpubReaderOptions
-            {
-                PackageReaderOptions = new PackageReaderOptions
-                {
-                    SkipInvalidManifestItems = true,
-                    SkipInvalidSpineItems = true,
-                    IgnoreMissingToc = true,
-                    IgnoreMissingMetadataNode = true
-                },
-                BookCoverReaderOptions = new BookCoverReaderOptions
-                {
-                    Epub2MetadataIgnoreMissingManifestItem = true,
-                    Epub2MetadataIgnoreMissingContentFile = true,
-                    Epub3IgnoreMissingContentFile = true,
-                    IgnoreRemoteContentFileError = true
-                },
-                ContentReaderOptions = new ContentReaderOptions
-                {
-                    IgnoreMissingFileError = true,
-                    IgnoreFileIsTooLargeError = true
-                }
-            };
-            return (await EpubReader.ReadBookAsync(filePath, fallbackOptions))!;
+            return (await EpubReader.ReadBookAsync(filePath, BuildFallbackOptions()))!;
         }
     }
+
+    // Lazy twin of ReadEpubSafeAsync, kept separate because C# forbids yield return inside a
+    // try/catch: the shared option builders are what make "same tolerance" structural, not copied.
+    private static async Task<EpubBookRef> OpenEpubSafeAsync(string filePath)
+    {
+        try
+        {
+            return (await EpubReader.OpenBookAsync(filePath, BuildStrictOptions()))!;
+        }
+        catch (EpubPackageException)
+        {
+            return (await EpubReader.OpenBookAsync(filePath, BuildFallbackOptions()))!;
+        }
+    }
+
+    private static EpubReaderOptions BuildStrictOptions() => new()
+    {
+        PackageReaderOptions = new PackageReaderOptions
+        {
+            SkipInvalidManifestItems = true,
+            SkipInvalidSpineItems = true,
+            IgnoreMissingToc = true
+        },
+        BookCoverReaderOptions = new BookCoverReaderOptions
+        {
+            Epub2MetadataIgnoreMissingManifestItem = true,
+            Epub2MetadataIgnoreMissingContentFile = true,
+            Epub3IgnoreMissingContentFile = true
+        },
+        ContentReaderOptions = new ContentReaderOptions
+        {
+            IgnoreMissingFileError = true
+        }
+    };
+
+    private static EpubReaderOptions BuildFallbackOptions() => new()
+    {
+        PackageReaderOptions = new PackageReaderOptions
+        {
+            SkipInvalidManifestItems = true,
+            SkipInvalidSpineItems = true,
+            IgnoreMissingToc = true,
+            IgnoreMissingMetadataNode = true
+        },
+        BookCoverReaderOptions = new BookCoverReaderOptions
+        {
+            Epub2MetadataIgnoreMissingManifestItem = true,
+            Epub2MetadataIgnoreMissingContentFile = true,
+            Epub3IgnoreMissingContentFile = true,
+            IgnoreRemoteContentFileError = true
+        },
+        ContentReaderOptions = new ContentReaderOptions
+        {
+            IgnoreMissingFileError = true,
+            IgnoreFileIsTooLargeError = true
+        }
+    };
 
     private static string InlineCssLinks(string html, string chapterFilePath, EpubBook epub)
     {
@@ -313,7 +328,7 @@ public partial class ParsingEngine : IParsingEngine
         var imageFile = epub.Content.Images.Local
             .FirstOrDefault(img => img.Key == coverItem.Href || img.FilePath == coverItem.Href);
 
-        return imageFile?.Content;
+        return imageFile?.Content is { Length: > 0 } bytes ? bytes : null;
     }
 
     private static string ResolveChapterTitle(EpubBook epub, string filePath)
