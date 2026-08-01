@@ -74,7 +74,7 @@ Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, `.jdi/sp
   - `npx -y jdi-cli render` rodado, nenhuma view editada a mao, `.gitignore` fora do commit.
 - **Dependencies:** none | **Test:** rodar so a derivacao do comando novo e conferir `B=338`, `S=2`,
   `comm` vazio | **Commit:** `docs(translated-epub-images): derive the suite floor from main (D-...-9)`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2
 #### T-2: RED — teste que prova a imagem quebrada NO ARTEFATO (tem de FALHAR) — **DoD 3 (vermelho)**
@@ -92,7 +92,7 @@ Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, `.jdi/sp
 - **Dependencies:** T-1 (a forma da assercao vem da medicao) | **Test:** ele mesmo — RED aqui, GREEN
   em T-3 (`csharp.md` §6: bugfix comeca vermelho) | **Commit:** `test(translated-epub-images): prove
   the app host leaks into the translated epub`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3
 #### T-3: fix — `ChapterContentPurpose`, Export sem mutacao, guarda no Display — **DoD 1, 2, 3**
@@ -118,7 +118,7 @@ Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, `.jdi/sp
 - **Dependencies:** T-2 | **Test:** DoD 1, DoD 2 (guarda + `..._RewritesImagePathsToVirtualHostUrl`
   existente), DoD 3 verde | **Commit:** `fix(translated-epub-images): extract chapters for export
   without app-host rewrites`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 #### T-4: pinar o purpose que cada call site de producao passa — **DoD 4**
@@ -133,7 +133,7 @@ Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, `.jdi/sp
     prova a guarda inalcancavel em producao. Nenhum arquivo de `src/` tocado.
 - **Dependencies:** T-3 | **Test:** os 3 nomes acima (filtro do DoD 4, piso `n=3`) | **Commit:**
   `test(translated-epub-images): pin the chapter content purpose of every call site`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 5
 #### T-5: nao-regressao, escopo de diff e prova por mutacao — **DoD 5, 6**
@@ -150,7 +150,7 @@ Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, `.jdi/sp
     seguem quebrados por decisao (D-...-7, ja registrado em `.jdi/todos/`). `.gitignore` fora do commit.
 - **Dependencies:** T-4 | **Test:** suite inteira (DoD 5) + build do app (DoD 6) | **Commit:**
   `docs(translated-epub-images): record gate evidence and mutation proof`
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Tasks: 5 | Waves: 5 sequenciais | speedup 1x **por desenho**: RED-first (T-2 antes de T-3) e o 4o
