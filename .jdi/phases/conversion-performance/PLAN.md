@@ -54,7 +54,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
 - **Dependencies:** none
 - **Test:** n/a (docs). Auto-teste: hoje os 4 comandos retornam != 0 (arquivos ainda nao existem) —
   prova que nao passam vazio.
-- **Status:** pending
+- **Status:** completed
 
 #### T-2: `ExtractAllImagesAsync` lazy + contrato streaming
 - **Specialist:** jdi-doer-translatereader
@@ -87,7 +87,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
   - `dotnet build` limpo em Core + nos 4 TFMs do app (contrato publico mudou).
 - **Dependencies:** none
 - **Test:** `ParsingEngineTests` (3 adaptados) + `ReadingManagerTests` (3 adaptados).
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2
 
@@ -108,7 +108,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
     D-2026-07-31-coverage-90-3 + precedente `ParsingEngineTests`); citar no comentario do bloco novo.
 - **Dependencies:** T-2
 - **Test:** os 4 `[Fact]` acima (strict + fallback + disposal de `OpenEpubSafeAsync`).
-- **Status:** pending
+- **Status:** completed
 
 #### T-4: `ParsingEngineMemoryTests` — prova MEDIDA do pico retido
 - **Specialist:** jdi-doer-translatereader
@@ -131,7 +131,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
   - `[Trait("Category","Slow")]`; custo alvo < 30s.
 - **Dependencies:** T-2
 - **Test:** ele proprio (item 4 do DoD, com o `Verify:` endurecido de T-1) + mutacao em T-7.
-- **Status:** pending
+- **Status:** completed
 
 #### T-5: `ParsingEngineFixtureValidationTests` — ponta-a-ponta curto vs grande
 - **Specialist:** jdi-doer-translatereader
@@ -149,7 +149,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
     em `ParsingEngineTests`).
 - **Dependencies:** T-2
 - **Test:** os 10 `[Fact]` acima (item 1 do DoD).
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3
 
@@ -169,7 +169,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
   - Nome do teste preservado (o `Verify:` do item 5 do DoD faz grep pelo nome); so a assercao muda.
 - **Dependencies:** T-2 (mesmo arquivo de producao), T-3 (mesmo arquivo de teste)
 - **Test:** `ExtractCoverImageAsync_WithACoverImagePropertyPointingAtAMissingFile_ReturnsNoBytes`.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 
@@ -187,7 +187,7 @@ a streamar via `EpubReader.OpenBookAsync` (lazy), com prova MEDIDA de memoria.
   - `git status` confirma que `.gitignore` (alteracao local do usuario) nao entrou em commit algum.
 - **Dependencies:** T-1, T-2, T-3, T-4, T-5, T-6
 - **Test:** suite completa `-c Release` + mutacao documentada.
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Total tasks: 7 | Waves: 4 (W1: T-1, T-2 | W2: T-3, T-4, T-5 | W3: T-6 | W4: T-7)
