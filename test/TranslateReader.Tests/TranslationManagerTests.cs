@@ -744,6 +744,88 @@ public class TranslationManagerTests
         Assert.DoesNotContain("<script>", chapterHtml);
     }
 
+    // Fixture A of the phase CONTEXT: three leaf divs carry prose, the image div and the bullet div
+    // do not. The bullet is 7 non-space characters that no block covers, so the ratio must drop.
+    private const string CalibreChapterHtml = """
+        <html><body>
+        <div class="calibre1">
+        <div class="calibre2">First calibre paragraph with real text.</div>
+        <div class="calibre2">Second calibre paragraph with more text.</div>
+        <div class="calibre3"><img src="fig1.png"/></div>
+        <div class="calibre2">&#8226;</div>
+        <div class="calibre2">Third paragraph, letters only matter here.</div>
+        </div>
+        </body></html>
+        """;
+
+    // Fixture B of the phase CONTEXT: every non-space character sits inside the single leaf div.
+    private const string FullyCoveredChapterHtml =
+        "<html><body><div class=\"calibre2\">Only paragraph, fully covered by the leaf div.</div></body></html>";
+
+    [Fact]
+    public async Task TranslateBookAsync_CoveredTextRatio_IsBelowOneWhenTextEscapesEveryBlock()
+    {
+        SetupBookForTranslation(out _, out _, CalibreChapterHtml);
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns("/dest/out.epub");
+
+        var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.True(result.CoveredTextRatio < 1.0, $"ratio was {result.CoveredTextRatio}");
+        Assert.Equal(106d / 113d, result.CoveredTextRatio, 10);
+    }
+
+    [Fact]
+    public async Task TranslateBookAsync_CoveredTextRatio_IsOneWhenEveryCharacterIsCovered()
+    {
+        SetupBookForTranslation(out _, out _, FullyCoveredChapterHtml);
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns("/dest/out.epub");
+
+        var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.Equal(1.0, result.CoveredTextRatio);
+        Assert.Equal("/dest/out.epub", result.EpubPath);
+    }
+
+    [Fact]
+    public async Task TranslateBookAsync_WithZeroCoverageChapter_CompletesWithoutThrowing()
+    {
+        const string html = "<html><body><img src=\"fig.png\"/>Loose caption outside any block.</body></html>";
+        SetupBookForTranslation(out _, out _, html);
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns("/dest/out.epub");
+
+        var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.Equal(0.0, result.CoveredTextRatio);
+        Assert.Equal("/dest/out.epub", result.EpubPath);
+        await _jobAccess.Received(1).DeleteJobAsync(Arg.Any<int>());
+    }
+
+    [Fact]
+    public async Task TranslateBookAsync_CoveredTextRatio_IsOneWhenTheBodyHasNoTextAtAll()
+    {
+        const string html = "<html><body><img src=\"fig.png\"/></body></html>";
+        SetupBookForTranslation(out _, out _, html);
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns("/dest/out.epub");
+
+        var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.Equal(1.0, result.CoveredTextRatio);
+        await _translationEngine.DidNotReceive().GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
     private void SetupBookForTranslation(out Book book, out List<Chapter> chapters, string html)
     {
         book = new Book { Id = 1, Title = "Test Book", FilePath = "/tmp/test.epub" };
