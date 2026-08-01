@@ -11,7 +11,10 @@ Traduzir paragrafos em `<div>` (EPUBs calibre, hoje `ExtractTextBlocks` so ve `p
 de reportar sucesso quando parte relevante do texto ficou de fora, em silencio.
 
 ## Locked decisions
-- **D-...-1 (extracao):** `ExtractTextBlocks` tenta `p|h1-6|li` (regex atual, intocada). SO quando
+- **D-...-1 (extracao)** — _gatilho SUPERSEDIDO por `D-2026-08-01-div-paragraph-translation-7`
+  (uniao disjunta numa unica regex; o resto da decisao — lookahead, guarda de letra, timeout,
+  rejeicao de parser HTML — continua valendo). Texto original preservado abaixo:_
+  `ExtractTextBlocks` tenta `p|h1-6|li` (regex atual, intocada). SO quando
   isso devolve zero blocos PARA AQUELE CORPO, cai num fallback de **div-folha** (div sem `<div>`
   aninhado antes do fechamento — lookahead negativo por caractere, com o `RegexTimeoutMilliseconds`
   que toda regex de `HtmlUtility` ja carrega, csharp.md §4/ReDoS). Bloco de div so conta se tiver
@@ -46,6 +49,11 @@ de reportar sucesso quando parte relevante do texto ficou de fora, em silencio.
 - **D-...-6 (bugfix comeca vermelho):** os testes de `## Notes` (Fixture A/B) e a caracterizacao
   dos 3 fixtures reais sao escritos ANTES do fallback existir — o de Fixture A fica vermelho (0
   blocos) ate o fallback ser implementado.
+- **D-...-7 (selecao):** uniao disjunta numa UNICA regex com alternacao (branch `p|h[1-6]|li`
+  primeiro, branch de div-folha depois, so casando div que NAO contem `p|h[1-6]|li`). Supersede SO
+  o gatilho "zero blocos" de `D-...-1`. Teto 100% do corpo contra 44,3% do gatilho antigo.
+- **D-...-8 (simetria):** `ReplaceTextBlocksInHtml` compartilha selecao E predicado com
+  `ExtractTextBlocks`; sem isso a traducao dos divs seria cacheada e nunca escrita no EPUB.
 
 ## Canonical refs
 - `.jdi/DECISIONS.md` D-2026-08-01-div-paragraph-translation-0 (diagnostico medido, numeros)
@@ -75,8 +83,9 @@ de reportar sucesso quando parte relevante do texto ficou de fora, em silencio.
       imagem e div sem letra) usando guarda de letra Unicode
       **Verify:** `grep -q "ExtractTextBlocks_ForCalibreStyleBody_ExtractsLeafDivsWithLetters" test/TranslateReader.Tests/HtmlUtilityTests.cs && grep -q "IsLetter" src/TranslateReader.Core/Utilities/HtmlUtility.cs`
       **Source:** CONTEXT
-- [ ] Corpo com `<p>`/`<h#>`/`<li>` real nunca ativa o fallback de div (sem dupla contagem, sem
-      regressao dos livros que hoje funcionam)
+- [ ] Invariante estrutural (`D-...-7`): div que CONTEM `<p>`/`<h#>`/`<li>` nunca vira bloco — as
+      duas fontes sao disjuntas por construcao, zero dupla contagem, zero regressao dos livros que
+      hoje funcionam
       **Verify:** `grep -q "ExtractTextBlocks_WhenParagraphTagsPresent_IgnoresLeafDivs" test/TranslateReader.Tests/HtmlUtilityTests.cs`
       **Source:** CONTEXT
 - [ ] `TranslateBookAsync` devolve `BookTranslationResult.CoveredTextRatio` refletindo texto fora de

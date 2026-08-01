@@ -1459,3 +1459,42 @@ fixados em `## Notes` do CONTEXT.md.
 D-2026-08-01-div-paragraph-translation-6 (bugfix comeca vermelho): os testes de Fixture A/B e a
 caracterizacao dos 3 fixtures reais sao escritos ANTES do fallback existir — o de Fixture A fica
 vermelho (0 blocos) ate o fallback ser implementado.
+
+D-2026-08-01-div-paragraph-translation-7 (selecao de blocos: uniao disjunta numa UNICA regex) —
+**supersede SO o gatilho** de `D-2026-08-01-div-paragraph-translation-1`; todo o resto daquela
+decisao (div-folha por lookahead negativo por caractere, guarda de letra Unicode `char.IsLetter`
+apos `StripHtmlTags`, `RegexTimeoutMilliseconds` obrigatorio, rejeicao de AngleSharp/
+HtmlAgilityPack, decisao por CHAMADA) continua valendo integralmente.
+Motivo medido (livro-origem do bug report, 53 documentos): B = palavras em `p|h1-6|li` = 11.114;
+D = palavras em div-folha = 88.042; C = corpo total = 88.107. B + D = 99.156 > C = 88.107, ou seja
+>= 11.049 palavras vivem DENTRO de div-folha e seriam contadas duas vezes por uma uniao ingenua.
+Consequencias:
+- O gatilho "fallback so quando `p|h|li` devolve ZERO blocos" cobre apenas 39.051 palavras =
+  44,3% do corpo, porque 33 dos 53 documentos tem ALGUNS blocos `p|h|li` e a prosa toda em
+  `<div>`. Entregaria o mesmo bug de volta ao usuario.
+- Uniao ingenua (`p|h|li` + todo div-folha) traduz 11.049 palavras 2x e, pior, faz a lista de
+  extracao deixar de casar 1:1 com a varredura de `ReplaceTextBlocksInHtml` (`translations[index++]`):
+  traducao escrita no bloco errado — falha silenciosa pior que a original.
+Regra nova: UMA `[GeneratedRegex]` com alternacao, branch `p|h[1-6]|li` PRIMEIRO e branch de
+div-folha em segundo, onde o branch de div so casa `<div ...>` cujo conteudo NAO contem `<div`,
+`<p`, `<h[1-6]` nem `<li` (token temperado `(?:(?!...).)*`). As duas fontes ficam disjuntas POR
+CONSTRUCAO, em ordem de documento, num unico `Matches` — dedup vira invariante estrutural, nao
+codigo. Teto da regra = 88.107 palavras = 100% do corpo.
+REJEITADA a alternativa (a) "escolher por corpo quem rende mais texto" (teto 88.042 = 99,93%,
+delta de so 65 palavras) por dois motivos que nao sao os 0,07%: (i) exigiria recomputar a mesma
+decisao dentro de `ReplaceTextBlocksInHtml`, que recebe o html INTEIRO e nao o body — divergencia
+entre as duas passagens = traducao no paragrafo errado; (ii) um `<div class="section">` com varios
+`<p>` dentro (forma dos 3 fixtures reais) venceria a comparacao e viraria UM bloco gigante,
+regredindo granularidade, cache e tamanho de prompt.
+
+D-2026-08-01-div-paragraph-translation-8 (simetria extracao/substituicao): `ExtractTextBlocks` e
+`ReplaceTextBlocksInHtml` compartilham OBRIGATORIAMENTE a mesma selecao (a regex de
+`D-...-7`) E o mesmo predicado de filtro. Defeito estrutural que motiva a decisao:
+`ReplaceTextBlocksInHtml` usa `TextBlockRegex` sozinha (`HtmlUtility.cs:43`), entao corrigir so a
+extracao faria o motor traduzir e cachear os divs e NUNCA escrever nada no EPUB — a correcao
+entregaria o livro igualmente em ingles, so que mais lenta.
+O predicado e assimetrico POR BRANCH e simetrico entre as duas passagens: branch de div exige
+>= 1 `char.IsLetter` apos `StripHtmlTags` (filtra imagem/bullet/numero isolado); branch
+`p|h[1-6]|li` mantem o filtro de whitespace ATUAL (`string.IsNullOrWhiteSpace`) — endurece-lo
+mudaria a baseline de caracterizacao dos 3 fixtures reais (`D-...-2`). Filtro diferente entre as
+duas passagens desalinha `translations[index++]`; e a falha que o teste de round-trip mata.
