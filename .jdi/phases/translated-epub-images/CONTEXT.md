@@ -133,8 +133,12 @@ gerados quebrados.
 
 - [ ] Propriedade do ARTEFATO (nao so da funcao): um EPUB traduzido construido com o mesmo caminho
       de producao (capitulos extraidos em `Purpose.Export`, gravados via `CreateTranslatedEpubAsync`)
-      nao tem NENHUMA entrada do zip (de nenhum tipo) contendo os literais `epub-images` nem
-      `https://` — a prova explicita que o card pede
+      nao tem NENHUMA entrada do zip (de nenhum tipo) contendo o literal `epub-images` (absoluto:
+      medido 0 no EPUB-fonte) E nenhuma entrada GANHA `https://` — entrada a entrada por `FullName`,
+      se o artefato a traz com `https://`, a MESMA entrada do original ja trazia (forma DIFERENCIAL
+      por `D-2026-08-01-translated-epub-images-9(B)`: o fixture Practice tem 1 ocorrencia NATIVA de
+      `https://` em `ops/styles/1266002537.css`, entao a forma absoluta reprovaria codigo correto) —
+      a prova explicita que o card pede
       **Verify:** `grep -q "Practice_TranslatedEpubArtifact_ForExportedChapters_NoEntryContainsTheAppHost" test/TranslateReader.Tests/ParsingEngineTests.cs && grep -q "epub-images" test/TranslateReader.Tests/ParsingEngineTests.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~Practice_TranslatedEpubArtifact_ForExportedChapters_NoEntryContainsTheAppHost" > TestResults/dod3.log 2>&1 && grep -q "Passed!" TestResults/dod3.log && awk -v n=1 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod3.log`
       **Source:** CONTEXT (D-...-2, D-...-3, D-...-4)
 
@@ -144,11 +148,15 @@ gerados quebrados.
       **Verify:** `test "$(grep -c "ChapterContentPurpose.Export" src/TranslateReader.Core/Business/Managers/TranslationManager.cs)" -eq 3 && test "$(grep -c "ChapterContentPurpose.Display" src/TranslateReader.Core/Business/Managers/TranslationManager.cs)" -eq 0 && test "$(grep -c "ChapterContentPurpose.Display" src/TranslateReader.Core/Business/Managers/ReadingManager.cs)" -eq 1 && test "$(grep -c "ChapterContentPurpose.Export" src/TranslateReader.Core/Business/Managers/ReadingManager.cs)" -eq 0 && grep -q "ChapterContentPurpose.Display" test/TranslateReader.Tests/ReadingManagerTests.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~TranslateBookAsync_UsesExportPurposeForCacheExtractionAndRebuild|FullyQualifiedName~TranslateChapterAsync_UsesExportPurposeToReadChapterHtml|FullyQualifiedName~LoadChapterContentAsync_ExtractsImagesThenParsesContent" > TestResults/dod4.log 2>&1 && grep -q "Passed!" TestResults/dod4.log && awk -v n=3 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod4.log`
       **Source:** CONTEXT (D-...-4)
 
-- [ ] Suite INTEIRA sem regressao: `Failed: 0`, `Passed: >= 304`, `Total: >= 304` (piso estatico
-      via `D-...-8` — doer/reviewer devem substituir por numero medido em corrida limpa se for
-      maior)
-      **Verify:** `mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/dod5.log 2>&1 && grep -q "Passed!" TestResults/dod5.log && awk -v pn=304 -v tn=304 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1);if($i=="Total:")t=$(i+1)}} END{exit (k&&f+0==0&&p+0>=pn&&t+0>=tn)?0:1}' TestResults/dod5.log`
-      **Source:** CONTEXT (D-...-8)
+- [ ] Suite INTEIRA sem regressao: `Failed: 0`, `Total >= B+5` e `Skipped <= S` com `B` (`[Fact` +
+      `[InlineData`) e `S` (`Skip =`) DERIVADOS de `main` no proprio comando, soma coerente
+      (`Passed+Skipped+Failed == Total`), E nenhum nome de metodo publico de teste de `main` ausente
+      no HEAD (`comm -23` vazio — contagem sozinha aceita stub sem assert e delecao compensada).
+      Piso `304` de `D-...-8` REVOGADO por `D-2026-08-01-translated-epub-images-9(A)`: a corrida
+      limpa real deu `Failed: 0, Passed: 336, Skipped: 2, Total: 338` (`B=338`, `S=2`, piso efetivo
+      `Total >= 343`). Pre-requisito: ref local `main` == `origin/main`.
+      **Verify:** `mkdir -p TestResults && B=$(git grep -hoE '\[(Fact|InlineData)' main -- 'test/TranslateReader.Tests/*.cs' | wc -l) && S=$(git grep -hoE 'Skip[[:space:]]*=' main -- 'test/TranslateReader.Tests/*.cs' | wc -l) && git grep -hoE 'public[[:space:]]+(async[[:space:]]+)?(Task|void)[[:space:]]+[A-Za-z0-9_]+' main -- 'test/TranslateReader.Tests/*.cs' | awk '{print $NF}' | sort -u > TestResults/names-main.txt && git grep -hoE 'public[[:space:]]+(async[[:space:]]+)?(Task|void)[[:space:]]+[A-Za-z0-9_]+' HEAD -- 'test/TranslateReader.Tests/*.cs' | awk '{print $NF}' | sort -u > TestResults/names-head.txt && test -z "$(comm -23 TestResults/names-main.txt TestResults/names-head.txt)" && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/dod5.log 2>&1 && grep -q "Passed!" TestResults/dod5.log && awk -v b="$B" -v s="$S" '/Passed!/{ok=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1);if($i=="Skipped:")k=$(i+1);if($i=="Total:")t=$(i+1)}} END{exit (ok && f+0==0 && t+0>=b+5 && k+0<=s+0 && p+0+k+0+f+0==t+0)?0:1}' TestResults/dod5.log`
+      **Source:** CONTEXT (D-...-8, SUPERSEDIDA por D-...-9(A))
 
 - [ ] Escopo de diff fechado: `src/TranslateReader/` (app MAUI) sem NENHUMA mudanca (nenhuma UI/
       migracao/reparo introduzida — reforca D-...-7); `src/TranslateReader.Core/` muda so nos 4
@@ -172,13 +180,11 @@ gerados quebrados.
   rigor esperado (o card pediu explicitamente "mais pontos de vista").
 
 ## Notes
-Piso numerico do DoD (itens 1-4 usam `n` pequeno fixo; item 5 usa 304): 304 vem de contagem estatica
-de `[Fact]`/`[Theory]` via grep (D-...-8), nao de execucao real — este asker nao teve shell neste
-ambiente. Doer/reviewer: antes de implementar, rodem a suite limpa (estado atual do branch, sem as
-mudancas desta fase) e anotem `Total:`/`Passed:`/`Failed:` reais; se `Total:` real for MAIOR que 304,
-substituam o piso do item 5 por esse numero (o ratchet so sobe, nunca desce) e registrem a correcao
-como decisao (mesmo mecanismo usado em `D-2026-07-31-conversion-performance-10` para corrigir um
-numero de auditoria).
+~~Piso numerico do DoD (itens 1-4 usam `n` pequeno fixo; item 5 usa 304)~~ — RESOLVIDO pelo doer em
+`D-2026-08-01-translated-epub-images-9`, T-1: suite limpa medida (`Failed: 0, Passed: 336,
+Skipped: 2, Total: 338`), piso do item 5 trocado por derivacao de `main` + `comm` nome a nome, e
+item 3 trocado para a forma DIFERENCIAL de `https://` apos sondar o fixture (1 ocorrencia nativa em
+`ops/styles/1266002537.css`, 0 de `epub-images`). Itens 1-4 e 6 seguem como estavam.
 
 Nomes de teste prescritos nesta fase (ainda nao existem, serao criados pela wave de execucao):
 `Practice_ExtractChapterContentAsync_ForExport_MatchesRawZipEntryForEveryChapter`,
