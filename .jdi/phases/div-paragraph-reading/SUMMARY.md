@@ -1,6 +1,11 @@
 # Phase 18: Traducao interativa cega a paragrafo em `<div>` (leitura) — Summary  (slug: div-paragraph-reading)
 
-**Status:** complete · **Tasks:** 6/6 · **Blocked:** 0 · **Iter:** 1 (ralph)
+**Status:** complete · **Tasks:** 6/6 · **Blocked:** 0 · **Iter:** 2 (ralph)
+
+Iter 1 entregou o codigo (secoes abaixo). Iter 2 nao tocou em `src/` nem `test/` — consertou os
+`Verify:` ocos do DoD apontados pelo `## DoD Critic` do REVIEW.md (`## Iter 2` no fim deste arquivo).
+
+# Iter 1 — o fix
 
 ## Tasks
 
@@ -69,28 +74,20 @@
 | `dotnet test ... -c Release` | `Passed!  - Failed: 0, Passed: 336, Skipped: 2, Total: 338` |
 | `dotnet format --verify-no-changes` | limpo nos arquivos tocados (restam `ThemeEngine.cs` e `TranslationManagerTests.cs:560` — legado byte-identico a `main`, D-2) |
 
-## Os 7 `Verify:` do CONTEXT
+## Os 7 `Verify:` do CONTEXT (iter 1 — comandos ANTIGOS, 5 deles SUPERSEDIDOS na iter 2)
 
-| # | exit | evidencia |
-|---|---|---|
-| 1 | **0** | `function _translatableCandidates` = 1; `_translatableCandidates(` = 4; `querySelectorAll('p')`/`('p[data-original]')` = 0 |
-| 2 | **1 (ver desvio D-1)** | criterio ATENDIDO: `N=6 >= 4`, suite filtrada `pass 6 / fail 0`, `P=6 >= N` |
-| 3 | **1 (ver desvio D-1)** | criterio ATENDIDO: `B=13`, piso `17`, `pass 20 / fail 0`, `P=20 >= 17` |
-| 4 | **0** | `ExtractParagraphs` = 0, `ParagraphRegex` = 0 em `HtmlUtility.cs`; `HtmlUtility.ExtractTextBlocks` presente |
-| 5 | **0** | `Passed! - Failed: 0, Passed: 7, Total: 7` (piso `B+1` = 7) |
-| 6 | **0** | `Passed! - Failed: 0, Passed: 336, Skipped: 2, Total: 338` (piso `321`/`323`) |
-| 7 | **0** | pathspec VAZIO; unico arquivo tocado em `src/TranslateReader/` e `Resources/Raw/wwwroot/js/translation.js` |
+`1,4,5,6,7` exit **0**; `2,3` exit **1 por defeito do comando** (reporter — desvio D-1), criterio
+atendido com a variante TAP (`N=6 P=6`; `B=13 P=20 piso 17`). O DoD critic depois provou que 5 dos 7
+comandos (1,2,3,4,6) eram ocos; substituidos na iter 2 por `D-2026-08-01-div-paragraph-reading-6` —
+matriz de mutacao e resultados reais em `## Iter 2`.
 
 ## Desvios do PLAN
 
 - **D-1 — itens 2 e 3 do DoD saem exit 1 por causa do REPORTER, nao por teste vermelho.** O Node 24
-  (`v24.14.0`) usa o reporter `spec` por padrao mesmo com stdout redirecionado, entao o sumario sai
-  com prefixo de info em vez de `#`, e o `grep -qE "^# fail[[:space:]]+0$"` dos dois comandos nunca
-  casa. Os MESMOS comandos, byte-identicos exceto por `--test-reporter=tap`, saem **exit 0**
-  (`N=6 P=6`; `B=13 P=20 floor=17`) — logs `TestResults/js-dod2-tap.log` e `js-dod3-tap.log`. A
-  phase `coverage-90` ja fixava o reporter no `Verify:` dela. Nao editei `CONTEXT.md` (imutavel para
-  o doer) e nao criei decisao; registrei em `.jdi/todos/2026-08-01-div-paragraph-reading.md` +
-  `npx -y jdi-cli render`.
+  (`v24.14.0`) usa o reporter `spec` por padrao mesmo com stdout redirecionado; `grep -qE "^# fail
+  [[:space:]]+0$"` nunca casa. Os MESMOS comandos + `--test-reporter=tap` saem **exit 0**. Na iter 1
+  registrei so em `.jdi/todos/` (CONTEXT.md imutavel para o doer); **resolvido na iter 2** via
+  decisao nova + edicao do CONTEXT.md.
 - **D-2 — baseline C# real desmente a projecao do PLAN, PARA CIMA.** O PLAN projetava `main` em
   320/322 e piso exato 321/323 ("margem zero"). A corrida real mediu **Failed 0, Passed 335,
   Skipped 2, Total 337** ANTES de qualquer mudanca minha, e **336/338** depois (+1 = o teste de
@@ -114,3 +111,137 @@
 `ITranslationManager` mantido (D-...-4); modo Scroll intocado; `:has()`/combinadores nao entraram no
 harness; nenhum parser de HTML novo; nenhuma dependencia npm. Aviso VISUAL ao usuario e validacao em
 WebView real seguem em `## Deferred to PR review`.
+
+# Iter 2 — fix dos gates do DoD
+
+**Escopo:** ZERO linha de `src/` ou `test/`. `git diff --stat -- src/ test/` = **vazio**. O codigo da
+iter 1 passou os 8 gates do reviewer (JS 73/73, C# Failed 0 / Passed 336 / Total 338, build 0 erros,
+RED-first reproduzido pelo reviewer em worktree) — o que estava quebrado era a PROVA. Consertei a
+prova.
+
+## O que mudou
+
+| Arquivo | Mudanca |
+|---|---|
+| `.jdi/decisions/D-2026-08-01-div-paragraph-reading-6.md` | **NOVO** — supersede os `Verify:` dos itens 1, 2, 3, 4 e 6. D-...-1..5 **intocadas** |
+| `.jdi/phases/div-paragraph-reading/CONTEXT.md` | 5 linhas `**Verify:**` trocadas + `**Source:**` de cada uma citando o motivo. Os **criterios** (texto do `- [ ]`) nao mudaram, exceto o do item 6, que passou a dizer "piso DERIVADO de `main`" |
+| `.jdi/DECISIONS.md`, `.jdi/todos.md` | regerados por `npx -y jdi-cli render` (views gitignored) |
+
+Itens **5 e 7 nao foram tocados** — o critic os confirmou solidos. Provado por `diff` entre o
+`Verify:` extraido do CONTEXT.md de hoje e o da iter 1: **byte-identicos**.
+
+**Contingencia do PLAN acionada.** O PLAN proibia `D-...-6` para a aritmetica de contagem, com a
+excecao "so se a corrida real contradisser a medicao". Contradisse: o PLAN projetava `main` em
+Passed 320 / Total 322 e chamava `321/323` de "margem zero"; o baseline REAL de `main` e
+**Failed 0, Passed 335, Skipped 2, Total 337**. O piso do PLAN tinha folga de **15 testes**, nao
+zero. Registrado na decisao.
+
+## Matriz de mutacao — repo real NUNCA mutado
+
+Lab: `git clone --local` do repo em scratchpad, `main` local criada de `origin/main` (`9e07c83`).
+Cada caso: `git checkout -- . && git clean -fd` -> aplica mutacao -> roda ANTIGO e NOVO -> restaura.
+`OLD-TAP` = o comando ANTIGO com `--test-reporter=tap` acrescentado, i.e. exatamente a variante
+RE-AUTORADA que o reviewer rodou na iter 1 — e a unica comparacao justa de CAPACIDADE para os itens
+2 e 3, ja que o comando literal e um reprovador constante.
+
+### (a) Contra-exemplos do critico: NOVO pega (exit 1), ANTIGO nao (exit 0)
+
+| Caso | Mutacao aplicada | Item | ANTIGO | NOVO |
+|---|---|---|---|---|
+| CE-1 | filtro de letra invertido (`if (!_LETTER_RE.test(` -> `if (_LETTER_RE.test(`), fix efetivamente AUSENTE | 1 | **0** | **1** |
+| CE-2 | `applyTranslations` desviado para `querySelectorAll('[data-original], p, div')` + COMENTARIO `// _translatableCandidates(pg)` repondo a contagem | 1 | **0** | **1** |
+| CE-3 | 3 testes da era de `main` DELETADOS de `translation.test.js` (fica `17 >= 17`) | 3 | **0** (OLD-TAP) | **1** |
+| CE-4 | linha 244 -> `HtmlUtility.LegacyParagraphExtract(bodyContent)` (extrator defeituoso so RENOMEADO) | 4 | **0** | **1** |
+| CE-5 | 6 testes calibre reais renomeados para fora do filtro + 4 stubs `test('calibre stub N', () => {})` sem assert | 2 | **0** (OLD-TAP) | **1** |
+| CE-6 | log sintetico `Passed! - Failed: 0, Passed: 321, Skipped: 2, Total: 323` | 6 | **0** | **1** |
+| CE-6b | 3 testes C# REALMENTE deletados (`TranslationManagerTests.cs`, chaves balanceadas, `[Fact]` 289->286) + log honesto `333/335` | 6 | **0** | **1** |
+
+Fidelidade das mutacoes conferida por execucao, nao assumida:
+CE-3 -> `# tests 17 / # pass 17 / # fail 0` (o piso `B+4=17` fecha com 3 testes de `main` fora);
+CE-5 -> `--test-name-pattern="calibre"` casa **so** `ok 1..4 - calibre stub 1..4`, `# pass 4`, zero
+round-trip; CE-1 -> a suite acusa 6 falhas enquanto o item 1 ANTIGO sai 0.
+
+### (b) Zero falso positivo: NOVO sai exit 0 no repo REAL sem mutacao
+
+| Item | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| NOVO no repo real | **0** | **0** | **0** | **0** | **0** (intocado) | **0** | **0** (intocado) |
+
+Rodados a partir do `CONTEXT.md` de hoje, extraidos por `sed` da linha `**Verify:**` — **nao
+digitados de memoria**. Os 7 extraidos foram `diff`-ados contra os arquivos que a matriz executou:
+**byte-identicos** (1,2,3,4,6 = NOVO; 5,7 = os da iter 1).
+
+### (c) Sem regressao de gate: NOVO continua pegando tudo que o ANTIGO pegava
+
+| Caso | Mutacao | Item | ANTIGO | NOVO |
+|---|---|---|---|---|
+| R1 | `querySelectorAll('p')` de volta em `getVisibleParagraphs` | 1 | 1 | **1** |
+| R2 | helper renomeado (`function _translatableCandidates` some) | 1 | 1 | **1** |
+| R3 | so 3 testes calibre (abaixo do piso `N>=4`) | 2 | 1 | **1** |
+| R4 | `assert.strictEqual(1, 2)` injetado no round-trip `applyTranslations ... calibre` | 2 e 3 | 1 | **1** |
+| R5 | `ExtractParagraphs` de volta em `HtmlUtility.cs` | 4 | 1 | **1** |
+| R6 | nenhum `HtmlUtility.ExtractTextBlocks` em `TranslationManager.cs` | 4 | 1 | **1** |
+| R7 | teste da era de `main` (`clearTranslations restores every original...`) ficou vermelho | 3 | 1 | **1** |
+| R8 | log `Passed: 300, Total: 302` (abaixo ate do piso ANTIGO) | 6 | 1 | **1** |
+| R9 | log `Failed! - Failed: 1` | 6 | 1 | **1** |
+
+### Baseline do lab (prova do defeito que o critic apontou)
+
+| Comando | exit no repo 100% verde |
+|---|---|
+| item 2 ANTIGO (literal do CONTEXT) | **1** — nao pode sair 0 no Node 24 |
+| item 3 ANTIGO (literal do CONTEXT) | **1** — idem |
+| itens 2 / 3 OLD-TAP (variante re-autorada pelo reviewer) | 0 |
+| itens 1, 4 ANTIGOS | 0 |
+
+Metodo para o item 6: a parte estatica (`git grep`/`comm`) rodou contra mutacoes REAIS do codigo; a
+parte de parse do sumario rodou com logs sinteticos, substituindo **apenas** a invocacao
+`dotnet test ... > TestResults/dod6.log 2>&1` por `cp <log> TestResults/dod6.log` — o resto do
+comando (incluindo o `awk`) e byte-identico, gerado por substituicao de string sobre o proprio
+arquivo do comando. O comando COMPLETO, com `dotnet test` de verdade, rodou no repo real: exit 0.
+
+## Por que cada comando novo fecha o buraco
+
+- **Item 1** — comentarios (`//` e `/* */` de uma linha) removidos ANTES do grep; o helper tem de ser
+  lido em linha de CODIGO dentro do corpo de cada uma das 3 funcoes (range `awk` de
+  `window.<fn> = function` ate `^};`); as 2 guardas do corpo do helper checadas na polaridade certa
+  (sem `!` na de folha, com `!` na de letra). Continua sendo, por desenho, gate ESTRUTURAL de fonte
+  unica — a prova de COMPORTAMENTO do corpo esta DELEGADA aos itens 2 e 3, agora endurecidos, e isso
+  esta escrito no `**Source:**` da linha.
+- **Item 2** — TAP pinado (sem isso o comando e um reprovador constante) + os 3 testes de round-trip
+  get/apply/clear exigidos por NOME EXATO como `^ok <n> - <nome>$`. Stub sem assert nao produz esses
+  nomes. `N >= 4` fica como piso adicional, nao como prova.
+- **Item 3** — TAP pinado + `# skipped 0` + `comm -23` entre os nomes de
+  `git show main:test/js/translation.test.js` e os nomes VERDES do TAP do HEAD (vazio obrigatorio).
+  Teste deletado, renomeado, pulado OU vermelho some da lista de `ok` e o `comm` acusa. Piso `B+4`
+  mantido por cima.
+- **Item 4** — ausencia varrida no repo tracked inteiro via `git grep` em `src/*.cs`/`test/*.cs`
+  (`grep -r` leria `obj/`, onde o source generator de `[GeneratedRegex]` emite `ParagraphRegex` — era
+  falso positivo garantido) + presenca amarrada ao CORPO de `TranslateChapterAsync` (range `awk`) e
+  exatamente UMA atribuicao a partir de `bodyContent` nesse corpo (mata o rename E o "legado
+  adicionado ao lado"). Conferido que a linha 195 (`= HtmlUtility.ExtractTextBlocks(bodyContent)`,
+  outro metodo) fica FORA do range.
+- **Item 6** — piso derivado de `main` no proprio comando: `B` = `[Fact]` + `[InlineData]` contados em
+  `main` = **288 + 49 = 337**, que bate 1:1 com o `Total: 337` da corrida real de `main` (0 uso de
+  `MemberData`/`ClassData` no projeto — conferido). Exige `Total >= B+1`, `Skipped <=` contagem de
+  `Skip=` em `main` (**2**), `Failed == 0`, coerencia `Passed+Skipped+Failed == Total` (mata log
+  sintetico incoerente) e `comm -23` nome a nome dos metodos publicos de teste C# de `main` contra o
+  HEAD.
+
+## Gates finais (saida real, repo real)
+
+| Gate | Resultado |
+|---|---|
+| `node --test --test-reporter=tap test/js/` | `# tests 73 / # pass 73 / # fail 0 / # skipped 0` |
+| `DOTNET_CLI_UI_LANGUAGE=en dotnet test ... -c Release` | `Passed! - Failed: 0, Passed: 336, Skipped: 2, Total: 338` |
+| 7 `Verify:` extraidos por `sed` do CONTEXT.md | **7/7 exit 0** |
+| Item 6, evidencia interna | `dod6-base.txt` 308 nomes, `dod6-head.txt` 309, `comm -23` = **vazio**; B=337, piso Total 338 |
+| `git diff --stat -- src/ test/` | **vazio** — nenhum teste deletado, renomeado ou pulado |
+| `.gitignore` | alteracao local do usuario, **fora do commit** |
+
+## Debitos que seguem abertos (nao regridem, nao bloqueiam)
+
+W-2 (harness falha ABERTO para aspas dentro de valor de atributo, `harness.js:315-333`, pre-existente
+de `main`) e W-3 (branch `chapter?.Title`, `TranslationManager.cs:265`, 83,3% de branch, divida
+pre-existente — o irmao intocado `TranslateParagraphsAsync` tem o mesmo 0,8333) seguem em
+`.jdi/todos/`, como na iter 1. Nenhum e alcancado por esta iter, que nao tocou codigo.
