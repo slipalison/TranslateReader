@@ -6,6 +6,13 @@ const { createEnv } = require('./harness');
 
 const WINDOW_WIDTH = 500;
 const VIEWPORT_WIDTH = 400;
+const ELEMENT_NODE = 1;
+
+// The fixture lines are joined by `\n`, so the wrapper also holds text nodes: only the element
+// children are the calibre blocks.
+function elementChildren(node) {
+    return node.childNodes.filter((child) => child.nodeType === ELEMENT_NODE);
+}
 
 // translation.js reads `_stepW` and `_currentPage`, which are declared by
 // paginated.js: both files must share one context, exactly as they do in the WebView.
@@ -246,6 +253,52 @@ test('applyTranslations writes into the calibre div the reported index points at
     assert.strictEqual(pager.childNodes[1].dataset.original, 'two');
     assert.strictEqual(pager.childNodes[0].textContent, 'one');
     assert.strictEqual(pager.childNodes[2].textContent, 'three');
+});
+
+// `<p>one</p><div>two</div><p>three</p>` cannot tell a correct selector from a naive one: every
+// element there is a paragraph. CALIBRE_BODY can, because it holds a wrapper, an image div and a
+// bullet div that the read list skips, so writing must walk that same list or the indexes slide.
+test('applyTranslations writes each calibre index into the element getVisibleParagraphs read it from', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, CALIBRE_BODY);
+    const blocks = elementChildren(pager.childNodes[0]);
+
+    const read = env.window.getVisibleParagraphs();
+    env.window.applyTranslations(Array.from(read, (paragraph) => ({
+        index: paragraph.index,
+        translated: `traduzido ${paragraph.index}`,
+    })));
+
+    assert.deepStrictEqual(blocks.map((block) => block.textContent), [
+        'traduzido 0',
+        'traduzido 1',
+        '',
+        '&#8226;',
+        'traduzido 2',
+    ]);
+    assert.deepStrictEqual(blocks.map((block) => block.dataset.original), [
+        'First calibre paragraph with real text.',
+        'Second calibre paragraph with more text.',
+        undefined,
+        undefined,
+        'Third paragraph, letters only matter here.',
+    ]);
+});
+
+test('applyTranslations leaves the calibre wrapper alone instead of collapsing the chapter', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, CALIBRE_BODY);
+    const wrapper = pager.childNodes[0];
+    const before = env.window.getVisibleParagraphs();
+
+    env.window.applyTranslations([{ index: before[0].index, translated: 'primeiro traduzido' }]);
+
+    assert.strictEqual(wrapper.dataset.original, undefined, 'the wrapper div itself was translated');
+    assert.strictEqual(elementChildren(wrapper).length, 5, 'the chapter lost its blocks');
+    // Parity: what the page reports after writing is still the same list, one original per element.
+    assert.deepStrictEqual(
+        Array.from(env.window.getVisibleParagraphs(), (paragraph) => paragraph.text),
+        Array.from(before, (paragraph) => paragraph.text));
 });
 
 test('clearTranslations restores a translated calibre div and drops the marker', () => {
