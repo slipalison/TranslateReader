@@ -1,0 +1,15 @@
+---
+phase_slug: div-paragraph-reading
+phase_position: 18
+iter: 1
+total_resets: 0
+status: running
+max_iter_per_round: 5
+max_resets: 3
+mode: autonomous (/jdi-issue — human gate auto-continues as AUTO-RESET)
+created_at: 2026-08-01T12:58:36-03:00
+---
+
+## History
+
+- iter 1: BLOCKED (DoD critic: 5 de 7 rows ocas), hash=6a4e73feffeb, commit=c79580d, ts=2026-08-01T13:38:52-03:00
