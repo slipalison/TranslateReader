@@ -826,6 +826,24 @@ public class TranslationManagerTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
+    // EPUB HTML is untrusted input: a raw '<' inside a leaf div is invalid XHTML, yet it makes the
+    // stripped block longer than the stripped body (the '<' pairs with the '>' of the closing tag),
+    // so the ratio has to be clamped or the coverage signal reports more than 100%.
+    [Fact]
+    public async Task TranslateBookAsync_CoveredTextRatio_IsNeverAboveOneOnMalformedHtml()
+    {
+        const string html = "<html><body><div class=\"c\">a < b</div></body></html>";
+        SetupBookForTranslation(out _, out _, html);
+        _cacheAccess.FetchTranslationAsync(1, Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        _parsingEngine.CreateTranslatedEpubAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<string>())
+            .Returns("/dest/out.epub");
+
+        var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
+
+        Assert.Equal(1.0, result.CoveredTextRatio);
+    }
+
     private void SetupBookForTranslation(out Book book, out List<Chapter> chapters, string html)
     {
         book = new Book { Id = 1, Title = "Test Book", FilePath = "/tmp/test.epub" };
