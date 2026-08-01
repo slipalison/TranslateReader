@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 using TranslateReader.Business.Engines;
+using TranslateReader.Models;
 
 namespace TranslateReader.Tests;
 
@@ -164,6 +165,95 @@ public class ParsingEngineEdgeCaseTests : IDisposable
 
         var bookDir = Path.GetFileName(_tempDir);
         Assert.Equal(2, CountOccurrences(html, $"https://epub-images/{bookDir}/OEBPS/images/pic.png"));
+    }
+
+    // ── ExtractAllImagesAsync (lazy stream over EpubBookRef) ────────────────
+    // Same named exception to .claude/rules/csharp.md section 6 declared at the top of this file
+    // (D-2026-07-31-coverage-90-3 + the ParsingEngineTests precedent): every public entry point
+    // takes a file path, so a synthesised EPUB under %TEMP% is the only reachable seam. The three
+    // real fixtures never enter the lenient fallback, so only a synthetic package can cover it.
+
+    [Fact]
+    public async Task ExtractAllImagesAsync_StreamsEachLocalImageWithItsRelativePath()
+    {
+        var path = CreateRichEpub();
+
+        var images = new List<ExtractedImage>();
+        await foreach (var image in _sut.ExtractAllImagesAsync(path))
+            images.Add(image);
+
+        var only = Assert.Single(images);
+        Assert.Equal("OEBPS/images/pic.png", only.RelativePath);
+        Assert.Equal(PngBytes, only.Content);
+    }
+
+    [Fact]
+    public async Task ExtractAllImagesAsync_WithAPackageMissingItsMetadataNode_UsesTheLenientFallback()
+    {
+        var path = CreateEpub("no-metadata-images.epub", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+              <manifest>
+                <item id="ch1" href="text/chapter1.xhtml" media-type="application/xhtml+xml"/>
+                <item id="pic" href="images/pic.png" media-type="image/png"/>
+              </manifest>
+              <spine>
+                <itemref idref="ch1"/>
+              </spine>
+            </package>
+            """, archive =>
+        {
+            AddText(archive, "OEBPS/text/chapter1.xhtml", "<html><body><p>a</p></body></html>");
+            AddBytes(archive, "OEBPS/images/pic.png", PngBytes);
+        });
+
+        var images = new List<ExtractedImage>();
+        await foreach (var image in _sut.ExtractAllImagesAsync(path))
+            images.Add(image);
+
+        var only = Assert.Single(images);
+        Assert.Equal("OEBPS/images/pic.png", only.RelativePath);
+        Assert.Equal(PngBytes, only.Content);
+    }
+
+    [Fact]
+    public async Task ExtractAllImagesAsync_WithoutAnyImage_YieldsNothing()
+    {
+        var path = CreateEpub("text-only.epub", Package("""
+              <dc:identifier id="bookid">urn:uuid:text-only</dc:identifier>
+              <dc:title>So texto</dc:title>
+            """, """
+              <item id="ch1" href="text/chapter1.xhtml" media-type="application/xhtml+xml"/>
+            """, """
+              <itemref idref="ch1"/>
+            """), archive => AddText(archive, "OEBPS/text/chapter1.xhtml", "<html><body><p>a</p></body></html>"));
+
+        var count = 0;
+        await foreach (var _ in _sut.ExtractAllImagesAsync(path))
+            count++;
+
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task ExtractAllImagesAsync_WhenTheConsumerBreaksEarly_ReleasesTheArchiveHandle()
+    {
+        var path = CreateTwoImageEpub();
+
+        var seen = 0;
+        await foreach (var image in _sut.ExtractAllImagesAsync(path))
+        {
+            seen++;
+            Assert.NotEmpty(image.Content);
+            break;
+        }
+
+        Assert.Equal(1, seen);
+
+        // Windows refuses to delete a file the zip handle still holds, so this only passes when
+        // the iterator's using disposed the EpubBookRef on the consumer's early break.
+        File.Delete(path);
+        Assert.False(File.Exists(path));
     }
 
     // ── ExtractCoverImageAsync fallbacks ────────────────────────────────────
@@ -417,6 +507,22 @@ public class ParsingEngineEdgeCaseTests : IDisposable
             </body></html>
             """);
         AddBytes(archive, "OEBPS/text/empty.xhtml", []);
+    });
+
+    private string CreateTwoImageEpub() => CreateEpub("two-images.epub", Package("""
+          <dc:identifier id="bookid">urn:uuid:two-images</dc:identifier>
+          <dc:title>Duas imagens</dc:title>
+        """, """
+          <item id="ch1" href="text/chapter1.xhtml" media-type="application/xhtml+xml"/>
+          <item id="pic1" href="images/pic1.png" media-type="image/png"/>
+          <item id="pic2" href="images/pic2.png" media-type="image/png"/>
+        """, """
+          <itemref idref="ch1"/>
+        """), archive =>
+    {
+        AddText(archive, "OEBPS/text/chapter1.xhtml", "<html><body><p>a</p></body></html>");
+        AddBytes(archive, "OEBPS/images/pic1.png", PngBytes);
+        AddBytes(archive, "OEBPS/images/pic2.png", PngBytes);
     });
 
     private string CreateCoverEpub(
