@@ -59,8 +59,10 @@ public class ReadingManagerTests
 
         Assert.Equal("<p>Texto</p>", result.Html);
         Assert.Contains("images", result.BaseDirectory);
+        // Display AND a real directory together: this is what makes the new fail-fast guard in
+        // ParsingEngine unreachable from production (D-2026-08-01-translated-epub-images-4).
         await _parsingEngine.Received(1).ExtractChapterContentAsync(
-            "/tmp/livro.epub", "cap1.html", Arg.Is<string>(s => s.Contains("images")), Arg.Any<ChapterContentPurpose>());
+            "/tmp/livro.epub", "cap1.html", Arg.Is<string>(s => s.Contains("images")), ChapterContentPurpose.Display);
     }
 
     [Fact]
