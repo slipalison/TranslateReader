@@ -72,6 +72,10 @@ Aqui entram apenas features NOVAS a serem construidas via JDI.
 - **Slug:** coverage-90
 - **Goal:** escrever os testes que faltam ate a cobertura medida pelo SonarQube atingir 90%, sem introduzir nenhuma issue nova — partindo de 75,9% em `main` (1428 lines to cover, 329 descobertas, das quais 195 sao JS do WebView sem harness nenhum no repo)
 
+### Phase 17: Traducao cega a paragrafo em `<div>` (EPUB de calibre)
+- **Slug:** div-paragraph-translation
+- **Goal:** traduzir o texto de EPUBs cujos paragrafos sao `<div>` e nao `<p>` — hoje `HtmlUtility.ExtractTextBlocks` casa so `p|h1-h6|li` e, num livro real do usuario, enxergou 360 de 2.274 blocos (11,2% do texto), gerou o EPUB "traduzido" com 48 de 53 documentos ainda em ingles e nao avisou nada; entrega tambem o sinal de cobertura de traducao, para que um livro de formato inesperado deixe de falhar em silencio
+
 ## Evidencias de origem das phases
 
 Todas as 6 phases vieram de lacunas detectadas na varredura da adocao e foram

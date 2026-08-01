@@ -1392,3 +1392,27 @@ MESMO que o item 2 mede localmente, amarrando os dois gates a uma unica string.
 lugar natural do conserto, mas o custo medido e de um `test` adicional, com contra-exemplo e zero
 falso positivo em duas rodadas; adiar deixaria os itens 2 e 5 desacoplados no unico momento em que
 o par foi verificado de ponta a ponta. Nenhuma linha de `src/` e tocada por esta decisao.
+
+D-2026-08-01-div-paragraph-translation-0 (registro de phase): phase `div-paragraph-translation`
+registrada no ROADMAP. Origem: BUG REPORT do usuario em 2026-08-01 — ele converteu
+"Staff Engineer: Leadership beyond the management track" (Will Larson, 4,7 MB, EPUB 2.0 gerado por
+calibre) e "nao traduziu". Base: `main` @ `ad607ac`.
+Diagnostico medido nesta sessao (nao inferido — probe do pipeline real do Core contra o arquivo do
+usuario + inspecao do banco do app em `%LOCALAPPDATA%\...\translatereader.db`):
+- o pipeline de parsing esta INTEGRO para esse livro: 53 capitulos no ReadingOrder, 902.266 chars de
+  HTML, zero capitulo vazio; `CreateTranslatedEpubAsync` substituiu 53/53 entradas num probe com
+  sentinela; o modelo `gemma-2-2b-it-Q4_K_M.gguf` esta integro (1.708.582.752 bytes).
+- CAUSA RAIZ: o livro tem **zero tags `<p>`** — e uma conversao calibre, e os paragrafos sao
+  `<div class="calibreN">`. `HtmlUtility.ExtractTextBlocks` casa `<(p|h[1-6]|li)\b...>` e por isso
+  enxerga apenas **360 blocos / 11.114 palavras**, contra **1.914 blocos / 88.042 palavras** que
+  vivem em `<div>` folha e sao ignorados. Cobertura de traducao do livro: **11,2% do texto**.
+- confirmacao aritmetica: `TranslationCache` para `BookId=12` tem **exatamente 360 entradas** — o
+  motor traduziu tudo o que conseguia ver e nada alem. A corrida inteira levou 3min56s
+  (14:19:31 -> 14:23:27), coerente com 360 blocos curtos.
+- consequencia observavel: o EPUB gerado (`Books.Id=15`,
+  `..._translated_544b0db6.epub`) tem **5 de 53 documentos em portugues, 48 ainda em ingles**.
+- SEGUNDO DEFEITO (silencio): o fluxo tratou isso como sucesso — `TranslateBookAsync` chamou
+  `RebuildAllTranslatedChaptersAsync`, apagou o job (`DeleteJobAsync`) e devolveu o caminho do EPUB
+  sem nenhum sinal de que 89% do texto nao foi traduzido. Nao ha excecao, nao ha aviso, nao ha
+  metrica exposta ao usuario.
+Escopo pedido pelo usuario nesta invocacao: os DOIS defeitos (extracao + sinal de cobertura).
