@@ -1418,3 +1418,77 @@ Achado secundario medido (NAO superdimensionar): `CreateTranslatedEpubAsync` faz
 `archive.Entries.FirstOrDefault(...)` dentro do loop de capitulos — O(entries x capitulos), mas em
 numeros absolutos sao 1.215 / 4.238 / 6.578 comparacoes de string nos tres fixtures; e defeito de
 forma, nao gargalo dominante.
+D-2026-07-31-conversion-performance-1 (medicao — sessao de captura de contexto, asker):
+LOCKED entre as 3 opcoes do brief: **(b)** — teste in-process deterministico via
+`GC.GetTotalMemory(forceFullCollection: true)` (nao BenchmarkDotNet — opcao a, infra nova fora do
+estatuto desta fase; nao cronometro de parede — opcao c, notoriamente flaky em CI). Prova a
+PROPRIEDADE (pico de memoria retida durante a extracao das 229 imagens do fixture Wardley,
+44MB totais, fica bem abaixo do total) em vez de cronometrar a maquina. Ver `## Definition of Done`
+de `.jdi/phases/conversion-performance/CONTEXT.md`.
+
+D-2026-07-31-conversion-performance-2 (escopo): Core apenas (`ParsingEngine`, `ReadingManager`,
+`LibraryManager`, `ModelAccess`, `BooksAccess`/`ReadingStateAccess`) validado contra os 3 fixtures
+reais. UI MAUI (`Pages`/`PageModels`) e performance em device real (Android/iOS) NAO sao
+verificaveis neste ambiente — `## Deferred to PR review`, espelhando a fronteira ja travada em
+`D-2026-07-30-regression-suite-2`.
+
+D-2026-07-31-conversion-performance-3 (CORRECAO do diagnostico do achado ancora, pesquisado nesta
+sessao — vers-one/EpubReader docs): `ReadEpubSafeAsync` chama `EpubReader.ReadBookAsync`, API
+EAGER que carrega TODO o conteudo do livro (HTML, CSS e as 229 imagens = 44MB) na memoria durante o
+proprio parse — `EpubBook` nao tem lazy-load; a API lazy da biblioteca e `EpubReader.OpenBookAsync`
+(retorna `EpubBookRef`, le cada arquivo sob demanda, mantem o handle do EPUB aberto). Consequencia:
+o `Dictionary<string, byte[]>` de `ExtractAllImagesAsync` NAO e a causa raiz por si so — ele copia
+REFERENCIAS (nao bytes) de `epub.Content.Images.Local`, que ja estao residentes em memoria antes do
+dicionario existir. Uma correcao que so trocasse `Dictionary` por `IAsyncEnumerable` MANTENDO
+`ReadBookAsync` por baixo NAO reduziria o pico de memoria real — passaria em greps estruturais sem
+corrigir o problema medido, mesma familia de proxy-que-nao-prova ja catalogada varias vezes em
+`.jdi/todos.md` `[PROCESSO/DoD]`. Fix real LOCKED: `ExtractAllImagesAsync` passa a usar
+`EpubReader.OpenBookAsync` (com as MESMAS opcoes de tolerancia hoje aplicadas em
+`ReadEpubSafeAsync`, strict + fallback), lendo e emitindo UMA imagem por vez, descartando a
+referencia antes de ler a proxima, descartando o `EpubBookRef` ao fim. Escopo do lazy-switch fica
+LIMITADO a este metodo — os outros 5 metodos publicos de `IParsingEngine` continuam no caminho
+eager `ReadEpubSafeAsync` (menor risco/diff nesta fase); estender o lazy-switch a eles e achado
+nomeado, registrado em `.jdi/todos.md`, nao decidido aqui.
+
+D-2026-07-31-conversion-performance-4 (contrato): `IParsingEngine.ExtractAllImagesAsync` passa de
+`Task<IReadOnlyDictionary<string, byte[]>>` para `IAsyncEnumerable<ExtractedImage>` (novo record
+`ExtractedImage(string RelativePath, byte[] Content)` em `Models/`). Contagem de operacoes do
+contrato permanece 5 (sem crescimento — CLAUDE.md "3-5 operacoes por contrato"). Consumidor
+`ReadingManager.ExtractImagesIfNeededAsync` passa a `await foreach`, escrevendo e descartando cada
+imagem sem acumular colecao propria.
+
+D-2026-07-31-conversion-performance-5 (biblioteca/leitura — medido/raciocinado, sem fix nesta fase,
+resposta honesta exigida pelo brief): (a) `LibraryManager.ListBookSummariesAsync` tem N+1
+estrutural real — 1 round-trip SQLite por livro via `readingStateAccess.FetchProgressAsync` dentro
+do `foreach` — mas sem evidencia de impacto perceptivel em escala realista (SQLite local em
+arquivo, biblioteca pessoal tipicamente de dezenas de livros, nao milhares); registrado em
+`.jdi/todos.md` como candidato futuro SE a biblioteca crescer — "medimos e nao ha gargalo
+confirmado" e a resposta pedida pelo brief quando a medicao nao sustenta a otimizacao. (b) TODOS os
+metodos publicos de `ParsingEngine` reabrem e reparseiam o EPUB inteiro a cada chamada
+(`ReadEpubSafeAsync`, eager) — `ExtractChapterContentAsync`, chamado 1x por navegacao de capitulo
+via `ReadingManager.LoadChapterContentAsync`, reparseia o livro TODO a cada troca de capitulo.
+Achado real e nomeado para "leitura", mesma causa raiz do achado ancora (D-...-3), mas corrigi-lo
+exigiria cachear `EpubBook`/`EpubBookRef` com gestao de ciclo de vida, disposal e concorrencia
+(`.claude/rules/csharp.md` §3) — escopo maior que esta fase comporta (a fase e finding-driven sobre
+o achado ancora, nao rewrite do parsing). Registrado em `.jdi/todos.md` como achado NOMEADO para
+fase futura, explicitamente NAO descartado em silencio.
+
+D-2026-07-31-conversion-performance-6 (dois defeitos ja registrados em `todos.md § coverage-90`):
+(a) `ExtractCoverImageAsync` retorna `byte[0]` em vez de `null` quando a capa do manifesto aponta
+pra arquivo ausente (`ParsingEngine.cs:316`) — CORRIGIDO nesta fase: guarda `Length > 0` igual as
+duas fontes irmas do mesmo metodo (linhas 72 e 75); mesmo arquivo ja tocado por D-...-3/D-...-4,
+risco baixo, uma linha. Teste de caracterizacao existente
+(`ParsingEngineEdgeCaseTests.cs:185`) aperta `Assert.Empty(cover ?? [])` -> `Assert.Null(cover)`.
+(b) `ReadEpubSafeAsync` deixa o handle do zip aberto quando o fallback e acionado
+(`ParsingEngine.cs:138-190`) — DEFERIDO: exige investigar o comportamento interno do VersOne.Epub
+(possivel bug da propria lib) alem do orcamento de pesquisa desta fase (2 lookups ja usados em
+D-...-3); so ocorre no caminho de FALLBACK (EPUB malformado), nao exercitado pelos 3 fixtures reais
+usados na validacao desta fase. Continua registrado em `.jdi/todos.md § coverage-90`.
+
+D-2026-07-31-conversion-performance-7 (higiene explicitamente fora de escopo): o
+`archive.Entries.FirstOrDefault(...)` O(entries×capitulos) de `CreateTranslatedEpubAsync`,
+ja medido no achado secundario de D-...-0 (1.215-6.578 comparacoes de string nos 3 fixtures),
+confirmado NAO dominante — per o proprio brief, "se entrar no escopo, entra como higiene, nao como
+otimizacao de performance". Decisao: fica FORA de escopo integralmente nesta fase (nem como
+higiene), para nao diluir o achado ancora — registrado em `.jdi/todos.md` como candidato de
+higiene futuro.
