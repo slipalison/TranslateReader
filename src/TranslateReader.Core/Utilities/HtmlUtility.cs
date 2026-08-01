@@ -23,15 +23,6 @@ public static partial class HtmlUtility
         return html[(bodyStart.Index + bodyStart.Length)..bodyEndIndex];
     }
 
-    public static List<string> ExtractParagraphs(string bodyContent)
-    {
-        var matches = ParagraphRegex().Matches(bodyContent);
-        return matches
-            .Select(m => StripHtmlTags(m.Groups[1].Value).Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .ToList();
-    }
-
     public static List<string> ExtractTextBlocks(string bodyContent)
     {
         var blocks = new List<string>();
@@ -163,9 +154,6 @@ public static partial class HtmlUtility
 
         return $"<html><head>{headContent}</head><body>{html}</body></html>";
     }
-
-    [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
-    private static partial Regex ParagraphRegex();
 
     // Disjoint union in a single alternation (D-2026-08-01-div-paragraph-translation-7): the p/h/li
     // branch is tried first, and the div branch only matches a LEAF div - one whose content holds no

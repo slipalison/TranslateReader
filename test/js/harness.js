@@ -285,7 +285,39 @@ function* descendantElements(root) {
     }
 }
 
-function parseSelector(selector) {
+// A comma only separates a selector group at the top level: scroll.js builds
+// `[data-chapter-href="<href>"]` from an EPUB href, which is untrusted input, so a href holding a
+// comma must stay one selector instead of silently becoming two broken ones.
+function splitSelectorGroup(selector) {
+    const parts = [];
+    let start = 0;
+    let depth = 0;
+    let quoted = false;
+    for (let i = 0; i < selector.length; i++) {
+        const character = selector[i];
+        if (character === '"') {
+            quoted = !quoted;
+        } else if (quoted) {
+            continue;
+        } else if (character === '[') {
+            depth++;
+        } else if (character === ']') {
+            depth--;
+        } else if (character === ',' && depth === 0) {
+            parts.push(selector.slice(start, i));
+            start = i + 1;
+        }
+    }
+    parts.push(selector.slice(start));
+    return parts;
+}
+
+// Every character has to be accounted for. Skipping over text the parser cannot read produced an
+// empty matcher, and an empty matcher matches EVERY element: the harness failed OPEN. scroll.js
+// builds `[data-chapter-href="<href>"]` out of an EPUB href, which is untrusted input, so a quote
+// in that href yields a selector a real WebView rejects — the harness must reject it too instead of
+// green-lighting code that selects the wrong chapter.
+function parseSimpleSelector(selector) {
     const trimmed = selector.trim();
     const tagMatch = /^[a-zA-Z][\w-]*/.exec(trimmed);
     const tag = tagMatch === null ? null : tagMatch[0].toUpperCase();
@@ -293,16 +325,25 @@ function parseSelector(selector) {
     const classes = [];
     const attributes = [];
     SELECTOR_PART_RE.lastIndex = 0;
+    let cursor = 0;
     let match = SELECTOR_PART_RE.exec(rest);
-    while (match !== null) {
+    while (match !== null && match.index === cursor) {
         if (match[1] === undefined) {
             attributes.push({ name: match[2], value: match[3] });
         } else {
             classes.push(match[1]);
         }
+        cursor = SELECTOR_PART_RE.lastIndex;
         match = SELECTOR_PART_RE.exec(rest);
     }
+    if (cursor !== rest.length || (tag === null && cursor === 0)) {
+        throw new SyntaxError(`harness cannot parse selector '${selector}'`);
+    }
     return { tag, classes, attributes };
+}
+
+function parseSelector(selector) {
+    return splitSelectorGroup(selector).map(parseSimpleSelector);
 }
 
 function readAttribute(element, name) {
@@ -335,11 +376,23 @@ function matches(element, parsed) {
     return true;
 }
 
+function matchesAnyPart(element, parsedParts) {
+    for (const parsed of parsedParts) {
+        if (matches(element, parsed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ONE walk over the descendants, testing every part of the group against each element. Looping the
+// group outside and concatenating would return every `p` and then every `div` instead of document
+// order, and translation.js pairs a paragraph with its translation by index into this very list.
 function matchDescendants(root, selector) {
-    const parsed = parseSelector(selector);
+    const parsedParts = parseSelector(selector);
     const found = [];
     for (const element of descendantElements(root)) {
-        if (matches(element, parsed)) {
+        if (matchesAnyPart(element, parsedParts)) {
             found.push(element);
         }
     }

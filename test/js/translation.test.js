@@ -6,6 +6,13 @@ const { createEnv } = require('./harness');
 
 const WINDOW_WIDTH = 500;
 const VIEWPORT_WIDTH = 400;
+const ELEMENT_NODE = 1;
+
+// The fixture lines are joined by `\n`, so the wrapper also holds text nodes: only the element
+// children are the calibre blocks.
+function elementChildren(node) {
+    return node.childNodes.filter((child) => child.nodeType === ELEMENT_NODE);
+}
 
 // translation.js reads `_stepW` and `_currentPage`, which are declared by
 // paginated.js: both files must share one context, exactly as they do in the WebView.
@@ -174,4 +181,154 @@ test('clearTranslations does nothing before a chapter is paginated', () => {
     env.window.clearTranslations();
 
     assert.strictEqual(env.document.getElementById('_pager'), null);
+});
+
+// Same markup as CalibreFixtures.PartiallyCoveredBody on the C# side: calibre wraps every
+// paragraph in a leaf `div class="calibreN"` and never emits a `p`. The wrapper div, the image
+// only div and the bullet only div are the three shapes that must stay out of the paragraph list.
+const CALIBRE_BODY = [
+    '<div class="calibre1">',
+    '<div class="calibre2">First calibre paragraph with real text.</div>',
+    '<div class="calibre2">Second calibre paragraph with more text.</div>',
+    '<div class="calibre3"><img src="fig1.png"/></div>',
+    '<div class="calibre2">&#8226;</div>',
+    '<div class="calibre2">Third paragraph, letters only matter here.</div>',
+    '</div>',
+].join('\n');
+
+const NO_PARAGRAPH_WARNING = 'no translatable paragraph';
+
+test('getVisibleParagraphs returns every calibre leaf div that holds letters', () => {
+    const env = loadTranslation();
+    paginate(env, CALIBRE_BODY);
+
+    const visible = env.window.getVisibleParagraphs();
+
+    // Array.from rebuilds the list in this realm: getVisibleParagraphs runs inside the vm context,
+    // so its arrays and objects carry that realm's prototypes and deepStrictEqual would reject them.
+    assert.deepStrictEqual(Array.from(visible, (paragraph) => paragraph.text), [
+        'First calibre paragraph with real text.',
+        'Second calibre paragraph with more text.',
+        'Third paragraph, letters only matter here.',
+    ]);
+});
+
+test('getVisibleParagraphs leaves the calibre wrapper, the image div and the bullet div out', () => {
+    const env = loadTranslation();
+    paginate(env, CALIBRE_BODY);
+
+    const texts = env.window.getVisibleParagraphs().map((paragraph) => paragraph.text);
+
+    assert.strictEqual(texts.length, 3);
+    assert.ok(!texts.some((text) => text.includes('First calibre') && text.includes('Second calibre')),
+        'the non-leaf wrapper collapsed the whole chapter into one block');
+    assert.ok(!texts.some((text) => text.includes('&#8226;')), 'the bullet only div became a paragraph');
+    assert.ok(!texts.some((text) => text.trim() === ''), 'the image only div became a paragraph');
+});
+
+test('getVisibleParagraphs indexes p and calibre div elements in document order', () => {
+    const env = loadTranslation();
+    paginate(env, '<p>one</p><div>two</div><p>three</p>');
+
+    const visible = env.window.getVisibleParagraphs();
+
+    assert.deepStrictEqual(
+        Array.from(visible, (paragraph) => ({ index: paragraph.index, text: paragraph.text })),
+        [
+            { index: 0, text: 'one' },
+            { index: 1, text: 'two' },
+            { index: 2, text: 'three' },
+        ]);
+});
+
+test('applyTranslations writes into the calibre div the reported index points at', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, '<p>one</p><div>two</div><p>three</p>');
+    const reported = env.window.getVisibleParagraphs()[1];
+
+    env.window.applyTranslations([{ index: reported.index, translated: 'dois' }]);
+
+    assert.strictEqual(pager.childNodes[1].tagName, 'DIV');
+    assert.strictEqual(pager.childNodes[1].textContent, 'dois');
+    assert.strictEqual(pager.childNodes[1].dataset.original, 'two');
+    assert.strictEqual(pager.childNodes[0].textContent, 'one');
+    assert.strictEqual(pager.childNodes[2].textContent, 'three');
+});
+
+// `<p>one</p><div>two</div><p>three</p>` cannot tell a correct selector from a naive one: every
+// element there is a paragraph. CALIBRE_BODY can, because it holds a wrapper, an image div and a
+// bullet div that the read list skips, so writing must walk that same list or the indexes slide.
+test('applyTranslations writes each calibre index into the element getVisibleParagraphs read it from', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, CALIBRE_BODY);
+    const blocks = elementChildren(pager.childNodes[0]);
+
+    const read = env.window.getVisibleParagraphs();
+    env.window.applyTranslations(Array.from(read, (paragraph) => ({
+        index: paragraph.index,
+        translated: `traduzido ${paragraph.index}`,
+    })));
+
+    assert.deepStrictEqual(blocks.map((block) => block.textContent), [
+        'traduzido 0',
+        'traduzido 1',
+        '',
+        '&#8226;',
+        'traduzido 2',
+    ]);
+    assert.deepStrictEqual(blocks.map((block) => block.dataset.original), [
+        'First calibre paragraph with real text.',
+        'Second calibre paragraph with more text.',
+        undefined,
+        undefined,
+        'Third paragraph, letters only matter here.',
+    ]);
+});
+
+test('applyTranslations leaves the calibre wrapper alone instead of collapsing the chapter', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, CALIBRE_BODY);
+    const wrapper = pager.childNodes[0];
+    const before = env.window.getVisibleParagraphs();
+
+    env.window.applyTranslations([{ index: before[0].index, translated: 'primeiro traduzido' }]);
+
+    assert.strictEqual(wrapper.dataset.original, undefined, 'the wrapper div itself was translated');
+    assert.strictEqual(elementChildren(wrapper).length, 5, 'the chapter lost its blocks');
+    // Parity: what the page reports after writing is still the same list, one original per element.
+    assert.deepStrictEqual(
+        Array.from(env.window.getVisibleParagraphs(), (paragraph) => paragraph.text),
+        Array.from(before, (paragraph) => paragraph.text));
+});
+
+test('clearTranslations restores a translated calibre div and drops the marker', () => {
+    const env = loadTranslation();
+    const pager = paginate(env, '<div class="calibre2">only paragraph</div>');
+    env.window.applyTranslations([{ index: 0, translated: 'unico paragrafo' }]);
+    assert.strictEqual(pager.childNodes[0].textContent, 'unico paragrafo');
+
+    env.window.clearTranslations();
+
+    assert.strictEqual(pager.childNodes[0].textContent, 'only paragraph');
+    assert.strictEqual(pager.childNodes[0].dataset.original, undefined);
+});
+
+test('getVisibleParagraphs warns when the page has text but no translatable paragraph', () => {
+    const env = loadTranslation();
+    paginate(env, '<span>so span</span>');
+
+    const visible = env.window.getVisibleParagraphs();
+
+    assert.strictEqual(visible.length, 0);
+    assert.ok(env.logged('warn', NO_PARAGRAPH_WARNING));
+});
+
+test('getVisibleParagraphs stays quiet when a calibre div is translatable', () => {
+    const env = loadTranslation();
+    paginate(env, CALIBRE_BODY);
+
+    const visible = env.window.getVisibleParagraphs();
+
+    assert.strictEqual(visible.length, 3);
+    assert.strictEqual(env.logged('warn', NO_PARAGRAPH_WARNING), false);
 });

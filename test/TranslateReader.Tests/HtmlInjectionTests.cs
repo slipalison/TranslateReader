@@ -301,7 +301,7 @@ public partial class HtmlInjectionTests
             .Where(m => m.ReturnType == typeof(Regex) && m.GetParameters().Length == 0)
             .ToList();
 
-        Assert.Equal(8, factories.Count);
+        Assert.Equal(7, factories.Count);
         foreach (var factory in factories)
         {
             var regex = factory.Invoke(null, null) as Regex;

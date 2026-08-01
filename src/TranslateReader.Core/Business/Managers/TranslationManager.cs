@@ -241,7 +241,7 @@ public class TranslationManager(
         var book = await booksAccess.FetchBookAsync(bookId);
         var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapterHRef, string.Empty);
         var bodyContent = HtmlUtility.ExtractBodyContent(html);
-        var paragraphs = HtmlUtility.ExtractParagraphs(bodyContent);
+        var paragraphs = HtmlUtility.ExtractTextBlocks(bodyContent);
 
         string? previousParagraph = null;
         var chapter = (await parsingEngine.ExtractChaptersAsync(book.FilePath))
