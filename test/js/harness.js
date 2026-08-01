@@ -312,6 +312,11 @@ function splitSelectorGroup(selector) {
     return parts;
 }
 
+// Every character has to be accounted for. Skipping over text the parser cannot read produced an
+// empty matcher, and an empty matcher matches EVERY element: the harness failed OPEN. scroll.js
+// builds `[data-chapter-href="<href>"]` out of an EPUB href, which is untrusted input, so a quote
+// in that href yields a selector a real WebView rejects — the harness must reject it too instead of
+// green-lighting code that selects the wrong chapter.
 function parseSimpleSelector(selector) {
     const trimmed = selector.trim();
     const tagMatch = /^[a-zA-Z][\w-]*/.exec(trimmed);
@@ -320,14 +325,19 @@ function parseSimpleSelector(selector) {
     const classes = [];
     const attributes = [];
     SELECTOR_PART_RE.lastIndex = 0;
+    let cursor = 0;
     let match = SELECTOR_PART_RE.exec(rest);
-    while (match !== null) {
+    while (match !== null && match.index === cursor) {
         if (match[1] === undefined) {
             attributes.push({ name: match[2], value: match[3] });
         } else {
             classes.push(match[1]);
         }
+        cursor = SELECTOR_PART_RE.lastIndex;
         match = SELECTOR_PART_RE.exec(rest);
+    }
+    if (cursor !== rest.length || (tag === null && cursor === 0)) {
+        throw new SyntaxError(`harness cannot parse selector '${selector}'`);
     }
     return { tag, classes, attributes };
 }

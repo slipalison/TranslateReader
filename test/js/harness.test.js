@@ -5,8 +5,9 @@ const assert = require('node:assert');
 const { createEnv } = require('./harness');
 
 // The harness itself is test infrastructure shared by every production script, so a regression
-// here is invisible in the suites that consume it. These tests pin the one CSS feature the
-// production code needs beyond a single simple selector: selector groups separated by commas.
+// here is invisible in the suites that consume it. These tests pin the CSS features the production
+// code needs beyond a single simple selector: selector groups separated by commas, and failing
+// CLOSED on a selector the harness cannot parse the way a real DOM does.
 
 function withBody(html) {
     const env = createEnv();
@@ -44,6 +45,45 @@ test('querySelectorAll does not split a comma inside an attribute value', () => 
 
     assert.strictEqual(found.length, 1);
     assert.strictEqual(found[0].textContent, 'alvo');
+});
+
+test('querySelectorAll keeps an attribute value holding a comma and a bracket in one selector', () => {
+    const env = withBody(
+        '<div data-chapter-href="a,b].xhtml">alvo</div><div data-chapter-href="c.xhtml">outro</div>');
+
+    const found = env.document.querySelectorAll('[data-chapter-href="a,b].xhtml"]');
+
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].textContent, 'alvo');
+});
+
+// scroll.js:32 concatenates an EPUB href — untrusted input — into `[data-chapter-href="<href>"]`.
+// A quote in that href builds a selector a real WebView rejects outright; the harness used to skip
+// the text it could not read and end up with a matcher that accepted EVERY element, so a test could
+// go green over code that selects the wrong chapter (or the whole document) in production.
+test('querySelectorAll refuses an unparseable selector instead of matching every element', () => {
+    const env = withBody('<div data-chapter-href="ok.xhtml"><span>x</span></div>');
+    const href = 'ch"1';
+
+    assert.throws(
+        () => env.document.querySelectorAll('[data-chapter-href="' + href + '"]'),
+        SyntaxError);
+});
+
+test('querySelector refuses an unparseable selector instead of reporting not-found', () => {
+    const env = withBody('<div data-chapter-href="ok.xhtml"><span>x</span></div>');
+    const href = 'ch"1';
+
+    assert.throws(
+        () => env.document.querySelector('[data-chapter-href="' + href + '"]'),
+        SyntaxError);
+    assert.throws(() => env.document.body.querySelector(']]garbage(('), SyntaxError);
+});
+
+test('querySelectorAll refuses an empty part of a selector group', () => {
+    const env = withBody('<p>um</p><div>dois</div>');
+
+    assert.throws(() => env.document.querySelectorAll('p,'), SyntaxError);
 });
 
 test('querySelectorAll keeps a comma-free selector matching exactly what it matched before', () => {
