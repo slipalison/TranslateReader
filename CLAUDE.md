@@ -6,6 +6,10 @@ Leitor de EPUB multiplataforma (.NET MAUI). Persiste posicao de leitura em SQLit
 
 ## Arquitetura: The Method (Volatility-Based Decomposition)
 
+> **D-3 (locked):** o JDI eh a camada de **processo**. A arquitetura abaixo esta locked e **nao**
+> deve ser redecidida pelas skills de arquitetura que o JDI traz (`clean-architecture`, `ddd`,
+> `hexagonal`, `onion`, `vertical-slice`). A arquitetura vigente eh The Method.
+
 ### Regras de Camada (OBRIGATORIAS)
 
 ```
@@ -134,9 +138,9 @@ TranslationCache: ID, BookId, ChapterHRef, OriginalHash, TranslatedText, Created
 
 ---
 
-# JDI — Workflow de Desenvolvimento
+# JDI — Instrucoes Claude Code
 
-Este projeto usa o JDI (Just Do It) como workflow. JDI eh a camada de **processo**; a arquitetura do projeto ja esta locked nas secoes acima e **nao** deve ser redecidida pelas skills de arquitetura que o JDI traz (`clean-architecture`, `ddd`, `hexagonal`, `onion`, `vertical-slice`). A arquitetura vigente eh The Method.
+Este projeto usa o JDI (Just Do It) como workflow de desenvolvimento. JDI eh um workflow enxuto: 6 comandos no loop principal, 5 agents core + 2 per-project specialists.
 
 ## Loop canonico
 
@@ -155,7 +159,6 @@ Este projeto usa o JDI (Just Do It) como workflow. JDI eh a camada de **processo
 
 # Continuidade / snapshot
 /jdi-status                                            -> resumo: phase atual + ultima acao + proximo comando
-/jdi-next                                              -> auto-router: roda o proximo passo correto
 ```
 
 `/jdi-create [desc]` gera novos agents/skills genericos no `core/` (rodado dentro do repo JDI, nao de projetos consumindo).
@@ -204,7 +207,7 @@ Routing em `.jdi/specialists.md` e `.jdi/reviewers.md`.
     REVIEW.md         <- output do reviewer
 ```
 
-## Convencoes JDI
+## Convencoes
 
 - Conventional Commits — scope = phase slug, ex: `feat(01-setup-api): ...`
 - Atomic commits — 1 task = 1 commit
@@ -216,6 +219,7 @@ Routing em `.jdi/specialists.md` e `.jdi/reviewers.md`.
 
 - Codigo, commits, PRs: ingles
 - Discussao, docs em `.jdi/`: pt-BR
+- i18n no frontend: nunca string hardcoded em pt-BR no JSX
 
 ## Prioridade quando conflita
 

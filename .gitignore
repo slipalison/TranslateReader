@@ -56,3 +56,10 @@ passwords.env
 # Zitadel setup (gerados automaticamente)
 scripts/.zitadel-pat
 scripts/.zitadel-setup-done
+.jdi/ROADMAP.md
+.jdi/DECISIONS.md
+.jdi/todos.md
+.jdi/registry.md
+.jdi/specialists.md
+.jdi/reviewers.md
+.jdi/skills-registry.md
