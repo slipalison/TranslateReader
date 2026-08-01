@@ -1498,3 +1498,43 @@ O predicado e assimetrico POR BRANCH e simetrico entre as duas passagens: branch
 `p|h[1-6]|li` mantem o filtro de whitespace ATUAL (`string.IsNullOrWhiteSpace`) — endurece-lo
 mudaria a baseline de caracterizacao dos 3 fixtures reais (`D-...-2`). Filtro diferente entre as
 duas passagens desalinha `translations[index++]`; e a falha que o teste de round-trip mata.
+
+D-2026-08-01-div-paragraph-translation-9 (o DoD tem de provar COMPORTAMENTO, nao FORMA) —
+**supersede os 7 comandos `Verify:`** da secao `## Definition of Done` de
+`.jdi/phases/div-paragraph-translation/CONTEXT.md` (itens 1..7). Os CRITERIOS dos 7 itens ficam
+identicos e cada comando novo COMECA pelo comando antigo, literal, encadeado com `&&` — nenhuma
+checagem estrutural foi perdida; ela apenas deixou de ser a prova UNICA.
+
+Contra-exemplo que motiva (DoD critic, iter 1, medido nesta maquina): removendo o branch de
+div-folha da alternacao de `TextBlockRegex` (`HtmlUtility.cs:193-194`) o padrao volta a ser
+`p|h[1-6]|li` — exatamente o defeito que esta phase existe para corrigir — e o codigo continua
+valido: `dotnet build` 0 erros, `dotnet test` 9 falhas, e os 7 `Verify:` antigos exit 0 nos 7.
+Pior: com `HtmlUtility.cs` sintaticamente QUEBRADO (2 erros de compilacao) os 7 tambem exit 0 — o
+DoD antigo nem exigia que o projeto compilasse. Causa raiz: os 7 comandos mediam apenas
+propriedade de FORMA do arquivo (contagem de ocorrencias de NOME de teste, presenca de literal,
+presenca de record/assinatura, contagem de atributo, escopo do diff); NENHUM executava teste.
+
+Regra nova (vale para esta phase e como precedente do padrao de DoD do projeto):
+1. Todo item de DoD que afirma COMPORTAMENTO amarra-se a execucao real da suite:
+   `DOTNET_CLI_UI_LANGUAGE=en dotnet test ... > log 2>&1 && grep -q "Passed!" log` mais piso
+   numerico parseado do sumario (`Failed:` == 0 e `Passed:` >= piso), tudo encadeado com `&&` —
+   nunca `;`, que engole exit code. `DOTNET_CLI_UI_LANGUAGE=en` e obrigatorio: a maquina do
+   projeto imprime o sumario em pt-BR (`Com falha: / Aprovado:`) e o parser quebraria em silencio.
+2. Item amarrado a `--filter` carrega piso PROPRIO de testes casados, fixado ANTES da corrida.
+   Filtro que casa ZERO teste reprova por construcao: o VSTest imprime "No test matches the given
+   testcase filter" e NAO imprime a linha `Passed!` — com **exit code 0** (medido). Por isso o
+   gate nunca pode depender so do exit code do `dotnet test`.
+3. Existe pelo menos UM item que roda a suite INTEIRA, sem filtro, com piso casado fixo — item 8,
+   NOVO: `Failed:` 0, `Passed:` >= 320, `Total:` >= 322. Baseline medido em `9c56c36` era 319/321;
+   o piso sobe para o estado ENTREGUE (o teste de clamp do W-1 somou 1), nunca desce.
+4. Como todo `dotnet test`/`dotnet build` compila antes de rodar, codigo que nao compila reprova
+   em 8 dos 8 itens. "O projeto compila" deixa de ser suposicao e vira consequencia.
+5. Logs vao para `TestResults/` (ja ignorado por `**/TestResults/` no `.gitignore`), para que
+   `git status --porcelain` continue limpo depois de rodar o DoD inteiro.
+
+Nenhum item ficou mais fraco: o `-eq 3` estrutural do item 1, por exemplo, permanece E ganhou
+`Passed: == 3` na corrida filtrada. REJEITADO `--no-build` nos itens filtrados: economizaria ~4 s
+por item e devolveria exatamente a falha que o critico explorou (binario velho aprovando fonte
+quebrada). REJEITADO substituir os 7 por um unico gate "roda a suite inteira": um item de DoD tem
+de reprovar pelo motivo DELE, entao cada item mantem filtro e piso proprios e a regressao aponta o
+criterio violado em vez de "algo quebrou".

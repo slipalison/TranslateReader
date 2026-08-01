@@ -54,6 +54,11 @@ de reportar sucesso quando parte relevante do texto ficou de fora, em silencio.
   o gatilho "zero blocos" de `D-...-1`. Teto 100% do corpo contra 44,3% do gatilho antigo.
 - **D-...-8 (simetria):** `ReplaceTextBlocksInHtml` compartilha selecao E predicado com
   `ExtractTextBlocks`; sem isso a traducao dos divs seria cacheada e nunca escrita no EPUB.
+- **D-...-9 (o DoD prova COMPORTAMENTO):** supersede os 7 comandos `Verify:` de
+  `## Definition of Done` (os CRITERIOS nao mudam). Cada comando novo comeca pelo comando ANTIGO
+  literal e segue, encadeado com `&&`, numa execucao real da suite com piso de testes casados.
+  Item 8 e novo. Motivo: o DoD critic provou que os 7 antigos aprovavam um mutante que reintroduz
+  o defeito da phase (`dotnet test` 9 falhas) e aprovavam ate fonte que nao compila.
 
 ## Canonical refs
 - `.jdi/DECISIONS.md` D-2026-08-01-div-paragraph-translation-0 (diagnostico medido, numeros)
@@ -73,37 +78,57 @@ de reportar sucesso quando parte relevante do texto ficou de fora, em silencio.
 
 ## Definition of Done
 
+> **Endurecido na iter 2 por `D-2026-08-01-div-paragraph-translation-9`.** Os 7 `Verify:`
+> originais mediam so FORMA (nome de teste presente, literal presente, contagem de atributo,
+> escopo de diff) e o DoD critic provou que aprovavam um mutante que reintroduz o defeito da phase
+> (`dotnet build` 0 erros, `dotnet test` 9 falhas, 7/7 gates exit 0) e aprovavam ate fonte que nao
+> compila. Cada comando abaixo COMECA pelo comando antigo, literal — nenhuma checagem estrutural
+> foi perdida — e continua, encadeado com `&&` (nunca `;`), numa execucao REAL da suite com piso
+> de testes casados fixado antes da corrida. Filtro que casa zero teste reprova por construcao: o
+> VSTest sai com exit 0 e sem a linha `Passed!`, por isso todo item exige o `grep -q "Passed!"`
+> alem do encadeamento. `DOTNET_CLI_UI_LANGUAGE=en` e obrigatorio (a maquina imprime o sumario em
+> pt-BR). Logs vao para `TestResults/`, ja em `.gitignore`.
+
 ### Auto-verifiable
 - [ ] Teste de caracterizacao por fixture real fixa a contagem ATUAL de `ExtractTextBlocks` para
       `Wardley Maps`, `Righting software` e `Practice Makes Perfect` (nome contem
-      `PreservesBaselineBlockCount`, 1 por fixture, 3 no total)
-      **Verify:** `test $(grep -rho "PreservesBaselineBlockCount" test/TranslateReader.Tests/*.cs | wc -l) -eq 3`
+      `PreservesBaselineBlockCount`, 1 por fixture, 3 no total) — e os 3 passam de verdade
+      **Verify:** `test $(grep -rho "PreservesBaselineBlockCount" test/TranslateReader.Tests/*.cs | wc -l) -eq 3 && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~PreservesBaselineBlockCount" > TestResults/dod1.log 2>&1 && grep -q "Passed!" TestResults/dod1.log && awk -v n=3 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0==n)?0:1}' TestResults/dod1.log`
       **Source:** CONTEXT
 - [ ] Fallback de div-folha extrai a Fixture A de `## Notes` corretamente (ignora container, div de
-      imagem e div sem letra) usando guarda de letra Unicode
-      **Verify:** `grep -q "ExtractTextBlocks_ForCalibreStyleBody_ExtractsLeafDivsWithLetters" test/TranslateReader.Tests/HtmlUtilityTests.cs && grep -q "IsLetter" src/TranslateReader.Core/Utilities/HtmlUtility.cs`
+      imagem e div sem letra) usando guarda de letra Unicode — provado rodando os 3 testes de
+      selecao de div-folha, nao so pela presenca do nome
+      **Verify:** `grep -q "ExtractTextBlocks_ForCalibreStyleBody_ExtractsLeafDivsWithLetters" test/TranslateReader.Tests/HtmlUtilityTests.cs && grep -q "IsLetter" src/TranslateReader.Core/Utilities/HtmlUtility.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ExtractTextBlocks_ForCalibreStyleBody_ExtractsLeafDivsWithLetters|FullyQualifiedName~ExtractTextBlocks_ForFullyCoveredCalibreBody_ExtractsTheSingleLeafDiv|FullyQualifiedName~ExtractTextBlocks_ForLeafDivWithoutAnyLetter_SkipsTheBlock" > TestResults/dod2.log 2>&1 && grep -q "Passed!" TestResults/dod2.log && awk -v n=3 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod2.log`
       **Source:** CONTEXT
 - [ ] Invariante estrutural (`D-...-7`): div que CONTEM `<p>`/`<h#>`/`<li>` nunca vira bloco — as
       duas fontes sao disjuntas por construcao, zero dupla contagem, zero regressao dos livros que
-      hoje funcionam
-      **Verify:** `grep -q "ExtractTextBlocks_WhenParagraphTagsPresent_IgnoresLeafDivs" test/TranslateReader.Tests/HtmlUtilityTests.cs`
+      hoje funcionam; e a simetria de `D-...-8` (round-trip extracao/substituicao) roda junto
+      **Verify:** `grep -q "ExtractTextBlocks_WhenParagraphTagsPresent_IgnoresLeafDivs" test/TranslateReader.Tests/HtmlUtilityTests.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~ExtractTextBlocks_WhenParagraphTagsPresent_IgnoresLeafDivs|FullyQualifiedName~ReplaceTextBlocksInHtml_ForCalibreStyleBody_WritesEachTranslationIntoItsOwnDiv|FullyQualifiedName~ReplaceTextBlocksInHtml_ForCalibreStyleBody_LeavesLetterlessDivsByteIdentical" > TestResults/dod3.log 2>&1 && grep -q "Passed!" TestResults/dod3.log && awk -v n=3 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod3.log`
       **Source:** CONTEXT
 - [ ] `TranslateBookAsync` devolve `BookTranslationResult.CoveredTextRatio` refletindo texto fora de
-      qualquer bloco reconhecido (Fixture A < 1.0, Fixture B == 1.0 em `## Notes`)
-      **Verify:** `grep -q "record BookTranslationResult" src/TranslateReader.Core/Models/BookTranslationResult.cs && grep -q "Task<BookTranslationResult> TranslateBookAsync" src/TranslateReader.Core/Contracts/Managers/ITranslationManager.cs && grep -q "TranslateBookAsync_CoveredTextRatio" test/TranslateReader.Tests/TranslationManagerTests.cs`
+      qualquer bloco reconhecido (Fixture A < 1.0, Fixture B == 1.0 em `## Notes`) e NUNCA acima de
+      1.0 nem com HTML malformado (W-1) — os 4 testes de ratio rodam e passam
+      **Verify:** `grep -q "record BookTranslationResult" src/TranslateReader.Core/Models/BookTranslationResult.cs && grep -q "Task<BookTranslationResult> TranslateBookAsync" src/TranslateReader.Core/Contracts/Managers/ITranslationManager.cs && grep -q "TranslateBookAsync_CoveredTextRatio" test/TranslateReader.Tests/TranslationManagerTests.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~TranslateBookAsync_CoveredTextRatio" > TestResults/dod4.log 2>&1 && grep -q "Passed!" TestResults/dod4.log && awk -v n=4 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod4.log`
       **Source:** CONTEXT
 - [ ] Cobertura zero/baixa nao lanca excecao — `TranslateBookAsync` completa e devolve resultado
-      normalmente (csharp.md §1)
-      **Verify:** `grep -q "TranslateBookAsync_WithZeroCoverageChapter_CompletesWithoutThrowing" test/TranslateReader.Tests/TranslationManagerTests.cs`
+      normalmente (csharp.md §1), verificado executando o teste
+      **Verify:** `grep -q "TranslateBookAsync_WithZeroCoverageChapter_CompletesWithoutThrowing" test/TranslateReader.Tests/TranslationManagerTests.cs && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~TranslateBookAsync_WithZeroCoverageChapter_CompletesWithoutThrowing" > TestResults/dod5.log 2>&1 && grep -q "Passed!" TestResults/dod5.log && awk -v n=1 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod5.log`
       **Source:** CONTEXT
 - [ ] Toda `[GeneratedRegex]` nova/alterada em `HtmlUtility.cs` carrega `RegexTimeoutMilliseconds`
-      (ReDoS, csharp.md §4 — EPUB e input nao confiavel)
-      **Verify:** `F=src/TranslateReader.Core/Utilities/HtmlUtility.cs; N=$(grep -c "\[GeneratedRegex" "$F"); T=$(grep -c "RegexTimeoutMilliseconds" "$F"); D=$(grep -c "private const int RegexTimeoutMilliseconds" "$F"); test $((T-D)) -ge "$N"`
+      (ReDoS, csharp.md §4 — EPUB e input nao confiavel) — conferido por reflexao em runtime e
+      pelos 2 testes de corpo adversarial, alem da aritmetica do arquivo
+      **Verify:** `F=src/TranslateReader.Core/Utilities/HtmlUtility.cs; N=$(grep -c "\[GeneratedRegex" "$F"); T=$(grep -c "RegexTimeoutMilliseconds" "$F"); D=$(grep -c "private const int RegexTimeoutMilliseconds" "$F"); test $((T-D)) -ge "$N" && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release --filter "FullyQualifiedName~EveryHtmlUtilityRegex_IsBoundedByAMatchTimeout|FullyQualifiedName~ExtractTextBlocks_ForLargeCalibreBody_ExtractsEveryBlockUnderOneSecond|FullyQualifiedName~ExtractTextBlocks_ForDegenerateUnclosedDivs_ReturnsOrTimesOutWithoutHanging" > TestResults/dod6.log 2>&1 && grep -q "Passed!" TestResults/dod6.log && awk -v n=3 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1)}} END{exit (k&&f+0==0&&p+0>=n)?0:1}' TestResults/dod6.log`
       **Source:** CONTEXT
 - [ ] `src/TranslateReader/` so muda em `LibraryPageModel.cs` (ajuste mecanico do retorno), sem
-      popup/alert/UI nova (D-...-4)
-      **Verify:** `test "$(git diff --name-only main -- src/TranslateReader/ | tr '\n' ',')" = "src/TranslateReader/PageModels/LibraryPageModel.cs," && test $(git diff main -- src/TranslateReader/PageModels/LibraryPageModel.cs | grep -cE "^\+.*(DisplayAlert\(|ShowPopupAsync|new .*Popup)") -eq 0`
+      popup/alert/UI nova (D-...-4) — e o projeto MAUI compila com o novo tipo de retorno
+      **Verify:** `test "$(git diff --name-only main -- src/TranslateReader/ | tr '\n' ',')" = "src/TranslateReader/PageModels/LibraryPageModel.cs," && test $(git diff main -- src/TranslateReader/PageModels/LibraryPageModel.cs | grep -cE "^\+.*(DisplayAlert\(|ShowPopupAsync|new .*Popup)") -eq 0 && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 > TestResults/dod7.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/dod7.log`
       **Source:** CONTEXT
+- [ ] A suite INTEIRA (sem filtro) passa com piso de testes casados fixado antes da corrida:
+      `Failed: 0`, `Passed: >= 320`, `Total: >= 322` (baseline `9c56c36` era 319/321; +1 com o teste
+      de clamp do W-1). E o item que reprova o mutante do critico e qualquer regressao futura do
+      seletor (`D-...-9`)
+      **Verify:** `mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/dod8.log 2>&1 && grep -q "Passed!" TestResults/dod8.log && awk -v pn=320 -v tn=322 '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Passed:")p=$(i+1);if($i=="Total:")t=$(i+1)}} END{exit (k&&f+0==0&&p+0>=pn&&t+0>=tn)?0:1}' TestResults/dod8.log`
+      **Source:** CONTEXT (D-2026-08-01-div-paragraph-translation-9)
 
 ### Manual
 - _(none — dod=auto_only; itens humanos foram para `## Deferred to PR review`, nao viraram linha
