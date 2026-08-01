@@ -1,5 +1,7 @@
 using System.IO.Compression;
+using System.Text;
 using TranslateReader.Business.Engines;
+using TranslateReader.Utilities;
 
 namespace TranslateReader.Tests;
 
@@ -327,6 +329,89 @@ public class ParsingEngineTests
                 Directory.Delete(destinationDirectory, recursive: true);
         }
     }
+
+    // ── Artefato: o EPUB traduzido nao pode carregar URL do app ─────────────
+    // Propriedade do ARTEFATO, nao da funcao: reproduz o caminho de producao
+    // (RebuildAllTranslatedChaptersAsync com cache vazio -> traducao = original) e reabre o zip.
+    // `epub-images` e ABSOLUTO (o EPUB-fonte tem 0 ocorrencias); `https://` e DIFERENCIAL porque o
+    // fixture ja traz 1 nativo (licenca MIT em ops/styles/1266002537.css) —
+    // D-2026-08-01-translated-epub-images-9(B).
+
+    [Fact]
+    public async Task Practice_TranslatedEpubArtifact_ForExportedChapters_NoEntryContainsTheAppHost()
+    {
+        var destinationDirectory = Path.Combine(
+            Path.GetTempPath(), "translatereader_artifact_" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var rebuilt = await RebuildEveryChapterAsync(PracticeEpub);
+            var destPath = await _sut.CreateTranslatedEpubAsync(
+                PracticeEpub, "Artefato Traduzido", rebuilt, destinationDirectory);
+
+            using var original = ZipFile.OpenRead(PracticeEpub);
+            var entriesWithNativeHttps = original.Entries
+                .Where(e => ReadEntryRaw(e).Contains("https://", StringComparison.Ordinal))
+                .Select(e => e.FullName)
+                .ToHashSet(StringComparer.Ordinal);
+
+            using var artifact = ZipFile.OpenRead(destPath);
+            var leaks = CollectAppUrlLeaks(artifact, entriesWithNativeHttps);
+
+            Assert.True(leaks.Count == 0, string.Join(Environment.NewLine, leaks));
+        }
+        finally
+        {
+            if (Directory.Exists(destinationDirectory))
+                Directory.Delete(destinationDirectory, recursive: true);
+        }
+    }
+
+    private async Task<Dictionary<string, string>> RebuildEveryChapterAsync(string epubPath)
+    {
+        var chapters = await _sut.ExtractChaptersAsync(epubPath);
+        var rebuilt = new Dictionary<string, string>(chapters.Count);
+
+        foreach (var href in chapters.Select(c => c.HRef))
+        {
+            var html = await _sut.ExtractChapterContentAsync(epubPath, href, string.Empty);
+            var blocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
+            rebuilt[href] = HtmlUtility.ReplaceTextBlocksInHtml(html, blocks);
+        }
+
+        return rebuilt;
+    }
+
+    private static List<string> CollectAppUrlLeaks(ZipArchive artifact, HashSet<string> entriesWithNativeHttps)
+    {
+        var leaks = new List<string>();
+
+        foreach (var entry in artifact.Entries)
+        {
+            var content = ReadEntryRaw(entry);
+
+            var appHostAt = content.IndexOf("epub-images", StringComparison.Ordinal);
+            if (appHostAt >= 0)
+                leaks.Add($"{entry.FullName}: contains 'epub-images' -> {Excerpt(content, appHostAt)}");
+
+            var httpsAt = content.IndexOf("https://", StringComparison.Ordinal);
+            if (httpsAt >= 0 && !entriesWithNativeHttps.Contains(entry.FullName))
+                leaks.Add($"{entry.FullName}: gained 'https://' -> {Excerpt(content, httpsAt)}");
+        }
+
+        return leaks;
+    }
+
+    // Latin1 round-trips every byte, so binary entries can be scanned for the literal without
+    // decoder replacement characters swallowing it.
+    private static string ReadEntryRaw(ZipArchiveEntry entry)
+    {
+        using var reader = new StreamReader(entry.Open(), Encoding.Latin1);
+        return reader.ReadToEnd();
+    }
+
+    private static string Excerpt(string content, int index) =>
+        content.Substring(index, Math.Min(70, content.Length - index));
 
     private static string ReadEntry(ZipArchive archive, string href)
     {
