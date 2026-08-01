@@ -117,3 +117,63 @@ texto extraido (achado 3 do PLAN). Nenhum teste deletado, renomeado ou pulado.
 - Forma dos regexes de imagem e percent-encoding em `FindImage`/`FindCss` (D-...-6) — mesmo todo.
 - Confirmacao visual em device/WebView real e SonarCloud sem issue nova: `## Deferred to PR review`
   (sem harness neste ambiente / so existe apos push+CI).
+
+## Iter 2 — rodada de warnings
+
+Disparada por `/jdi-issue` apos o loop convergir `APPROVED_WITH_WARNINGS` na iter 1. Lista de
+trabalho = os 2 itens de `## Warnings` da REVIEW. **Nenhuma linha de `src/` mudou** (os 2 commits
+desta iter tocam so `.jdi/`), nenhum teste deletado/renomeado/pulado, `.gitignore` fora dos commits.
+
+### W-2 (fragilidade do ref `main` LOCAL nos `Verify:`) — **FECHADO**
+
+Caminho append-only: decisao NOVA `D-2026-08-01-translated-epub-images-10` (`f0b2164`) e SO DEPOIS
+as linhas do `## Definition of Done` do CONTEXT (`30c9123`). `D-...-1..-9` INTOCADAS
+(`git show --stat` dos 2 commits: `D-...-10.md` novo + `CONTEXT.md`, mais nada).
+
+Ancora dos itens 5 e 6: literal `main` -> `$(git merge-base origin/main HEAD)`. O `main` local sumiu
+dos comandos (`grep -oE ".{8}main"` sobre os 6 `Verify:` extraidos: so `origin/main`).
+
+**Barra de prova — CLONE DESCARTAVEL no scratchpad (`git clone -b jdi/translated-epub-images`),
+repo real NUNCA mutado:**
+
+| # | Cenario | ANTIGO | NOVO |
+|---|---|---|---|
+| (a) | `main` local ATRASADO em `9e07c83` (o incidente real) | item 6 **exit 1** (arrasta `.../js/translation.js` do PR #17); item 5 afrouxa: `B=337`, piso 342, `names_main=308` | ambos **exit 0**, `BASE=05f3670`, `B=338`, piso 343, 309 nomes |
+| (b) | `main` local AUSENTE (clone fresco, o que CI faz) | item 6 **exit 1** `fatal: bad revision 'main'`; item 5 **exit 0 OCO** (`B=0`, `S=0`, piso 5, `names_main=0`) | ambos **exit 0** com os valores corretos |
+| (a') | `main`/`origin/main` AVANCA com o PR aberto | item 6 **exit 1** (commit de terceiro entra no diff) | item 6 **exit 0** (`merge-base` fica em `05f3670`) |
+| (c) | Regressao de gate, com `main == origin/main` (melhor caso do ANTIGO) | valores IDENTICOS aos do NOVO (`B=338 S=2 piso=343 nomes=309`) | reprova as 4 mutacoes JUNTO com o ANTIGO |
+| (d) | Repo real, sem mutacao | — | **6/6 `Verify:` exit 0** |
+
+Mutacoes de (c), cada uma commitada e revertida no clone: arquivo a mais em `src/TranslateReader/`
+(1/1 reprovado), arquivo a mais em `src/TranslateReader.Core/` fora da lista fechada (1/1), metodo
+de teste DELETADO (1/1, `comm -23` nao-vazio), metodo de teste RENOMEADO (1/1). Zero direcao de
+deteccao perdida.
+
+Achado (b) motivou 2 guardas ANTI-OCO no item 5 junto com a troca de ancora — `test "$B" -gt 0` e
+`test -s TestResults/names-base.txt` — para que "nao consegui ler a base" reprove em vez de aprovar
+vazio. A ancora nova ja falha FECHADO sozinha quando nem `origin/main` existe (clone raso):
+`fatal: Not a valid object name origin/main`, exit **128**, `&&` corta a cadeia (medido).
+Pre-requisito de CI passa a ser `fetch-depth: 0` (registrado na `D-...-10`).
+
+**Imprecisao de prosa da `D-...-9` ("309 nomes no HEAD") corrigida na `D-...-10`**, uma linha, sem
+editar a `-9`: o HEAD tem **314** (309 herdados + 5 novos), a base segue com 309 e o `comm -23`
+segue vazio — o gate so consome o lado da base, nenhum veredito muda. Medido nesta iter:
+`names_base=309`, `names_head=314`.
+
+### W-1 (lint legado, `dotnet format` exit 2) — **NAO CORRIGIDO, por regra**
+
+D-2 (legado nao se refatora por estilo) + a phase `baseline-de-estilo` e a dona (ROADMAP posicao 1,
+`sem .editorconfig, sem .gitattributes, sem analyzers configurados`). As violacoes sao byte-identicas
+a `main` e nenhuma cai em linha tocada por esta phase — a propria revisora reconferiu isso na iter 1.
+Ja registrado em `.jdi/todos/LEGACY.md:367-378` (`[LEGADO/ESTILO, D-2]`, com `file:line` de todas as
+violacoes e a instrucao de rodar `dotnet format` uma unica vez, no repo inteiro, em commit proprio).
+Nenhum todo novo criado — seria duplicata.
+
+### Gates ao final da iter 2
+
+- `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release` (dentro do item 5):
+  `Failed: 0, Passed: 341, Skipped: 2, Total: 343` — **igual ao baseline da iter 1**.
+- `node --test test/js/`: `pass 79, fail 0` — **igual ao baseline**.
+- Os **6** `Verify:` extraidos por `sed` do CONTEXT.md JA COMMITADO
+  (`sed -n 's/^ *\*\*Verify:\*\* `\(.*\)`$/\1/p'`, 6 comandos): **6/6 exit 0**.
+- `git status`: so `.gitignore` (alteracao local do usuario, fora dos commits).
