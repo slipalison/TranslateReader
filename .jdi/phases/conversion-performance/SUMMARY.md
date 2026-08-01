@@ -126,3 +126,120 @@ inexistentes) — prova de que nao passam vazio.
 - N+1 de `LibraryManager.ListBookSummariesAsync` (D-...-5a) — medido, sem gargalo confirmado.
 - `FirstOrDefault` O(entries x capitulos) de `CreateTranslatedEpubAsync` (D-...-7) — nao dominante.
 - Device real Android/iOS, UI MAUI e confirmacao remota do SonarCloud — `## Deferred to PR review`.
+
+## Iter 2 — rodada de warnings (/jdi-issue)
+
+O loop ja convergiu em `APPROVED_WITH_WARNINGS` na iter 1. Esta rodada trata os 6 warnings da
+REVIEW. Nenhum item do DoD foi enfraquecido, nenhum `Verify:` mudou, nenhum teste foi deletado ou
+afrouxado, e o diff em `src/TranslateReader/` continua vazio.
+
+### W-1 — justificativa "impossivel" em D-...-9 — **FECHADO** (correcao de auditoria)
+`D-2026-07-31-conversion-performance-10 (a)` anexada. C# so proibe `yield return` dentro de um `try`
+**com `catch`** — um `try/catch` inline ANTES do laco de `yield` seria legal, entao o termo preciso e
+**"insatisfazivel dentro do design locked pela T-2"**, nao "impossivel": o que elimina a forma inline
+e a acceptance da T-2 (helper `OpenEpubSafeAsync` + builders compartilhados), justamente a estrutura
+que prova "MESMAS opcoes de tolerancia" de D-...-3. D-...-9 **nao foi reescrita** — caminho
+append-only, precedente `D-2026-07-30-sonar-zero-issues-13` corrigindo a `-12`. Conclusao de D-...-9
+intacta: o comando novo segue estritamente mais forte (proibe `ReadEpubSafeAsync` no iterador e
+`ReadBookAsync` no helper). Evidencia: `git diff .jdi/DECISIONS.md` = 61 insercoes, **0 remocoes**.
+
+### W-2 — "contagem permanece 5" em D-...-4 — **FECHADO** (correcao de auditoria)
+`D-...-10 (b)`. Medido: `IParsingEngine` tem **6 operacoes antes e 6 depois** — a propriedade
+afirmada ("sem crescimento") esta CORRETA, so o numero estava errado; origem provavel, "os OUTROS 5
+metodos" de D-...-3. As 6 excedem o "3-5 ideal" do CLAUDE.md como forma LEGADA (pre-`4285f25`,
+coberta por D-2), agora NOMEADA em `.jdi/todos.md` para revisao junto com o lazy-switch (D-...-5b).
+Sem acao de codigo: dividir contrato legado seria o rewrite amplo que o escopo finding-driven proibe.
+
+### W-3 — `ExtractAllImagesAsync` sem `CancellationToken` — **FECHADO como decisao de NAO adicionar**
+Avaliado, nao ignorado. Decisao: a assinatura locked por D-...-4 **fica como esta**; achado NOMEADO
+em `.jdi/todos.md` + `D-...-10 (c)`. Argumento medido, nao reflexo:
+
+1. `.claude/rules/csharp.md` §3 exige que o token **FLUA** `PageModel -> Manager -> Engine -> Access`.
+   A cadeia de LEITURA e inteira token-free: `IReadingManager` (5 ops) e `IParsingEngine` (6 ops) nao
+   declaram token, e os 3 call sites de producao (`ReaderPageModel.cs:112,134,154` ->
+   `LoadChapterContentAsync(BookId, chapter.HRef)`) nao tem CTS no caminho de leitura — o unico CTS
+   do PageModel (`:63`) serve o caminho de TRADUCAO.
+2. Logo, adicionar o token **so neste membro** faria o unico consumidor de producao
+   (`ReadingManager.ExtractImagesIfNeededAsync`) passar `default`: um parametro que anuncia
+   cancelamento e **nao cancela nada**. Pior que a ausencia — e a mesma familia
+   proxy-que-nao-prova que esta phase catalogou em D-...-3, agora aplicada a um contrato.
+3. Fazer o token fluir de verdade exige mudar `IReadingManager` + `ReadingManager` + os 3 call sites
+   em `src/TranslateReader/` — **diff proibido nesta phase** — com ciclo de vida de CTS no PageModel
+   (§2.4). E fase propria, junto com o lazy-switch que ja vai tocar a cadeia de leitura inteira.
+4. O contraste esta no proprio repo: `ITranslationManager`/`ITranslationEngine` mostram um fluxo §3
+   correto — token em TODOS os niveis, com `[EnumeratorCancellation]` em `GenerateStreamingAsync` e
+   `TranslateChapterAsync`. Um contrato meio-token/meio-nao seria inconsistencia sem ganho funcional.
+5. Risco residual **medido e limitado**: o `using var bookRef` do iterador libera o handle do arquivo
+   no `break` do consumidor e na propagacao de excecao — provado por
+   `ExtractAllImagesAsync_WhenTheConsumerBreaksEarly_ReleasesTheArchiveHandle` (`File.Delete` apos o
+   `break` nao lanca). A lacuna e de **latencia de cancelamento** (no maximo a leitura de uma
+   imagem), nao de seguranca de recurso. Nada vaza hoje.
+
+Como NAO adicionei o token, nenhum contrato locked mudou: sem supersedencia de D-...-4, sem alteracao
+do `Verify:` do item 2, sem teste de cancelamento novo (nao ha caminho de cancelamento a cobrir).
+
+### W-4 — catches legados no app MAUI — **NAO FECHAVEL** (confirmado registrado)
+Fora do diff da phase (`src/TranslateReader/` = 0 linhas), anterior a `4285f25`, coberto por **D-2** e
+pelo estatuto finding-driven. Ja registrado em `.jdi/todos.md`, bloco `[LEGADO/D-2]`, com os 5 pontos
+exatos da REVIEW: `ReaderPage.xaml.cs:326` e `:434` (`catch { }`), `LibraryPageModel.cs:183`,
+`ReaderPageModel.cs:222` e `ReaderPage.xaml.cs:308` (`OperationCanceledException` engolida).
+Confirmado nesta rodada — nenhuma acao; segue candidato a phase de higiene do head MAUI.
+
+### W-5 — transcript da prova por mutacao da T-6 — **FECHADO** (rodado agora, saida real)
+Mutante aplicado em `FindCoverInManifest` (`ParsingEngine.cs:331`), guarda `Length > 0` removida
+(`return imageFile?.Content;`):
+
+```
+[xUnit.net] ...ExtractCoverImageAsync_WithACoverImagePropertyPointingAtAMissingFile_ReturnsNoBytes [FAIL]
+  Error Message:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   []
+  Stack Trace:
+     at ...ParsingEngineEdgeCaseTests.cs:line 278
+Failed!  - Failed: 1, Passed: 0, Skipped: 0, Total: 1, Duration: 61 ms
+```
+
+Restaurado (`git checkout` do arquivo, guarda de volta na linha 331) e re-rodado:
+
+```
+Passed!  - Failed: 0, Passed: 1, Skipped: 0, Total: 1, Duration: 63 ms
+```
+
+O aperto `Assert.Empty(cover ?? [])` -> `Assert.Null(cover)` e load-bearing: sem a guarda, vermelho.
+
+### W-6 — `<summary>` no membro de contrato alterado — **FECHADO**
+`<summary>` adicionado **so** em `ExtractAllImagesAsync` (`IParsingEngine.cs:11-15`), o unico membro
+que esta phase alterou e o unico que e codigo novo (pos-`4285f25`), como csharp.md §7 pede para
+`Contracts/`. Julgamento sobre a inconsistencia do arquivo: documentar os outros 5 seria refatorar
+legado por estilo, proibido por D-2 — e a alternativa (nao documentar nenhum) deixaria codigo NOVO
+fora da regra. 1 de 6 documentado e estado transitorio normal de repo brownfield, e o membro
+documentado e exatamente o que a phase possui. Sem `GenerateDocumentationFile` no csproj nao ha
+CS1591 nem warning novo (build segue com os mesmos 64 MVVMTK0045 pre-existentes).
+
+### Gates re-rodados nesta iteracao (numeros reais)
+
+| Gate | Resultado |
+|---|---|
+| `dotnet build TranslateReader.slnx -c Release` | **0 Error(s)**, 64 Warning(s) — todos MVVMTK0045 pre-existentes do app MAUI |
+| `dotnet test ... -c Release` | **Failed: 0, Passed: 317, Skipped: 2, Total: 319** — baseline mantida |
+| `node --test test/js/` | **pass 60, fail 0** — baseline mantida |
+| `dotnet format --verify-no-changes` (escopo `IParsingEngine.cs`) | exit **0** |
+| Os 7 `Verify:` do `## Definition of Done` | **7/7 exit 0** — item 1 `Passed: 10` + 28 `Assert.`; 2 contrato; 3 dois saltos; 4 quatro literais + `Passed: 1`; 5 capa; 6 `Passed: 15`; 7 `Failed: 0` / `Total: 319 >= 316` |
+| Diff em `src/TranslateReader/` | **vazio** |
+| `.jdi/DECISIONS.md` append-only | 0 linhas removidas |
+| `.gitignore` | segue `M` na working tree, **fora de todo commit** desta rodada |
+
+Nota de escopo: o PLAN listava `.jdi/todos.md` em "NAO tocar" (era do asker). A edicao desta rodada
+foi autorizada pelo dispatch da iter 2 e e **puramente aditiva** (0 linhas removidas) — nada do que o
+asker escreveu foi alterado. `dotnet format --verify-no-changes` na solucao inteira acusa desvios de
+espaco em branco pre-existentes em `ThemeEngine.cs`, `ReaderPage.xaml.cs`, `ThemeEngineTests.cs` e
+`TranslationManagerTests.cs` — **nenhum deles entre os 9 arquivos da phase**, legado, nao corrigido
+aqui por D-2.
+
+### Commits da iter 2
+| sha | subject |
+|---|---|
+| `848dd6e` | docs(conversion-performance): correct the audit record of two locked decisions |
+| `91ccb24` | docs(conversion-performance): name the missing cancellation token as a finding |
+| `e1722a2` | docs(conversion-performance): document the streaming member of the parsing contract |
