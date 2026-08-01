@@ -189,6 +189,38 @@ public class TranslationManagerTests
         Assert.Equal(2, results.Count);
     }
 
+    // Calibre exports hold every paragraph in a leaf `div class="calibreN"` and never emit a `p`,
+    // so a chapter body like this one is exactly what the reader hands to the manager for a book
+    // that reproduces the reported defect.
+    [Fact]
+    public async Task TranslateChapterAsync_ForCalibreStyleBody_TranslatesLeafDivParagraphs()
+    {
+        SetupBookAndChapter($"<html><body>{CalibreFixtures.PartiallyCoveredBody}</body></html>");
+        _cacheAccess.FetchTranslationAsync(1, "ch1.html", Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("Primeiro", "Segundo", "Terceiro");
+
+        var results = new List<TranslatedParagraph>();
+        await foreach (var p in _sut.TranslateChapterAsync(1, "ch1.html", "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None))
+            results.Add(p);
+
+        Assert.Equal(3, results.Count);
+        Assert.Equal(
+            [
+                "First calibre paragraph with real text.",
+                "Second calibre paragraph with more text.",
+                "Third paragraph, letters only matter here.",
+            ],
+            results.Select(r => r.Original));
+        Assert.Equal(["Primeiro", "Segundo", "Terceiro"], results.Select(r => r.Translated));
+        Assert.Equal([0, 1, 2], results.Select(r => r.Index));
+    }
+
     [Fact]
     public async Task TranslateParagraphsAsync_WithCacheHit_DoesNotCallEngine()
     {
