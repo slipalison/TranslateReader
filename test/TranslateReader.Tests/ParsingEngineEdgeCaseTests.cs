@@ -274,16 +274,8 @@ public class ParsingEngineEdgeCaseTests : IDisposable
     [Fact]
     public async Task ExtractCoverImageAsync_WithACoverImagePropertyPointingAtAMissingFile_ReturnsNoBytes()
     {
-        var path = CreateCoverEpub(
-            "orphan-cover.epub",
-            metadataExtra: string.Empty,
-            coverItem: "<item id=\"c\" href=\"images/gone.png\" media-type=\"image/png\" properties=\"cover-image\"/>",
-            imageHref: null,
-            imageBytes: null);
-
-        var cover = await _sut.ExtractCoverImageAsync(path);
-
-        Assert.Empty(cover ?? []);
+        var cover = await _sut.ExtractCoverImageAsync(CreateOrphanCoverEpub());
+        Assert.Null(cover);
     }
 
     [Fact]
@@ -508,6 +500,15 @@ public class ParsingEngineEdgeCaseTests : IDisposable
             """);
         AddBytes(archive, "OEBPS/text/empty.xhtml", []);
     });
+
+    // A cover-image property whose target is absent from the archive: the manifest fallback used to
+    // hand back an empty byte[] instead of null.
+    private string CreateOrphanCoverEpub() => CreateCoverEpub(
+        "orphan-cover.epub",
+        metadataExtra: string.Empty,
+        coverItem: "<item id=\"c\" href=\"images/gone.png\" media-type=\"image/png\" properties=\"cover-image\"/>",
+        imageHref: null,
+        imageBytes: null);
 
     private string CreateTwoImageEpub() => CreateEpub("two-images.epub", Package("""
           <dc:identifier id="bookid">urn:uuid:two-images</dc:identifier>

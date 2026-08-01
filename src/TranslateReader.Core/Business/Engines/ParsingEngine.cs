@@ -328,7 +328,7 @@ public partial class ParsingEngine : IParsingEngine
         var imageFile = epub.Content.Images.Local
             .FirstOrDefault(img => img.Key == coverItem.Href || img.FilePath == coverItem.Href);
 
-        return imageFile?.Content;
+        return imageFile?.Content is { Length: > 0 } bytes ? bytes : null;
     }
 
     private static string ResolveChapterTitle(EpubBook epub, string filePath)
