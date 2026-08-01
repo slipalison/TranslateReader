@@ -167,17 +167,17 @@ public partial class LibraryPageModel(ILibraryManager libraryManager, ITranslati
             var progress = new Progress<BookTranslationProgress>(p =>
                 MainThread.BeginInvokeOnMainThread(() => BookTranslationProgress = p.OverallProgress));
 
-            var translatedEpubPath = await Task.Run(
+            var translation = await Task.Run(
                 () => translationManager.TranslateBookAsync(book.Id, source, target, tempDirectory, progress, ct), ct);
 
             try
             {
-                await libraryManager.ImportBookAsync(translatedEpubPath);
+                await libraryManager.ImportBookAsync(translation.EpubPath);
                 await LoadBooksAsync();
             }
             finally
             {
-                File.Delete(translatedEpubPath);
+                File.Delete(translation.EpubPath);
             }
         }
         catch (OperationCanceledException) { }
