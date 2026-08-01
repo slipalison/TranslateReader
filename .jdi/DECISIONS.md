@@ -1546,3 +1546,64 @@ prova e o item 4 (medida). A mutacao registrada na T-7 (reverter o iterador para
 `ReadEpubSafeAsync` + dicionario atras da MESMA fachada `IAsyncEnumerable`) faz
 `ParsingEngineMemoryTests` falhar com 46 MB de pico retido contra 0,36 MB do caminho lazy — ou seja,
 uma implementacao que enganasse o grep continuaria reprovando na medicao.
+
+D-2026-07-31-conversion-performance-10 (CORRECAO DE REGISTRO — precisao de auditoria de D-...-9 e
+D-...-4, levantada pela review iter 1 (W-1/W-2) e medida nesta rodada): esta decisao NAO reescreve
+nenhuma das duas — append-only, supersedendo apenas as afirmacoes nomeadas abaixo. Precedente do
+mesmo mecanismo neste repo: `D-2026-07-30-sonar-zero-issues-13`, que corrigiu `D-...-12`.
+Nenhuma linha `**Verify:**` do `## Definition of Done` muda por esta decisao — os 7 gates seguem
+exatamente como estao, e foram rodados de novo nesta rodada, todos exit 0.
+
+(a) CORRECAO da JUSTIFICATIVA de D-...-9 (a conclusao continua valida; a palavra estava errada).
+D-...-9 escreveu que o comando antigo exigia algo "que a propria decisao de design torna
+impossivel (C# proibe `yield return` em `try`/`catch`)". Preciso: C# proibe `yield return` DENTRO
+de um bloco `try` que tenha `catch` — NAO proibe um `try/catch` inline colocado ANTES do laco de
+`yield`. Em C# puro, portanto, existiria uma forma que satisfaria o comando antigo (abrir o
+`EpubBookRef` num `try/catch` inline no proprio corpo do iterador e so depois iterar). O que
+elimina essa forma nao e a linguagem, e o DESIGN LOCKED: a acceptance da T-2 do `PLAN.md` exige o
+helper `OpenEpubSafeAsync` separado e os builders compartilhados
+(`BuildStrictOptions()`/`BuildFallbackOptions()`) — e essa estrutura compartilhada e justamente o
+que prova "as MESMAS opcoes de tolerancia" exigidas por D-...-3, prova que a forma inline nao daria.
+Termo correto: o comando antigo era **insatisfazivel dentro do design locked pela T-2**, nao
+"impossivel". A CONCLUSAO de D-...-9 fica intacta e continua medida: o comando antigo reprovaria a
+implementacao correta e aprovaria uma sem fallback, e o comando novo e ESTRITAMENTE mais forte —
+proibe `ReadEpubSafeAsync` no corpo do iterador e `EpubReader.ReadBookAsync` dentro de
+`OpenEpubSafeAsync`, dois saltos que o comando antigo nao tinha.
+
+(b) CORRECAO DE NUMERO em D-...-4 (a propriedade afirmada continua valida; a contagem estava
+errada). D-...-4 escreveu "Contagem de operacoes do contrato permanece 5 (sem crescimento)".
+Medido em `src/TranslateReader.Core/Contracts/Engines/IParsingEngine.cs`: o contrato tem **6**
+operacoes ANTES e 6 DEPOIS da phase. A propriedade "sem crescimento" esta CORRETA — a phase nao
+adicionou nem removeu operacao, so trocou o tipo de retorno de uma delas; o numero 5 e que esta
+errado. Origem provavel do erro: o proprio D-...-3 fala em "os OUTROS 5 metodos publicos" (os que
+seguem no caminho eager), o que soma 6 com `ExtractAllImagesAsync`. Consequencia registrada:
+`IParsingEngine` excede o "3-5 operacoes por contrato (ideal)" do `CLAUDE.md` — forma LEGADA
+anterior a `4285f25`, nao introduzida nem agravada por esta phase, coberta por `D-2`. Sem acao de
+codigo aqui (dividir contrato legado seria o rewrite amplo que o escopo finding-driven proibe);
+registrada em `.jdi/todos.md` como candidata a revisao quando o lazy-switch dos outros metodos
+(D-...-5b) for atacado.
+
+(c) DECISAO sobre W-3 (`CancellationToken` no caminho async novo): a assinatura
+`IAsyncEnumerable<ExtractedImage> ExtractAllImagesAsync(string filePath)` locked por D-...-4 fica
+COMO ESTA — sem `CancellationToken`, sem `[EnumeratorCancellation]`. Nao e reflexo, e medida:
+`.claude/rules/csharp.md` §3 exige que o token FLUA `PageModel -> Manager -> Engine -> Access`, e a
+cadeia de LEITURA inteira e token-free hoje — `IReadingManager` (5 operacoes) nao tem token,
+`IParsingEngine` (6 operacoes) nao tem token, e os 3 call sites de producao
+(`ReaderPageModel.cs:112,134,154` -> `readingManager.LoadChapterContentAsync(BookId, chapter.HRef)`)
+nao tem `CancellationTokenSource` algum no caminho de leitura (o unico CTS do PageModel,
+`_translationCts:63`, serve o caminho de TRADUCAO). Adicionar o token so no metodo do Engine faria o
+unico consumidor de producao (`ReadingManager.ExtractImagesIfNeededAsync`) passar `default` — um
+parametro que anuncia cancelamento e nao cancela nada, exatamente a familia
+proxy-que-nao-prova que esta phase ja catalogou em D-...-3. Fazer o token FLUIR de verdade exigiria
+alterar `IReadingManager` + `ReadingManager` + os 3 call sites em `src/TranslateReader/`
+(app MAUI), com ciclo de vida de CTS no PageModel (§2.4) — e o diff em `src/TranslateReader/` e
+zero por restricao desta phase, alem de ser escopo de fase propria. O contraste esta no proprio
+repo: `ITranslationManager`/`ITranslationEngine` mostram como e um fluxo §3 correto — token
+declarado em TODOS os niveis, com `[EnumeratorCancellation]` em `GenerateStreamingAsync` e
+`TranslateChapterAsync`. Risco residual medido e limitado: o `using var bookRef` dentro do iterador
+libera o handle do arquivo no `break` do consumidor e na propagacao de excecao — provado por
+`ParsingEngineEdgeCaseTests.ExtractAllImagesAsync_WhenTheConsumerBreaksEarly_ReleasesTheArchiveHandle`
+(`File.Delete` apos o `break` nao lanca). Ou seja, a lacuna e de LATENCIA de cancelamento (no maximo
+a leitura de uma imagem), nao de seguranca de recurso. Achado NOMEADO em `.jdi/todos.md`, amarrado a
+phase futura do lazy-switch (D-...-5b), onde a cadeia de leitura sera tocada de ponta a ponta e o
+token podera entrar em TODOS os niveis de uma vez, sem contrato meio-token/meio-nao.
