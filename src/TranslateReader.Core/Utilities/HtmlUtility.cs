@@ -84,6 +84,16 @@ public static partial class HtmlUtility
         return false;
     }
 
+    public static int CountTextChars(string html)
+    {
+        var count = 0;
+        foreach (var c in StripHtmlTags(html))
+        {
+            if (!char.IsWhiteSpace(c)) count++;
+        }
+        return count;
+    }
+
     public static string StripHtmlTags(string html) =>
         HtmlTagRegex().Replace(html, string.Empty);
 

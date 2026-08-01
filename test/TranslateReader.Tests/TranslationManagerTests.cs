@@ -331,7 +331,7 @@ public class TranslationManagerTests
 
         var result = await _sut.TranslateBookAsync(1, "English", "Portuguese", "/dest", null, CancellationToken.None);
 
-        Assert.Equal("/dest/test_translated.epub", result);
+        Assert.Equal("/dest/test_translated.epub", result.EpubPath);
         await _parsingEngine.Received(1).CreateTranslatedEpubAsync(
             "/tmp/test.epub",
             "Test Book [English \u2192 Portuguese]",

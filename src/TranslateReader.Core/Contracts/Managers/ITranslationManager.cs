@@ -9,7 +9,13 @@ public interface ITranslationManager
     IAsyncEnumerable<TranslatedParagraph> TranslateChapterAsync(int bookId, string chapterHRef, string sourceLanguage, string targetLanguage, CancellationToken ct);
     IAsyncEnumerable<TranslatedParagraph> TranslateParagraphsAsync(int bookId, string chapterHRef, string sourceLanguage, string targetLanguage, IReadOnlyList<VisibleParagraph> paragraphs, CancellationToken ct);
     Task DeleteModelAsync();
-    Task<string> TranslateBookAsync(
+    /// <summary>
+    /// Translates every chapter of the book and writes a new EPUB into
+    /// <paramref name="destinationDirectory"/>. The result also carries the share of the source
+    /// text the block selection reached, so a book whose markup hides text from the extractor is
+    /// never reported as a silent success. A low ratio is not an error and never throws.
+    /// </summary>
+    Task<BookTranslationResult> TranslateBookAsync(
         int bookId,
         string sourceLanguage,
         string targetLanguage,
