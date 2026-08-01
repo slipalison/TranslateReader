@@ -71,7 +71,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** none
 - **Test:** `test/js/harness.test.js` + suite JS completa como regressao
 - **Commit:** `test(div-paragraph-reading): support selector groups in the JS DOM harness`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** pre-requisito dos itens 2 e 3
 
 #### T-4: Teste VERMELHO do caminho C# (`TranslateChapterAsync` em corpo calibre)
@@ -91,7 +91,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** none
 - **Test:** o proprio (xUnit, fixture literal)
 - **Commit:** `test(div-paragraph-reading): cover calibre body in TranslateChapterAsync`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** item 5
 
 ### Wave 2 (parallel-eligible — `test/js/translation.test.js` vs Core + `HtmlInjectionTests.cs`)
@@ -118,7 +118,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** T-1
 - **Test:** os proprios (`node --test`, zero dependencia)
 - **Commit:** `test(div-paragraph-reading): add failing calibre cases for paragraph selection`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 2 e 3 (metade vermelha)
 
 #### T-5: Remover o caminho C# morto (`ExtractParagraphs`/`ParagraphRegex`)
@@ -145,7 +145,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** T-4
 - **Test:** T-4 + os 6 existentes + `EveryHtmlUtilityRegex_IsBoundedByAMatchTimeout` na mesma corrida
 - **Commit:** `fix(div-paragraph-reading): extract text blocks in TranslateChapterAsync`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 4 e 5
 
 ### Wave 3
@@ -174,7 +174,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** T-2
 - **Test:** `test/js/translation.test.js` (T-2) + suite JS completa
 - **Commit:** `fix(div-paragraph-reading): select calibre leaf divs as translatable paragraphs`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 1, 2 e 3
 
 ### Wave 4
@@ -197,7 +197,7 @@ CONTEXT.md, depois `npx -y jdi-cli render`. NUNCA reescrever decisao existente, 
 - **Dependencies:** T-3, T-5
 - **Test:** suite JS + suite C# + build do TFM Windows
 - **Commit:** nenhum se nao houver diff versionado (`TestResults/` e ignorado)
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 3, 6 e 7
 
 ## Riscos nomeados
