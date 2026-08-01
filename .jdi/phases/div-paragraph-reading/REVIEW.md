@@ -1,197 +1,231 @@
-# Phase 18: Review  (slug: div-paragraph-reading)
+# Phase 18: Review (FINAL — iter 2)  (slug: div-paragraph-reading)
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
-Review iter 1 (`mode=verify`), branch `jdi/div-paragraph-reading`, diff `main` (`9e07c83`) ->
-HEAD (`c79580d`), 10 commits (6 de codigo, 4 de artefatos `.jdi/`). Toda evidencia abaixo foi
-executada nesta sessao pelo reviewer — nada foi aceito do SUMMARY sem reproducao.
+Review final auto-suficiente (o REVIEW.md da iter 1 foi deletado; nada aqui depende dele).
+Diff revisado: `main` (`9e07c83`) → HEAD (`39b5c2d`), 12 commits de phase + 2 de bookkeeping.
+Iter 2 = SO endurecimento de gate/doc (`D-2026-08-01-div-paragraph-reading-6`); toda evidencia
+abaixo foi produzida NESTA sessao, por execucao propria — nada herdado do SUMMARY do doer.
 
 ## Gates
 
-| Gate | Comando | Resultado real | Status |
-|---|---|---|---|
-| 1. Build | `dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` | `0 Erro(s)`, 40 warnings (MVVMTK0045 etc., pre-existentes; zero nos arquivos tocados) | PASS |
-| 2. Tests C# | `DOTNET_CLI_UI_LANGUAGE=en dotnet test ... -c Release` | `Failed: 0, Passed: 336, Skipped: 2, Total: 338` — baseline `main` medido pelo reviewer em worktree: `335/2/337`; +1 liquido; >> baseline 167 (D-2) | PASS |
-| 2b. Tests JS | `node --test --test-reporter=tap test/js/` | `# tests 73 / # pass 73 / # fail 0 / # skipped 0` — baseline `main` medido: `60/60/0`; os 60 nomes de `main` presentes 1:1 no HEAD (comm = 0 ausentes), +13 novos | PASS |
-| 3. Coverage | `dotnet test --collect:"XPlat Code Coverage"` + parse Cobertura; `node --test --experimental-test-coverage test/js/` | 0 arquivos `.cs` novos nesta phase -> gate adopted-mode formalmente SKIPPED; medido mesmo assim: agregado 93,15%; `HtmlUtility` 100/100; `TranslateChapterAsync` **100% linha / 83,33% branch** (ver W-3); `translation.js` **100,00 / 100,00 / 100,00** (4 arquivos JS em 100%) | PASS (nota W-3) |
-| 4. Lint | `dotnet format --verify-no-changes` | exit 2 — hits em `ThemeEngine.cs:12,14`, `ReaderPage.xaml.cs:122,124`, `ThemeEngineTests.cs:12`, `TranslationManagerTests.cs:560-561`; TODOS byte-identicos a `main` (regiao 560 = `main:528`; `git diff main` nesses arquivos = 0 linhas). Nenhum drift novo | WARN (legado, D-2) |
-| 5. Security/Layer | greps 5.1-5.17 + leitura manual | 5.1/5.2/5.10(sync-async)/5.15b/5.16/5.17 limpos; 5.3 so auto-interface; 5.10b: 4 catches de OCE identicos em `main` (e `TranslationManager.cs:61` faz `throw;`); 5.11 `+=5/-=4` = baseline bootstrap; 5.12 = 1 hit baseline; `catch { }` `ReaderPage.xaml.cs:326,434` pre-existentes em `main`. Phase nao toca C# de UI; o `console.warn` novo e string constante (sem interpolacao, 5.8 ok) | PASS |
-| 6. Consistency | `git log --name-only main..HEAD -- src/ test/` | 1 task = 1 commit atomico; arquivos por commit = `files_modified` do PLAN; Conventional Commits com scope `div-paragraph-reading`, tipos corretos (`test`/`fix`/`docs`/`chore`); commit extra `fd5f177` documentado como desvio D-3 do SUMMARY | PASS |
-| 7. UI Validation | — | SKIPPED (has_frontend=false, cliente MAUI nativo) | SKIPPED |
-| 8. DoD | 7 itens Auto executados um a um (abaixo) | 5/7 exit 0 como escritos; itens 2 e 3 exit 1 **por defeito do comando** (reporter), criterio provado verde com TAP — ver W-1 e veredito (f) | PASS c/ defeito de comando (W-1) |
+| Gate | Status | Details |
+|---|---|---|
+| Build | PASS | `dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` — exit 0, `0 Erro(s)` |
+| Tests | PASS | C# `Failed: 0, Passed: 336, Skipped: 2, Total: 338` (baseline 167 e baseline da phase 336/2/338 — sem regressao) · JS `# tests 73 / # pass 73 / # fail 0 / # skipped 0` |
+| Coverage | PASS | Cobertura real (Cobertura XML): agregado 88,92% (so contexto, D-2); arquivos NOVOS pos-boundary `4285f25`: `Models/BookTranslationResult.cs` 100%, `Models/ExtractedImage.cs` 100% (>= 90%, D-6). Esta phase criou 0 arquivo `.cs` novo |
+| Lint | WARN | `dotnet format --verify-no-changes` exit 2 com 9 findings — todos em arquivos legados byte-identicos a `main` (D-2 exime; WARN por regra do gate 4). Arquivos tocados pela phase: limpos |
+| Security/Layer | PASS | 5.1/5.2/5.3/5.10/5.15 zero hits; 5.8 todas as interpolacoes de `EvaluateJavaScriptAsync` via `JsStr(...)`/`itemsJson` (legado identico a `main`); 5.9 limpo; 5.11 `+=`5/`-=`4 e 5.12 `_nativeLibraryConfigured` = exatamente o baseline legado do bootstrap, nada novo; OCE em `TranslationManager.cs:61` faz `throw;` |
+| Consistency | PASS | 8 arquivos commitados em `src/`+`test/` batem 1:1 com o `files_modified` do PLAN; Conventional Commits com scope `div-paragraph-reading` (+1 `chore(jdi)` padrao), tipos adequados (test/fix/docs/chore) |
+| UI Validation | SKIPPED | has_frontend=false (cliente MAUI nativo) — por desenho, nunca bloqueia |
+| DoD | PASS | 7/7 Auto PASS (comandos extraidos por `sed` do CONTEXT.md COMMITADO em HEAD, rodados nesta sessao); 0 itens Manual (dod=auto_only; PROJECT.md nao declara secao DoD — a da phase governa) |
 
 ## Blockers
 
-_Nenhum._
+- _(nenhum)_
 
 ## Warnings
 
-- **W-1 — `Verify:` dos itens 2 e 3 do DoD nao provam o criterio como escritos**
-  (`.jdi/phases/div-paragraph-reading/CONTEXT.md:64,68`). O Node 24 (`v24.14.0`) usa reporter
-  `spec` mesmo com stdout redirecionado; o sumario sai `ℹ pass 20 / ℹ fail 0` e o
-  `grep -qE "^# fail[[:space:]]+0$"` nunca casa -> exit 1 com suite 100% verde. Reproduzido pelo
-  reviewer nos dois sentidos (ver veredito (f)). Julgo **WARNING**, nao blocker — argumento em (f).
-  Acao: proximo `/jdi-discuss` deve pinar `--test-reporter=tap` em todo `Verify:` que parseie
-  `node --test` (precedente: phase `coverage-90`; ja registrado pelo doer em
-  `.jdi/todos/2026-08-01-div-paragraph-reading.md`).
-- **W-2 — harness falha ABERTO para seletor invalido com aspas no valor**
-  (`test/js/harness.js:315-333`, `SELECTOR_PART_RE`). `[data-chapter-href="a"b"]` (href de EPUB
-  contendo `"`) nao parseia nenhum atributo e vira seletor sem restricao -> **casou 3 elementos
-  (BODY,DIV,SPAN)** no teste do reviewer, enquanto um DOM real lanca `SyntaxError` (falha fechada).
-  Comportamento pre-existente do `parseSelector` de `main` (a phase nao o piorou; virgula e `]`
-  entre aspas estao CORRETOS — ver (d)); risco e de fidelidade do harness mascarar teste futuro,
-  nao defeito do produto. Relacionado: `scroll.js:32` nao usa `CSS.escape` no href (pre-existente,
-  intocado, csharp.md §4) — candidato a item de phase futura.
-- **W-3 — branch parcial pre-existente em `TranslateChapterAsync`**
-  (`src/TranslateReader.Core/Business/Managers/TranslationManager.cs:265-270`, `chapter?.Title`,
-  condition-coverage 50% 1/2). Linha NAO alterada pela phase (diff = so `@@ -244 +244 @@`) e o
-  irmao intocado `TranslateParagraphsAsync` tem o MESMO 0,8333 na linha 313 — divida pre-existente
-  (D-2), nao regressao. Fechamento (1 teste: `ExtractChaptersAsync` sem o href pedido) ja anotado
-  em `.jdi/todos/`. Piso D-6 sobre codigo ALTERADO: atendido (ver (g)).
-- **W-4 — lint legado** (`ThemeEngine.cs`, `ReaderPage.xaml.cs`, `ThemeEngineTests.cs`,
-  `TranslationManagerTests.cs:560-561`): drift de whitespace byte-identico a `main`, exempt por
-  D-2. Vira BLOCK-on-new-files quando a phase `baseline-de-estilo` shipar `.editorconfig`.
-
-## Veredito ponto a ponto (a)-(i)
-
-- **(a) RED-first — CONFIRMADO como TDD genuino, por execucao propria em worktree descartavel**
-  (branch intocada):
-  - JS em `537e595`: `# tests 20 / # pass 13 / # fail 7` — falham exatamente os 7 testes novos
-    (nomes conferidos no TAP). Re-medido em `fd5f177` (asserts de realm corrigidos, producao ainda
-    antiga): continua `13/7`. Em `e00c066` (fix): `73/73/0`.
-  - C# em `a3eee90`: filtro `~TranslateChapterAsync` -> `Failed: 1, Passed: 6, Total: 7`, falha
-    `TranslateChapterAsync_ForCalibreStyleBody_TranslatesLeafDivParagraphs`
-    (`Assert.Equal() Failure`). Em `1b13648` (fix): `Failed: 0, Passed: 7, Total: 7`.
-- **(b) Ordem de documento e estabilidade do pareamento — CONFIRMADO por testes adversariais do
-  reviewer (8/8)** alem dos testes commitados: DOM com `h2`/`p`/div-folha/`li`/div-`<img>`/bullet/
-  div-aninhado INTERCALADOS devolve indices `[0..5]` em ordem de documento; ciclo
-  get->apply->get->clear->get mantem membership, ordem e texto original; cada traducao caiu no
-  elemento cujo indice a reportou (`textContent === 'T:' + dataset.original` para os 6); div
-  traduzido para texto SEM letra continua candidato (o `el.dataset.original ?? el.textContent` de
-  `translation.js:15` resolve o ramo div) e `p` traduzido para string vazia continua candidato
-  (`_paragraphText`, `translation.js:24-26`: candidato `p` exige `textContent.trim()` nao-vazio
-  antes do apply, logo `dataset.original` gravado nunca e vazio). Os dois ramos sao suficientes.
-- **(c) Regressao do harness — NENHUMA.** Suite JS de `main` medida em worktree: `60/60/0`.
-  Comparacao nome a nome (TAP `ok N - <nome>`, `comm -23`): **0 testes de `main` ausentes no
-  HEAD**, 13 novos (6 `harness.test.js` + 7 `translation.test.js`), `# skipped 0`, nenhum rename.
-- **(d) Split de virgula — CORRETO para o input nao confiavel testado:** virgula no valor
-  (`[data-chapter-href="a,b.xhtml"]` -> 1 seletor, 1 match), `]` no valor entre aspas
-  (`"a]b.xhtml"` -> match exato) e `],` combinados (`"a],b.xhtml"` -> match exato) — todos
-  verificados pelo reviewer alem do teste commitado. Aspas DENTRO do valor: falha aberta no
-  harness vs falha fechada no DOM real — pre-existente, produto nao afetado (W-2).
-- **(e) Remocao de API — ACOMPANHADA, sem afrouxamento:** `HtmlInjectionTests.cs:304` trocou
-  literal por literal (`Assert.Equal(8` -> `Assert.Equal(7`, `Assert.Equal` mantido, sem `>=`);
-  diff de `test/`: **+1 `[Fact]`, 0 removidos, 0 `Skip` novo**, unico assert removido e o proprio
-  literal 8 (numstat `HtmlInjectionTests.cs 1+/1-`, `TranslationManagerTests.cs 32+/0-`);
-  `grep -rn "ExtractParagraphs\|ParagraphRegex" src/ test/` = **0 hits**.
-- **(f) Defeito de gate (reporter) — CONFIRMADO independentemente; julgo WARNING, nao BLOCKER.**
-  Reproducao do reviewer: item 2 como escrito exit **1**; mesmo comando + `--test-reporter=tap`
-  exit **0** (`N=6`, `# pass 6 / # fail 0`). Item 3 como escrito exit **1** (log spec mostra
-  `ℹ pass 20 / ℹ fail 0` — sem `#`); com TAP exit **0** (`B=13`, piso 17, `# pass 20`). A causa e
-  o reporter, nao teste vermelho. Argumento para WARNING: (1) o CRITERIO de cada item ("suite
-  passa, sem regressao, piso N") esta objetivamente provado — o mesmo comando, alterado apenas no
-  formato de saida, passa; (2) o defeito mora no comando do `Verify:` (autorado no discuss em modo
-  auto), nao na entrega — bloquear puniria o codigo por um bug do gate; (3) ha precedente no
-  projeto de que a forma correta do comando pina o reporter (phase `coverage-90`), ou seja, isso e
-  correcao de tooling ja reconhecida, e o doer seguiu o processo certo: nao editou o CONTEXT
-  (imutavel) e registrou em `.jdi/todos/`. O que impediria o APPROVED seria um `# fail != 0` — que
-  nao existe. Condicao da aprovacao: a correcao dos `Verify:` futuros fica registrada (ja esta).
-- **(g) Cobertura D-6 — piso vale sobre o CODIGO ALTERADO, e passa.** Medido pelo reviewer no
-  Cobertura (`TestResults/0360504f-.../coverage.cobertura.xml`): `<TranslateChapterAsync>d__26`
-  line-rate 1.0 / branch-rate 0,8333; unico branch parcial na linha **265** (statement
-  `BuildTranslationMessages(...)` cujo argumento `chapter?.Title` esta na linha 270), 50% (1/2).
-  O diff da phase nesse arquivo e exatamente `@@ -244 +244 @@` — a linha alterada tem 100% de
-  cobertura e zero branches proprios. Evidencia de divida pre-existente: o irmao INTOCADO
-  `TranslateParagraphsAsync` (`d__27`) tem o mesmo padrao na linha 313 com o mesmo 0,8333.
-  Interpretar o piso sobre o metodo inteiro cobraria desta phase um teste para linha que D-2
-  exime; classifico como divida pre-existente documentada (W-3). JS: `translation.js` 100% linha /
-  100% branch / 100% funcs, medido com `--experimental-test-coverage`.
-- **(h) Escopo — LIMPO.** `git diff --name-only main -- src/TranslateReader/
-  ':(exclude)...wwwroot/js/'` = vazio (exit 0); unico arquivo tocado em `src/TranslateReader/` e
-  `Resources/Raw/wwwroot/js/translation.js`; `git log --stat main..HEAD | grep -c gitignore` =
-  **0** — a alteracao local de `.gitignore` esta fora de todos os commits.
-- **(i) `console.warn` (D-...-5) — os dois lados testados:** `translation.test.js:263` prova que
-  dispara com texto e zero candidato (`<span>so span</span>`, `env.logged('warn', ...)` true) e
-  `translation.test.js:273` prova que NAO dispara havendo candidato (`logged(...) === false`).
-  Pagina sem texto nenhum nao avisa (`translation.js:36` exige `pg.textContent.trim()`), entao nao
-  ha falso positivo em capitulo vazio. Mesmo canal e prefixo `[JS]` de `paginated.js:27`. Mensagem
-  constante — sem dado do livro no log (csharp.md §5) e sem superficie de injecao (§4).
+1. **`D-...-6` promete "os CRITERIOS ficam INTACTOS", mas o texto do criterio do item 6 tambem
+   mudou** (de "piso acima do baseline conhecido ... 320/322" para "piso DERIVADO de `main` ... e
+   nenhum metodo de teste de `main` some"). A mudanca e na direcao ESTRITA (o texto antigo embutia
+   um piso factualmente errado, 15 testes abaixo do real) e o SUMMARY a declara honestamente —
+   mas a frase de abertura da decisao e imprecisa. Sem efeito pratico; registrar como precedente
+   de redacao: se o criterio muda, a decisao deve dizer que muda.
+2. **Item 1 — bypass residual por comentario de BLOCO multi-linha.** O `sed` remove `//` e `/* */`
+   de UMA linha; um `/* ... _translatableCandidates( ... */` atravessando linhas dentro do corpo
+   de uma funcao ainda enganaria o grep estrutural. Mitigado por desenho: o proprio `Source:` do
+   item 1 delega a prova de COMPORTAMENTO aos itens 2/3, e a matriz abaixo (CE-1, R-A) prova que
+   eles pegam o desvio real. Nota menor: `s://.*::` truncaria linha de codigo contendo `://` em
+   string (hoje inexistente em `translation.js`); o efeito seria gate MAIS estrito, nunca mais
+   frouxo.
+3. **Item 6 — limites conhecidos da derivacao do piso** (analise do item e do dispatch):
+   (a) ancora no `main` LOCAL — hoje `main == origin/main == 9e07c83` (verificado); se o ref local
+   estalar atras do remoto, o piso deriva de um baseline defasado. Rodar `git fetch` antes do gate;
+   (b) a contagem estatica `[Fact]`+`[InlineData]` nao enxerga `MemberData`/`ClassData`/`TheoryData`
+   — hoje ZERO ocorrencias em `main` e HEAD (verificado); se entrarem no futuro, `B` subconta e o
+   comando precisa ser re-derivado; (c) o `comm` e por nome de METODO — deletar uma LINHA de
+   `[InlineData]` e simultaneamente somar 2 testes novos ainda fecharia a conta aritmetica. Piso
+   aritmetico + nomes de metodo e o teto do que um gate estatico entrega; regressao por caso de
+   Theory fica para a suite em si. Aceitavel nesta phase (nenhum `[Theory]` foi tocado);
+   `[Fact(Skip=...)]` novo e pego (`Skipped <= 2`).
+   Confirmacao pedida no dispatch: `[Fact]`=288 + `[InlineData]`=49 = **337** em `main`, batendo
+   1:1 com o `Total: 337` real de `main`; `Skip=`=2 = os 2 Skipped reais.
+4. **Legado pre-existente, byte-identico a `main`, fora do alcance desta phase** (D-2 exime; nada
+   disso e novo): `catch (OperationCanceledException) { }` em `LibraryPageModel.cs:183`,
+   `ReaderPageModel.cs:222`, `ReaderPage.xaml.cs:308` + `catch { }` em `ReaderPage.xaml.cs:326,434`;
+   desbalanceamento de eventos 5/4; 9 findings de `dotnet format`; I/O real em testes legados
+   (`FileUtilityTests`, `ModelAccessTests`, `SettingsAccessTests`, `InMemoryDatabase`,
+   `HybridWebViewContractTests`).
+5. **Debitos da iter 1 que seguem abertos em `.jdi/todos/`** (nao regridem): harness com falha
+   ABERTA para aspas dentro de valor de atributo (`harness.js`, pre-existente de `main`); branch
+   `chapter?.Title` (`TranslationManager.cs:265`) em 83,3% — divida pre-existente, linha nao tocada.
 
 ## DoD Checklist (gate 8)
 
-Fonte: apenas `CONTEXT.md` (o `.jdi/PROJECT.md` nao tem secao `## Definition of Done`;
-`dod=auto_only`, 0 itens manuais).
+Comandos extraidos por `sed -nE 's/^ *\*\*Verify:\*\* \x60(.*)\x60$/\1/p'` de
+`git show HEAD:.jdi/phases/div-paragraph-reading/CONTEXT.md` — nao digitados de memoria.
 
-| # | Criterio | Source | Type | Status | Evidencia |
+| # | Criterion | Source | Type | Status | Evidence |
 |---|---|---|---|---|---|
-| 1 | `_translatableCandidates` fonte unica; seletores antigos ausentes | CONTEXT | Auto | PASS | exit 0 — helper 1x, chamadas 4x, `querySelectorAll('p')`/`('p[data-original]')` 0x |
-| 2 | >= 4 testes `calibre` verdes (round-trip real) | CONTEXT | Auto | PASS* | como escrito exit 1 (defeito de reporter, W-1); com `--test-reporter=tap` exit 0: `N=6`, `# pass 6 / # fail 0` |
-| 3 | Suite `translation.js` inteira sem regressao de `main` | CONTEXT | Auto | PASS* | como escrito exit 1 (W-1); com TAP exit 0: `B=13`, piso 17, `# pass 20 / # fail 0` |
-| 4 | `ExtractParagraphs`/`ParagraphRegex` removidos; `ExtractTextBlocks` em uso | CONTEXT | Auto | PASS | exit 0; 0 refs em `src/` e `test/` |
-| 5 | Teste calibre de `TranslateChapterAsync` + existentes verdes | CONTEXT | Auto | PASS | exit 0 — `Failed: 0, Passed: 7, Total: 7` (piso B+1 = 7) |
-| 6 | Suite C# inteira acima do piso | CONTEXT | Auto | PASS | exit 0 — `Failed: 0, Passed: 336, Total: 338` (piso 321/323) |
-| 7 | `Pages`/`PageModels` intocados; fix so em `wwwroot/js` + Core | CONTEXT | Auto | PASS | exit 0 — pathspec vazio |
+| 1 | `translation.js` com fonte unica `_translatableCandidates`, seletores antigos ausentes, helper no corpo das 3 funcoes, guardas na polaridade certa | CONTEXT (D-...-6) | Auto | PASS | exit 0 (repo real) |
+| 2 | Round-trip calibre get/apply/clear com >= 4 testes `calibre` e os 3 nomes exatos verdes em TAP | CONTEXT (D-...-6) | Auto | PASS | exit 0; `# fail 0`, 3 nomes `ok N - <nome>` presentes |
+| 3 | Suite `translation.js` inteira verde, sem regressao nome-a-nome vs `main`, piso B+4 | CONTEXT (D-...-6) | Auto | PASS | exit 0; `comm -23` vazio; 20 >= 13+4 |
+| 4 | `ExtractParagraphs`/`ParagraphRegex` ausentes do repo tracked; corpo de `TranslateChapterAsync` com exatamente 1 atribuicao `= HtmlUtility.ExtractTextBlocks(bodyContent)` | CONTEXT (D-...-6) | Auto | PASS | exit 0; linhas 124/195 (outros metodos) fora do range `awk` — conferido |
+| 5 | Teste calibre novo em `TranslateChapterAsync_*`, filtro passa com piso B+1 | CONTEXT (iter 1, intacto) | Auto | PASS | exit 0; byte-identico ao da iter 1 (diff vazio) |
+| 6 | Suite C# inteira, piso derivado de `main` (B=337), Skipped<=2, coerencia do sumario, `comm` nome-a-nome | CONTEXT (D-...-6) | Auto | PASS | exit 0; base 308 nomes / head 309, `comm -23` vazio; `Failed 0, Passed 336, Skipped 2, Total 338` |
+| 7 | `src/TranslateReader/` intocado fora de `Resources/Raw/wwwroot/js/` | CONTEXT (iter 1, intacto) | Auto | PASS | exit 0; byte-identico ao da iter 1 (diff vazio) |
 
-**Totals:** 7 itens | Auto: 7 (7 PASS — 2 deles via comando com reporter pinado, W-1; 0 FAIL) | Manual: 0 pendentes
+**Totals:** 7 items | Auto: 7 (7 PASS, 0 FAIL) | Manual: 0 pending
 
-\* Status semantico. O exit code registrado do comando literal e 1; a causa (reporter `spec` do
-Node 24) foi isolada e o criterio provado verde — fundamentacao completa no veredito (f).
+## Matriz de mutacao (execucao PROPRIA — lab `git clone --local` em scratchpad, repo real nunca mutado)
+
+Lab: clone descartavel com `main` local = `origin/main` (`9e07c83`), HEAD = `39b5c2d`. `OLD-TAP` =
+comando antigo + `--test-reporter=tap` (a re-autoria da iter 1 — o antigo LITERAL dos itens 2/3 e um
+reprovador constante no Node 24, reproduzido: exit 1 no lab 100% verde, enquanto v2/v3 novos saem 0).
+Higiene: apos detectar que `git checkout main -- <arquivo>` sujava o INDICE do lab, R-B e R-D foram
+re-rodados isolados com `reset --hard` — os numeros abaixo sao das rodadas limpas.
+
+### (a) Contra-exemplos do DoD critic — todos reproduzidos, todos caem no comando NOVO
+
+| Caso | Mutacao (so no lab) | Item | ANTIGO | NOVO |
+|---|---|---|---|---|
+| CE-1 | filtro de letra invertido em `translation.js:15` (`if (!_LETTER_RE.test(` → sem `!`) | 1 | 0 | **1** (e item 2 tambem: 1) |
+| CE-2 | `applyTranslations` desviado p/ `querySelectorAll('[data-original], p, div')` + comentario `// _translatableCandidates(pg)` | 1 | 0 | **1** |
+| CE-3 | `TranslationManager.cs:244` → `HtmlUtility.LegacyParagraphExtract(bodyContent)` (rename da API defeituosa) | 4 | 0 | **1** |
+| CE-4 | 3 testes da era de `main` deletados de `translation.test.js` (fica 17) | 3 | 0 (OLD-TAP) | **1** |
+| CE-5 | 6 calibre reais renomeados p/ fora do filtro + 4 stubs `test('calibre stub N', () => {})` | 2 | 0 (OLD-TAP) | **1** |
+| CE-6 | log sintetico `Passed: 321, Total: 323` (substituicao SO da invocacao dotnet por `cp`) | 6 | 0 | **1** |
+| CE-6b | 3 metodos `[Fact]` REALMENTE deletados de `TranslationManagerTests.cs` (7→4 `TranslateChapterAsync_*`) | 6 | 0 (c/ log honesto 333/335) | **1** (via `comm`, antes do dotnet) |
+
+### (b) Regressao de gate — NENHUM caso OLD=1/NEW=0 (criterio de blocker do dispatch: zero ocorrencias)
+
+| Caso | Mutacao | Item | ANTIGO | NOVO |
+|---|---|---|---|---|
+| R-A | fix AUSENTE (`translation.js` de `main`) | 1, 2, 3 | 1 | **1** em todos (suite JS vermelha inclusa) |
+| R-B | so 3 testes `calibre` (abaixo do piso N>=4) — isolado | 2 | 1 (OLD-TAP) | **1** |
+| R-C | `ExtractParagraphs` de volta (`HtmlUtility.cs` de `main`) | 4 | 1 | **1** |
+| R-D | assert falho injetado em teste da era de `main` — isolado, `# pass 19 / # fail 1` | 3 | 1 (OLD-TAP) | **1** |
+| R-E | logs: vermelho `Failed: 1`; `300/302`; incoerente `339+2+0 != 338` | 6 | 1 / 1 / n.a. | **1 / 1 / 1** |
+| R-F | suite C# REALMENTE vermelha no lab (assert flipado, `dotnet test` de verdade: `Failed! - 1/335/2/338`) | 6 | n.a. | **1** |
+
+### (c) Falso positivo — os 7 comandos NOVOS no repo REAL sem mutacao
+
+| Item | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| exit | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+## Checagens do dispatch (a–i)
+
+- **(a) Zero diff de codigo na iter 2:** `git diff --stat 03b54af..HEAD -- src/ test/` = **vazio**
+  (exit 0, 0 linhas). O diff completo da iter 2 toca so `.jdi/decisions/D-...-6.md` (novo),
+  `CONTEXT.md` e `SUMMARY.md`. Confirmado.
+- **(b)** Matriz secao (b) acima — zero caso OLD=1/NEW=0. Confirmado.
+- **(c)** Matriz secao (a) — os 6 contra-exemplos do critico + CE-6b saem exit 1 no comando novo.
+  Confirmado.
+- **(d)** Secao (c) da matriz — 7/7 exit 0 no repo real, comandos extraidos do CONTEXT.md commitado.
+  Confirmado.
+- **(e)** Warning 3 acima. 288+49=337 confirma a alegacao do doer; `main==origin/main` hoje;
+  limites MemberData/ref-local/linha-de-Theory documentados e aceitaveis nesta phase.
+- **(f) Append-only:** `D-...-6` e arquivo NOVO (`git diff --name-status 03b54af..HEAD --
+  .jdi/decisions/` = so `A D-...-6.md`); D-1..5 nasceram nesta phase e nao mudam desde a iter 1;
+  `git diff main HEAD -- .jdi/decisions/` = 6 linhas `A`, zero `D`/`M`. No CONTEXT.md mudaram as
+  linhas `Verify:`/`Source:` dos itens 1,2,3,4,6 e o texto do criterio do item 6 (Warning 1);
+  itens 5 e 7 byte-identicos entre iters (diff dos comandos extraidos = vazio). Confirmado com a
+  ressalva do Warning 1.
+- **(g)** A promessa OPERACIONAL da D-...-6 (6 regras de autoria) corresponde aos comandos
+  entregues — conferida regra a regra (TAP pinado; nome exato; `comm` nome-a-nome; comentario
+  removido + range de corpo; `git grep` de ausencia; piso derivado). Duas ressalvas textuais:
+  Warning 1 (criterio do item 6) e Warning 2 (comentario multi-linha fica fora do sed — a decisao
+  promete "comentario removido" e entrega so o de uma linha, com mitigacao comportamental provada).
+- **(h) O fix segue provado:** JS 73/73/0 skipped 0; C# 336/2/338; os 6 testes `calibre` verdes com
+  os 3 round-trips nomeados; codigo-fonte re-lido nesta sessao (`_translatableCandidates` unico,
+  guardas de folha/letra corretas, `clearTranslations` via `dataset.original`, `console.warn` so em
+  `getVisibleParagraphs`; C# linha 244 → `ExtractTextBlocks`, API morta removida,
+  `HtmlInjectionTests` 8→7). O endurecimento de gate nao mascarou nada.
+- **(i) Escopo:** diff da phase em `src/TranslateReader/` = SO `Resources/Raw/wwwroot/js/translation.js`
+  (resto no Core e em `test/`); `.gitignore` em **zero** commits (`git log main..HEAD -- .gitignore`
+  vazio; a alteracao local do usuario — linha `design` — segue nao commitada e nao foi tocada).
+
+## Estado final da phase
+
+**Producao (muda para o usuario):** EPUBs de calibre (paragrafos em `<div class="calibreN">`)
+agora funcionam na traducao interativa por paragrafo do ReaderPage — `translation.js` ganhou o
+helper unico `_translatableCandidates` (div-folha com letra Unicode entra; wrapper/imagem/bullet
+ficam fora; indice pareado por construcao entre get/apply/clear) e `console.warn` quando o capitulo
+tem texto mas zero candidato. No Core, `TranslateChapterAsync` trocou o extrator so-`<p>` morto
+(`ExtractParagraphs`/`ParagraphRegex`, removidos) por `ExtractTextBlocks`, ja corrigido na phase
+irma. **So em gate/teste/doc:** harness com selector group por virgula + 6 testes; 7 testes JS de
+calibre + 1 teste C#; iter 2 inteira (D-...-6 + `Verify:` endurecidos) — zero linha de `src/`/`test/`
+na iter 2. **Numeros finais:** build 0 erros; JS 73/73; C# 336 passed / 2 skipped / 338 total
+(+1 sobre `main` = o teste novo, nenhum removido — nome a nome); coverage de arquivos novos
+pos-boundary 100%.
+
+## Para o revisor humano do PR
+
+O que o gate automatizado NAO prova — 1 minuto de atencao:
+
+1. **Rendering real em WebView.** Toda a prova JS roda num DOM falso (harness). Que o paragrafo
+   calibre selecionado renderiza/pagina certo em WebView2/WKWebView/Android WebView so um smoke
+   manual com um EPUB de calibre mostra. (Deferido pelo CONTEXT.)
+2. **UX do caso "zero candidato":** hoje e so `console.warn` — o usuario final nao ve nada quando
+   um capitulo nao tem paragrafo traduzivel. Decisao de produto (toast/badge) esta explicitamente
+   deferida ao PR; concordar ou abrir issue.
+3. **SonarCloud** nos arquivos tocados so existe pos-push/CI (D-2026-07-30-sonar-zero-issues-12).
+4. **`ITranslationManager.TranslateChapterAsync` segue no contrato sem chamador de UI** — mantido
+   por decisao (D-...-4); se incomodar, e phase futura, nao este PR.
+5. Os `Verify:` novos sao fortes mas nao adversarialmente perfeitos (Warnings 2–3: comentario
+   multi-linha, MemberData futuro, ref `main` local). Eles provam nao-regressao e comportamento
+   hoje; nao substituem revisao de diff.
 
 ## Recommendation
 
-Aprovar e seguir para `/jdi-ship div-paragraph-reading`. Antes da proxima phase que parseie
-`node --test`, converter o registro de `.jdi/todos/2026-08-01-div-paragraph-reading.md` em regra
-de autoria de `Verify:` (pinar `--test-reporter=tap`, como `coverage-90` ja faz). Os dois debitos
-apontados (branch `chapter?.Title` e `CSS.escape` no `scroll.js:32`) sao candidatos naturais a
-itens de phase futura — nenhum bloqueia esta.
+Aprovar e seguir para `/jdi-ship div-paragraph-reading`. Nenhum item manual de DoD pendente. As
+warnings sao textuais/limites-de-gate ou legado exento por D-2 — nenhuma pede nova iteracao de
+codigo. Para phases futuras: adotar as 6 regras de autoria da D-...-6 ja na escrita do primeiro
+CONTEXT (a phase gastou uma iteracao inteira consertando prova, nao codigo).
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
 ## DoD Critic (enhanced — forcado por /jdi-issue)
 
-Re-ataque das 7 linhas `Type=Auto`/`PASS` com contra-exemplos EXECUTADOS em copia (repo intocado).
-Resultado: **5 linhas ocas**, todas com prova objetiva. As duas que se sustentam sao os itens 5 e 7.
+Re-ataque dos 7 rows apos o endurecimento da iter 2 (a aprovacao do critico da iter 1 nao cobre
+comandos que mudaram). Itens 3, 5 e 7 confirmados SOLIDOS; 4 e 6 caem para warning com backstop
+nomeado; **itens 1 e 2 ocos, com um achado que nao e de gate e sim de TESTE FALTANDO**:
 
-- Item 2 («>= 4 testes `calibre` verdes, round-trip get/apply/clear») — **hollow=true, objective=true**.
-  O comando LITERAL de `CONTEXT.md:64` sai **exit 1 com a suite 100% verde**: Node v24.14.0 emite o
-  reporter `spec` (`i pass 6 / i fail 0`), e o `grep -qE "^# fail"` nunca casa. Um `Verify:` que nao
-  pode sair 0 nao prova criterio nenhum — o PASS registrado veio de um comando RE-AUTORADO pelo
-  reviewer (variante `--test-reporter=tap`), nao do comando escrito. E o inverso exato do gate oco,
-  com o mesmo efeito: a linha do DoD nao certifica nada. Agravante medido: mesmo a variante TAP e
-  proxy de contagem — 4 stubs `test('calibre stub N', () => {})` SEM assert dao `N=4/pass=4` e
-  saem exit 0 com ZERO round-trip. O round-trip real existe
-  (`test/js/translation.test.js:237-261`, com asserts sobre `dataset.original`), mas quem o prova e
-  leitura/execucao externa, nao o gate.
-- Item 3 («suite de `translation.js` sem regressao de `main`, piso `B+4`») — **hollow=true,
-  objective=true**. Mesmo defeito de reporter, e o piso nao mede regressao: deletando 3 testes da
-  era de `main` da copia do HEAD a contagem fica `17 >= 17` e a variante TAP sai **exit 0 com 3
-  testes de `main` ausentes**; `main` + 4 stubs vazios da o mesmo `17 >= 17`. A prova real de
-  nao-regressao foi o `comm` nome-a-nome que o reviewer rodou FORA do comando.
-- Item 1 («`_translatableCandidates` fonte unica») — **hollow=true, objective=true**. Grep de forma:
-  (CE-1) filtro de letra invertido em `translation.js:15` — fix efetivamente AUSENTE, div calibre
-  com letra excluida — sai **exit 0** enquanto a suite acusa 6 falhas; (CE-2) `applyTranslations`
-  trocado para `querySelectorAll('[data-original], p, div')` com um COMENTARIO contendo
-  `_translatableCandidates(` repondo a contagem `>= 4` tambem sai exit 0, com so 2 das 3 funcoes
-  usando o helper. O grep conta TEXTO, inclusive comentario.
-- Item 4 («`ExtractParagraphs`/`ParagraphRegex` removidos; `TranslateChapterAsync` usa
-  `ExtractTextBlocks`») — **hollow=true, objective=true**. (CE-4) desviando a linha 244 para um
-  `LegacyParagraphExtract(bodyContent)` (o extrator defeituoso apenas RENOMEADO) o comando sai
-  **exit 0**, porque o `grep -q "HtmlUtility.ExtractTextBlocks"` casa nas linhas 124 e 195 (outros
-  metodos) — a presenca nao esta amarrada ao corpo de `TranslateChapterAsync`, e o grep de ausencia
-  so olha `HtmlUtility.cs`, entao um rename que preserve o defeito escapa.
-- Item 6 («suite C# nao regride do baseline», piso `321/323`) — **hollow=true, objective=true**. Log
-  sintetico `Failed: 0, Passed: 321, Total: 323` passa o `awk` de `CONTEXT.md:81`. O baseline REAL de
-  `main` e 335/337 (medido em worktree pela review primaria e corroborado por contagem independente
-  de atributos), ou seja o gate aceita **regressao de ate 15 testes**. A entrega real esta em
-  baseline+1 (336/338), entao nao houve regressao de fato — o furo e do criterio, nao da entrega.
+- **Mutante M-E (executado, mutacao SO em `src/`)**: `applyTranslations` desviado para
+  `pg.querySelectorAll('[data-original], p, div')` com um comentario de BLOCO multi-linha contendo
+  `_translatableCandidates(` para repor a contagem. Resultado: **os 7 `Verify:` saem exit 0 e a
+  suite JS fica 73/73 verde** — enquanto o harness prova, no proprio fixture calibre desta phase,
+  bug REAL de usuario: traduzir o paragrafo de indice 0 escreve no `div` WRAPPER e colapsa o
+  capitulo inteiro (`CHAPTER_COLLAPSED: true`). Isso falsifica a mitigacao do W-2 da review
+  ("os itens 2/3 pegam o desvio real" — nao pegam) e falsifica a certificacao do criterio central
+  da phase (`D-...-3`: "dessincronia de indice deixa de ser possivel por construcao").
+  Causa raiz da lacuna: a suite nova tem get-sobre-`CALIBRE_BODY` e clear-sobre-div-unico, mas
+  **nao tem apply sobre um corpo capaz de dessincronizar** — o teste de apply
+  (`test/js/translation.test.js:237-249`) usa `<p>one</p><div>two</div><p>three</p>`, forma em que
+  qualquer seletor ingenuo coincide com o helper.
+- Item 1 (`hollow=true, objective=true`): o `sed` de remocao de comentario so cobre `//` de UMA
+  linha — comentario de bloco e string literal burlam igual. Sem backstop comportamental (ver M-E).
+- Item 2 (`hollow=true, objective=true`): amarra NOME de teste, nao corpo — trocar o corpo do teste
+  nomeado por `assert.ok(true)` sai exit 0.
+- Item 4 (`hollow=true`, mas MITIGADO de verdade): desvio para `LegacyParagraphExtract` com a linha
+  genuina escondida em `/* */` sai exit 0; porem, para compilar, o extrator defeituoso precisa
+  existir, e o item 5 (byte-identico, `dotnet test` real, teste calibre provado RED-first na iter 1
+  contra exatamente esse extrator) fica VERMELHO. Backstop comportamental real.
+- Item 6 (`hollow=true`, assimetria documentada): o `comm` do lado HEAD vem de grep ESTATICO nos
+  arquivos, nao dos testes EXECUTADOS — remover `[Fact]` de um metodo da era de `main` (o metodo
+  fica no arquivo e nunca mais roda) mais 2 stubs vazios passa. O item 3 nao tem esse furo porque
+  compara com os nomes VERDES do TAP. Derivacao auditada em `main`: 288 `[Fact]` + 49 `[InlineData]`
+  = 337 = `Total` real, zero `MemberData`/`ClassData`, zero atributo comentado; direcao de erro
+  futura e SUBcontagem (piso frouxo), nunca gate impossivel.
+- Coerencia `D-...-6` <-> comandos: a frase "os CRITERIOS ficam INTACTOS" e imprecisa (o texto do
+  criterio do item 6 tambem mudou), mas a direcao e estritamente mais dura, esta declarada no
+  `Source`/SUMMARY, e o ledger `.jdi/decisions/` so recebeu arquivo NOVO (zero M/D) — warning de
+  redacao, nao invalida o caminho append-only.
 
-Linhas que se sustentam: item 5 (piso `B+1` derivado de `main`, sem folga, teste nomeado assertando
-o triple `Original/Translated/Index`, red-first reproduzido em worktree) e item 7 (`main` local
-conferido == `origin/main` == `ls-remote` = 9e07c83; unico path divergente sob
-`src/TranslateReader/` e `Resources/Raw/wwwroot/js/translation.js`).
-
-Familia ja catalogada em `.jdi/todos/` (`[PROCESSO/DoD]`): o gate mede um proxy conveniente — aqui
-com um agravante novo, o gate que reprova codigo CORRETO e so "passa" quando alguem reescreve o
-comando na hora de rodar.
+Endurecimento minimo para fechar: **1 teste JS de `applyTranslations` sobre `CALIBRE_BODY`** (ou
+assert de paridade entre a lista lida por `getVisibleParagraphs` e a escrita por
+`applyTranslations`), que fecha M-E por COMPORTAMENTO — independente de comentario ou string.
 
 **Verdict:** BLOCKED
