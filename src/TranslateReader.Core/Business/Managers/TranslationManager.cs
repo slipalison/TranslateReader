@@ -40,7 +40,7 @@ public class TranslationManager(
             await translationEngine.InitializeAsync(modelAccess.GetModelPath(), ct);
     }
 
-    public async Task<string> TranslateBookAsync(
+    public async Task<BookTranslationResult> TranslateBookAsync(
         int bookId,
         string sourceLanguage,
         string targetLanguage,
@@ -64,14 +64,15 @@ public class TranslationManager(
             throw;
         }
 
-        var translatedChapters = await RebuildAllTranslatedChaptersAsync(
+        var rebuilt = await RebuildAllTranslatedChaptersAsync(
             book, chapters, sourceLanguage, targetLanguage);
 
         await bookTranslationJobAccess.DeleteJobAsync(job.Id);
 
         var translatedTitle = $"{book.Title} [{sourceLanguage} \u2192 {targetLanguage}]";
-        return await parsingEngine.CreateTranslatedEpubAsync(
-            book.FilePath, translatedTitle, translatedChapters, destinationDirectory);
+        var epubPath = await parsingEngine.CreateTranslatedEpubAsync(
+            book.FilePath, translatedTitle, rebuilt.Chapters, destinationDirectory);
+        return new BookTranslationResult(epubPath, rebuilt.CoveredTextRatio);
     }
 
     public async Task<BookTranslationJob?> GetActiveTranslationJobAsync(int bookId) =>
@@ -173,23 +174,48 @@ public class TranslationManager(
             chapterIdx + 1, totalChapters, currentParagraph, totalParagraphs, overallProgress));
     }
 
-    private async Task<Dictionary<string, string>> RebuildAllTranslatedChaptersAsync(
+    /// Chapters keyed by href plus the share of the body text that ended up inside a block. The
+    /// rebuild pass already walks every chapter, so the coverage signal costs no extra I/O.
+    private sealed record RebuiltBook(Dictionary<string, string> Chapters, double CoveredTextRatio);
+
+    private async Task<RebuiltBook> RebuildAllTranslatedChaptersAsync(
         Book book,
         IReadOnlyList<Chapter> chapters,
         string sourceLanguage,
         string targetLanguage)
     {
-        var translatedChapters = new Dictionary<string, string>();
+        var translatedChapters = new Dictionary<string, string>(chapters.Count);
+        var coveredChars = 0L;
+        var totalChars = 0L;
+
         foreach (var href in chapters.Select(chapter => chapter.HRef))
         {
             var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, href, string.Empty);
-            var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
+            var bodyContent = HtmlUtility.ExtractBodyContent(html);
+            var textBlocks = HtmlUtility.ExtractTextBlocks(bodyContent);
             var translations = await FetchTranslationsFromCacheAsync(
                 book.Id, href, textBlocks, sourceLanguage, targetLanguage);
+
+            coveredChars += CountBlockChars(textBlocks);
+            totalChars += HtmlUtility.CountTextChars(bodyContent);
             translatedChapters[href] = HtmlUtility.ReplaceTextBlocksInHtml(html, translations);
         }
-        return translatedChapters;
+
+        return new RebuiltBook(translatedChapters, CoveredRatio(coveredChars, totalChars));
     }
+
+    private static long CountBlockChars(List<string> textBlocks)
+    {
+        var covered = 0L;
+        foreach (var block in textBlocks)
+            covered += HtmlUtility.CountTextChars(block);
+        return covered;
+    }
+
+    // Clamped because malformed chapter HTML (a raw '<' inside a block) can strip down to more
+    // characters than the whole body does, and a coverage signal above 100% would just be a lie.
+    private static double CoveredRatio(long coveredChars, long totalChars) =>
+        totalChars == 0 ? 1.0 : Math.Min(1.0, (double)coveredChars / totalChars);
 
     private async Task<List<string>> FetchTranslationsFromCacheAsync(
         int bookId, string chapterHRef, List<string> textBlocks,

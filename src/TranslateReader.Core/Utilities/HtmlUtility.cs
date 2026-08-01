@@ -9,6 +9,10 @@ public static partial class HtmlUtility
     // pathological chapter cannot pin a thread (S6444 / ReDoS).
     private const int RegexTimeoutMilliseconds = 1000;
 
+    private const string TagGroup = "tag";
+    private const string TextGroup = "text";
+    private const string DivTag = "div";
+
     public static string ExtractBodyContent(string html)
     {
         if (string.IsNullOrWhiteSpace(html)) return string.Empty;
@@ -30,11 +34,14 @@ public static partial class HtmlUtility
 
     public static List<string> ExtractTextBlocks(string bodyContent)
     {
-        var matches = TextBlockRegex().Matches(bodyContent);
-        return matches
-            .Select(m => StripHtmlTags(m.Groups[2].Value).Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .ToList();
+        var blocks = new List<string>();
+        foreach (Match match in TextBlockRegex().Matches(bodyContent))
+        {
+            var text = BlockText(match);
+            if (IsTranslatableBlock(match, text))
+                blocks.Add(text);
+        }
+        return blocks;
     }
 
     public static string ReplaceTextBlocksInHtml(string html, IReadOnlyList<string> translations)
@@ -42,17 +49,37 @@ public static partial class HtmlUtility
         var index = 0;
         return TextBlockRegex().Replace(html, match =>
         {
-            var innerHtml = match.Groups[2].Value;
-            var text = StripHtmlTags(innerHtml).Trim();
-            if (string.IsNullOrWhiteSpace(text))
+            var text = BlockText(match);
+            if (!IsTranslatableBlock(match, text))
                 return match.Value;
             if (index >= translations.Count)
                 return match.Value;
             var translated = System.Net.WebUtility.HtmlEncode(translations[index++]);
-            var tag = match.Groups[1].Value;
+            var tag = match.Groups[TagGroup].Value;
             var openTag = match.Value[..(match.Value.IndexOf('>') + 1)];
             return $"{openTag}{translated}</{tag}>";
         });
+    }
+
+    private static string BlockText(Match match) =>
+        StripHtmlTags(match.Groups[TextGroup].Value).Trim();
+
+    // Extraction and replacement share this predicate (decision
+    // D-2026-08-01-div-paragraph-translation-8). Both passes walk the same matches in document
+    // order, so block number N always pairs with translation number N. The div branch needs the
+    // stricter guard because calibre wraps images, bullets and stray numbers in the very same leaf
+    // div it uses for prose. The paragraph branch keeps the whitespace filter it always had, since
+    // hardening it would change what the three real EPUB fixtures extract.
+    private static bool IsTranslatableBlock(Match match, string text) =>
+        match.Groups[TagGroup].ValueSpan.Equals(DivTag, StringComparison.OrdinalIgnoreCase)
+            ? ContainsLetter(text)
+            : !string.IsNullOrWhiteSpace(text);
+
+    private static bool ContainsLetter(string text) => text.Any(char.IsLetter);
+
+    public static int CountTextChars(string html)
+    {
+        return StripHtmlTags(html).Count(c => !char.IsWhiteSpace(c));
     }
 
     public static string StripHtmlTags(string html) =>
@@ -140,12 +167,20 @@ public static partial class HtmlUtility
     [GeneratedRegex(@"<p\b[^>]*>(.*?)</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
     private static partial Regex ParagraphRegex();
 
-    // SYSLIB1044: the backreference \1 blocks the source generator from emitting a complete
+    // Disjoint union in a single alternation (D-2026-08-01-div-paragraph-translation-7): the p/h/li
+    // branch is tried first, and the div branch only matches a LEAF div - one whose content holds no
+    // <div, <p, <h1-6 or <li. The two sources therefore never overlap, which is what keeps the
+    // extraction list paired 1:1 with the replacement walk instead of double counting the ~11k words
+    // that calibre exports keep inside leaf divs.
+    // SYSLIB1044: the backreference \k<tag> blocks the source generator from emitting a complete
     // implementation, so it falls back to the interpreted engine. Waiver per
     // D-2026-07-30-sonar-zero-issues-3 mechanism (c): rewriting the pattern to drop the
     // backreference would change which closing tag is matched, i.e. change behavior.
 #pragma warning disable SYSLIB1044
-    [GeneratedRegex(@"<(p|h[1-6]|li)\b[^>]*>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
+    [GeneratedRegex(
+        @"<(?<tag>p|h[1-6]|li)\b[^>]*>(?<text>.*?)</\k<tag>>" +
+        @"|<(?<tag>div)\b[^>]*>(?<text>(?:(?!<div\b|</div|<p\b|<h[1-6]\b|<li\b).)*)</div>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline, RegexTimeoutMilliseconds)]
     private static partial Regex TextBlockRegex();
 #pragma warning restore SYSLIB1044
 

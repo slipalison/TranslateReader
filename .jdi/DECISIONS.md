@@ -1393,6 +1393,242 @@ lugar natural do conserto, mas o custo medido e de um `test` adicional, com cont
 falso positivo em duas rodadas; adiar deixaria os itens 2 e 5 desacoplados no unico momento em que
 o par foi verificado de ponta a ponta. Nenhuma linha de `src/` e tocada por esta decisao.
 
+D-2026-08-01-div-paragraph-translation-0 (registro de phase): phase `div-paragraph-translation`
+registrada no ROADMAP. Origem: BUG REPORT do usuario em 2026-08-01 — ele converteu
+"Staff Engineer: Leadership beyond the management track" (Will Larson, 4,7 MB, EPUB 2.0 gerado por
+calibre) e "nao traduziu". Base: `main` @ `ad607ac`.
+Diagnostico medido nesta sessao (nao inferido — probe do pipeline real do Core contra o arquivo do
+usuario + inspecao do banco do app em `%LOCALAPPDATA%\...\translatereader.db`):
+- o pipeline de parsing esta INTEGRO para esse livro: 53 capitulos no ReadingOrder, 902.266 chars de
+  HTML, zero capitulo vazio; `CreateTranslatedEpubAsync` substituiu 53/53 entradas num probe com
+  sentinela; o modelo `gemma-2-2b-it-Q4_K_M.gguf` esta integro (1.708.582.752 bytes).
+- CAUSA RAIZ: o livro tem **zero tags `<p>`** — e uma conversao calibre, e os paragrafos sao
+  `<div class="calibreN">`. `HtmlUtility.ExtractTextBlocks` casa `<(p|h[1-6]|li)\b...>` e por isso
+  enxerga apenas **360 blocos / 11.114 palavras**, contra **1.914 blocos / 88.042 palavras** que
+  vivem em `<div>` folha e sao ignorados. Cobertura de traducao do livro: **11,2% do texto**.
+- confirmacao aritmetica: `TranslationCache` para `BookId=12` tem **exatamente 360 entradas** — o
+  motor traduziu tudo o que conseguia ver e nada alem. A corrida inteira levou 3min56s
+  (14:19:31 -> 14:23:27), coerente com 360 blocos curtos.
+- consequencia observavel: o EPUB gerado (`Books.Id=15`,
+  `..._translated_544b0db6.epub`) tem **5 de 53 documentos em portugues, 48 ainda em ingles**.
+- SEGUNDO DEFEITO (silencio): o fluxo tratou isso como sucesso — `TranslateBookAsync` chamou
+  `RebuildAllTranslatedChaptersAsync`, apagou o job (`DeleteJobAsync`) e devolveu o caminho do EPUB
+  sem nenhum sinal de que 89% do texto nao foi traduzido. Nao ha excecao, nao ha aviso, nao ha
+  metrica exposta ao usuario.
+Escopo pedido pelo usuario nesta invocacao: os DOIS defeitos (extracao + sinal de cobertura).
+
+D-2026-08-01-div-paragraph-translation-1 (extracao): `ExtractTextBlocks` tenta `p|h1-6|li`
+(regex atual, intocada). SO quando isso devolve zero blocos PARA AQUELE CORPO, cai num fallback
+de div-folha (div sem `<div>` aninhado antes do fechamento — lookahead negativo por caractere,
+com `RegexTimeoutMilliseconds` que toda regex de `HtmlUtility` ja carrega, csharp.md §4/ReDoS).
+Bloco de div so conta se tiver >= 1 letra Unicode (`char.IsLetter`) apos `StripHtmlTags` — filtra
+imagem/bullet/numero isolado sem dependencia nova. REJEITADO: parser de HTML real (AngleSharp/
+HtmlAgilityPack) — mudaria a arquitetura 100%-regex de `HtmlUtility` de bugfix pra rewrite de
+Utility inteira (mesmo racional de `coverage-90`: zero dependencia nova quando da pra resolver
+sem); nesting real medido no livro do usuario e raso (`calibreN` direto), lookahead basta.
+Fallback e por CHAMADA (=por capitulo), sem heuristica de "livro inteiro".
+
+D-2026-08-01-div-paragraph-translation-2 (baseline): os 3 fixtures reais (`Wardley Maps`,
+`Righting software`, `Practice Makes Perfect`) nao tem `<div>` fora de `p|h1-6|li` hoje, entao o
+fallback nunca ativa neles — provado por teste de caracterizacao (fixa a contagem ATUAL antes da
+mudanca), nao so "codigo intocado".
+
+D-2026-08-01-div-paragraph-translation-3 (sinal de cobertura): `TranslateBookAsync` passa a
+devolver `BookTranslationResult(string EpubPath, double CoveredTextRatio)` em vez de `string`
+cru. `CoveredTextRatio` = caracteres NAO-espaco extraidos em blocos / caracteres NAO-espaco do
+corpo inteiro (`StripHtmlTags` + `char.IsWhiteSpace`), agregado por capitulo dentro de
+`RebuildAllTranslatedChaptersAsync` (ja itera todo capitulo — zero I/O novo); 1.0 se o corpo for
+vazio. NUNCA lanca excecao por cobertura baixa (csharp.md §1: formato inesperado e fluxo
+esperado, nao erro). `ILogger` REJEITADO como veiculo: nenhum Manager/Engine do Core injeta
+logger hoje — infra nova fora de escopo de bugfix. `IProgress<BookTranslationProgress>`
+REJEITADO como veiculo unico: o parametro pode ser `null`, e o ponto do defeito e nunca ficar em
+silencio.
+
+D-2026-08-01-div-paragraph-translation-4 (impacto em src/TranslateReader/): mudar o retorno
+obriga 1 ajuste MECANICO em `LibraryPageModel.TranslateBookAsync` (ler `result.EpubPath`) — nao
+e UI nova. Decidir SE/COMO avisar visualmente o usuario sobre `CoveredTextRatio` baixo fica em
+`## Deferred to PR review` do CONTEXT.md (decisao de produto/UX humana).
+
+D-2026-08-01-div-paragraph-translation-5 (fixture de teste): nem o EPUB do usuario (protegido,
+caminho pessoal, obra com direitos) nem um `.epub` sintetico novo tipo `CreateOrphanCoverEpub` —
+o defeito vive inteiro em `HtmlUtility.ExtractTextBlocks(string bodyContent)`, que nao toca
+arquivo. Teste usa STRING HTML literal reproduzindo a forma calibre — sem I/O, sem EPUB, sem
+questao de copyright, mais estreito que o precedente do brief. Corpos sinteticos (Fixture A/B)
+fixados em `## Notes` do CONTEXT.md.
+
+D-2026-08-01-div-paragraph-translation-6 (bugfix comeca vermelho): os testes de Fixture A/B e a
+caracterizacao dos 3 fixtures reais sao escritos ANTES do fallback existir — o de Fixture A fica
+vermelho (0 blocos) ate o fallback ser implementado.
+
+D-2026-08-01-div-paragraph-translation-7 (selecao de blocos: uniao disjunta numa UNICA regex) —
+**supersede SO o gatilho** de `D-2026-08-01-div-paragraph-translation-1`; todo o resto daquela
+decisao (div-folha por lookahead negativo por caractere, guarda de letra Unicode `char.IsLetter`
+apos `StripHtmlTags`, `RegexTimeoutMilliseconds` obrigatorio, rejeicao de AngleSharp/
+HtmlAgilityPack, decisao por CHAMADA) continua valendo integralmente.
+Motivo medido (livro-origem do bug report, 53 documentos): B = palavras em `p|h1-6|li` = 11.114;
+D = palavras em div-folha = 88.042; C = corpo total = 88.107. B + D = 99.156 > C = 88.107, ou seja
+>= 11.049 palavras vivem DENTRO de div-folha e seriam contadas duas vezes por uma uniao ingenua.
+Consequencias:
+- O gatilho "fallback so quando `p|h|li` devolve ZERO blocos" cobre apenas 39.051 palavras =
+  44,3% do corpo, porque 33 dos 53 documentos tem ALGUNS blocos `p|h|li` e a prosa toda em
+  `<div>`. Entregaria o mesmo bug de volta ao usuario.
+- Uniao ingenua (`p|h|li` + todo div-folha) traduz 11.049 palavras 2x e, pior, faz a lista de
+  extracao deixar de casar 1:1 com a varredura de `ReplaceTextBlocksInHtml` (`translations[index++]`):
+  traducao escrita no bloco errado — falha silenciosa pior que a original.
+Regra nova: UMA `[GeneratedRegex]` com alternacao, branch `p|h[1-6]|li` PRIMEIRO e branch de
+div-folha em segundo, onde o branch de div so casa `<div ...>` cujo conteudo NAO contem `<div`,
+`<p`, `<h[1-6]` nem `<li` (token temperado `(?:(?!...).)*`). As duas fontes ficam disjuntas POR
+CONSTRUCAO, em ordem de documento, num unico `Matches` — dedup vira invariante estrutural, nao
+codigo. Teto da regra = 88.107 palavras = 100% do corpo.
+REJEITADA a alternativa (a) "escolher por corpo quem rende mais texto" (teto 88.042 = 99,93%,
+delta de so 65 palavras) por dois motivos que nao sao os 0,07%: (i) exigiria recomputar a mesma
+decisao dentro de `ReplaceTextBlocksInHtml`, que recebe o html INTEIRO e nao o body — divergencia
+entre as duas passagens = traducao no paragrafo errado; (ii) um `<div class="section">` com varios
+`<p>` dentro (forma dos 3 fixtures reais) venceria a comparacao e viraria UM bloco gigante,
+regredindo granularidade, cache e tamanho de prompt.
+
+D-2026-08-01-div-paragraph-translation-8 (simetria extracao/substituicao): `ExtractTextBlocks` e
+`ReplaceTextBlocksInHtml` compartilham OBRIGATORIAMENTE a mesma selecao (a regex de
+`D-...-7`) E o mesmo predicado de filtro. Defeito estrutural que motiva a decisao:
+`ReplaceTextBlocksInHtml` usa `TextBlockRegex` sozinha (`HtmlUtility.cs:43`), entao corrigir so a
+extracao faria o motor traduzir e cachear os divs e NUNCA escrever nada no EPUB — a correcao
+entregaria o livro igualmente em ingles, so que mais lenta.
+O predicado e assimetrico POR BRANCH e simetrico entre as duas passagens: branch de div exige
+>= 1 `char.IsLetter` apos `StripHtmlTags` (filtra imagem/bullet/numero isolado); branch
+`p|h[1-6]|li` mantem o filtro de whitespace ATUAL (`string.IsNullOrWhiteSpace`) — endurece-lo
+mudaria a baseline de caracterizacao dos 3 fixtures reais (`D-...-2`). Filtro diferente entre as
+duas passagens desalinha `translations[index++]`; e a falha que o teste de round-trip mata.
+
+D-2026-08-01-div-paragraph-translation-9 (o DoD tem de provar COMPORTAMENTO, nao FORMA) —
+**supersede os 7 comandos `Verify:`** da secao `## Definition of Done` de
+`.jdi/phases/div-paragraph-translation/CONTEXT.md` (itens 1..7). Os CRITERIOS dos 7 itens ficam
+identicos e cada comando novo COMECA pelo comando antigo, literal, encadeado com `&&` — nenhuma
+checagem estrutural foi perdida; ela apenas deixou de ser a prova UNICA.
+
+Contra-exemplo que motiva (DoD critic, iter 1, medido nesta maquina): removendo o branch de
+div-folha da alternacao de `TextBlockRegex` (`HtmlUtility.cs:193-194`) o padrao volta a ser
+`p|h[1-6]|li` — exatamente o defeito que esta phase existe para corrigir — e o codigo continua
+valido: `dotnet build` 0 erros, `dotnet test` 9 falhas, e os 7 `Verify:` antigos exit 0 nos 7.
+Pior: com `HtmlUtility.cs` sintaticamente QUEBRADO (2 erros de compilacao) os 7 tambem exit 0 — o
+DoD antigo nem exigia que o projeto compilasse. Causa raiz: os 7 comandos mediam apenas
+propriedade de FORMA do arquivo (contagem de ocorrencias de NOME de teste, presenca de literal,
+presenca de record/assinatura, contagem de atributo, escopo do diff); NENHUM executava teste.
+
+Regra nova (vale para esta phase e como precedente do padrao de DoD do projeto):
+1. Todo item de DoD que afirma COMPORTAMENTO amarra-se a execucao real da suite:
+   `DOTNET_CLI_UI_LANGUAGE=en dotnet test ... > log 2>&1 && grep -q "Passed!" log` mais piso
+   numerico parseado do sumario (`Failed:` == 0 e `Passed:` >= piso), tudo encadeado com `&&` —
+   nunca `;`, que engole exit code. `DOTNET_CLI_UI_LANGUAGE=en` e obrigatorio: a maquina do
+   projeto imprime o sumario em pt-BR (`Com falha: / Aprovado:`) e o parser quebraria em silencio.
+2. Item amarrado a `--filter` carrega piso PROPRIO de testes casados, fixado ANTES da corrida.
+   Filtro que casa ZERO teste reprova por construcao: o VSTest imprime "No test matches the given
+   testcase filter" e NAO imprime a linha `Passed!` — com **exit code 0** (medido). Por isso o
+   gate nunca pode depender so do exit code do `dotnet test`.
+3. Existe pelo menos UM item que roda a suite INTEIRA, sem filtro, com piso casado fixo — item 8,
+   NOVO: `Failed:` 0, `Passed:` >= 320, `Total:` >= 322. Baseline medido em `9c56c36` era 319/321;
+   o piso sobe para o estado ENTREGUE (o teste de clamp do W-1 somou 1), nunca desce.
+4. Como todo `dotnet test`/`dotnet build` compila antes de rodar, codigo que nao compila reprova
+   em 8 dos 8 itens. "O projeto compila" deixa de ser suposicao e vira consequencia.
+5. Logs vao para `TestResults/` (ja ignorado por `**/TestResults/` no `.gitignore`), para que
+   `git status --porcelain` continue limpo depois de rodar o DoD inteiro.
+
+Nenhum item ficou mais fraco: o `-eq 3` estrutural do item 1, por exemplo, permanece E ganhou
+`Passed: == 3` na corrida filtrada. REJEITADO `--no-build` nos itens filtrados: economizaria ~4 s
+por item e devolveria exatamente a falha que o critico explorou (binario velho aprovando fonte
+quebrada). REJEITADO substituir os 7 por um unico gate "roda a suite inteira": um item de DoD tem
+de reprovar pelo motivo DELE, entao cada item mantem filtro e piso proprios e a regressao aponta o
+criterio violado em vez de "algo quebrou".
+
+D-2026-08-01-div-paragraph-translation-10 (rodada de warnings da iter 3: W-2 medido e NAO
+otimizado, W-7 fechado por extracao de fixture) — a REVIEW da iter 2 fechou
+APPROVED_WITH_WARNINGS com 5 warnings abertos e recomendacao explicita de nao agir antes do ship.
+O modo autonomo (`/jdi-issue`) exige uma tentativa de limpeza mesmo assim; esta decisao registra o
+veredito de cada um para que nenhum seja reaberto por intuicao.
+
+**W-2 (`CountBlockChars` re-aplica `StripHtmlTags` a blocos ja stripped) — NAO otimizado, agora
+com numero.** `.claude/rules/csharp.md` §2 exige medir antes de otimizar; a infra de medicao
+(BenchmarkDotNet) nao existe no repo (`.jdi/todos.md`, `[PERF/INFRA]` de `the-method-refactor`),
+entao a medicao foi feita com `Stopwatch` + `GC.GetAllocatedBytesForCurrentThread()` num probe
+descartavel fora do repo, contra `TranslateReader.Core.dll` -c Release, sobre um corpo sintetico
+de 534.890 chars / 2.000 blocos-folha (ordem de grandeza do livro que originou o bug: 1.910
+blocos). Medido, media de 20 corridas apos 3 de aquecimento:
+
+| Variante | ms por rebuild de livro | bytes alocados por rebuild |
+|---|---|---|
+| atual (`CountTextChars` -> `StripHtmlTags` por bloco) | **2,154 ms** | **2 B** |
+| hipotetica sem re-strip (conta nao-espaco direto) | 0,266 ms | 2 B |
+
+Duas conclusoes fecham o caso. (1) O ganho seria **~1,9 ms por livro inteiro**, contra uma corrida
+de traducao de 2.000 blocos de inferencia LLM local (minutos a horas — a propria phase mede ~8x de
+aumento de duracao). (2) A premissa de ALOCACAO do warning esta errada: `Regex.Replace` devolve a
+**mesma instancia** quando o padrao nao casa nada (`ReferenceEquals` = True, medido), e bloco ja
+stripped nao tem `<...>` sobrando — nao existe a "alocacao O(texto do livro)" descrita; sao ~0 B
+nas duas variantes. Alem disso a variante direta NAO e equivalente em geral: ela diverge
+exatamente em HTML malformado com `<` cru, que e a classe de entrada que produziu o W-1 e hoje
+depende do clamp. Trocar o caminho de contagem por 1,9 ms, num sinal que ja teve um defeito de
+borda, e trade ruim. Fica registrado em `.jdi/todos.md` como item de perf com o numero junto.
+
+**W-7 (literais repetidos em teste) — parcialmente fechado.** A parte que era risco real de
+DIVERGENCIA foi fechada: as Fixtures A e B do CONTEXT existiam em copia dupla, em
+`HtmlUtilityTests.cs` (que asserta QUAIS blocos saem) e em `TranslationManagerTests.cs` (que
+asserta a RAZAO 106/113 derivada dos mesmos caracteres). Editar uma copia deixaria a outra verde
+sobre markup obsoleto, em silencio. Agora ha uma copia so, em
+`test/TranslateReader.Tests/CalibreFixtures.cs`, e `TranslationManagerTests` compoe o documento de
+capitulo por concatenacao de `const` (`"<html><body>" + ... + "</body></html>"`), byte-identico ao
+literal anterior. Zero assercao alterada, zero nome de teste alterado (os `Verify:` do DoD
+grepam nome literal), suite segue **Failed: 0, Passed: 320, Total: 322**. A parte NAO fechada e a
+repeticao de `"/dest/out.epub"` (17 ocorrencias em `TranslationManagerTests.cs`, das quais so 5
+sao desta phase): extrair exigiria editar linhas legadas anteriores a `4285f25`, o que `D-2`
+proibe, e S1192 e regra de escopo MAIN — o projeto de teste e auto-detectado como test pelo
+scanner .NET, entao `csharpsquid` de escopo MAIN nao dispara la. (O precedente de issue do Sonar
+em codigo de teste, as 2 `CA1826` do PR #12, veio do importador `external_roslyn`, que le
+diagnostico do log do MSBuild — pipeline diferente, regra diferente.)
+
+**W-3, W-4, W-5 — nao corrigidos, por regra.** Todos legados, cobertos por `D-2`, todos fora do
+diff da phase (W-4 so teve a leitura do retorno trocada). Corrigi-los aqui seria refactor de
+legado no head MAUI, que hoje esta fora da rede de testes
+(`D-2026-07-30-regression-suite-2`) — trocar cheiro conhecido por bug desconhecido, sem rede.
+Os tres passam a estar registrados em `.jdi/todos.md` com `file:line` (W-5 ja estava, no item
+`[LEGADO/D-2]` de `sonar-zero-issues`).
+
+D-2026-08-01-div-paragraph-translation-10-CORRECAO (numero errado no proprio D-...-10, medido
+depois de escrito) — o paragrafo do W-7 acima diz "17 ocorrencias de `"/dest/out.epub"` em
+`TranslationManagerTests.cs`, das quais so 5 sao desta phase". O total (17) esta certo, o SPLIT
+esta errado. Medido: `git show main:test/.../TranslationManagerTests.cs | grep -c` = **10**
+ocorrencias pre-existentes em `main`; `grep -c` no HEAD = **17**;
+`git diff main -- ... | grep -cE '^\+.*/dest/out\.epub'` = **7** linhas com o literal
+adicionadas/tocadas pela phase (o numero 5 da REVIEW iter 2 contava so os testes de ratio novos,
+nao as linhas mecanicas `result` -> `result.EpubPath`). A CONCLUSAO nao muda e fica reforcada: sao
+10 linhas legadas, nao 12, e `D-2` cobre as 10 do mesmo jeito. A mensagem do commit `d237263`
+carrega a versao errada ("12 of its 17 occurrences predate 4285f25") — nao reescrita porque a
+correcao pertence aqui, no registro append-only, e nao a historia.
+
+D-2026-08-01-div-paragraph-translation-11 (issues novas do Sonar achadas so no CI do PR #15): a
+analise remota do PR acusou 9 issues, das quais 8 sao genuinamente novas desta phase e 1 e o waiver
+conhecido de `SYSLIB1044` que apenas mudou de linha (`HtmlUtility.cs:148` -> `:192`; ver
+`D-2026-07-30-sonar-zero-issues-13`, que ja registrou que nem `#pragma` nem
+`sonar.issue.ignore.multicriteria` removem issue de analisador externo do SonarCloud). As 8 novas,
+todas corrigidas neste commit:
+- `csharpsquid:S125` MAJOR (`HtmlUtility.cs:69`): o comentario que explica o predicado compartilhado
+  continha `translations[index++]` e `p/h/li`, e a heuristica leu como codigo comentado. Reescrito
+  como prosa, preservando a justificativa. **Terceira ocorrencia desta mesma classe na sessao** (as
+  outras em `sonar-zero-issues` e no proprio `HtmlUtility` da phase 14): comentario WHY que cita
+  identificador com sintaxe de codigo dispara S125.
+- `csharpsquid:S3267` MINOR x2 (`:80`, `:90`): `ContainsLetter` e `CountTextChars` usavam `foreach`
+  com `if` — viraram `text.Any(char.IsLetter)` e `.Count(c => !char.IsWhiteSpace(c))`. `char.IsLetter`
+  entra como method group (delegate estatico cacheado, sem closure), entao nao viola
+  `.claude/rules/csharp.md` §2.2.
+- `external_roslyn:CA1861` INFO x5 (`HtmlUtilityTests.cs:35,45,58,68,78`): `Assert.Equal(new[] {...},
+  blocks)` alocava array constante por chamada. Viraram
+  `Assert.Equal<IReadOnlyList<string>>([...], blocks)` — mesma assercao, mesma forca, sem alocacao
+  repetida.
+Verificado apos a correcao: build 0 erros, suite `Failed: 0, Passed: 320, Skipped: 2, Total: 322`
+(inalterada), os 8 `Verify:` do DoD exit 0, e o mutante do DoD critic (branch de div removido)
+continua reprovando em 5 dos 8 gates — a correcao cosmetica nao afrouxou a prova.
+LICAO (registrada tambem em `.jdi/todos.md`): os analisadores do SonarCloud nao rodam em
+`dotnet build`, entao esta classe de issue so aparece pos-push. Uma phase que promete "sem issue
+nova" precisa de um ciclo push+CI dentro do proprio escopo — ja registrado em
+`D-2026-07-30-sonar-zero-issues-12` e reincidente aqui.
 D-2026-07-31-conversion-performance-0 (registro de phase): phase `conversion-performance` registrada
 na posicao 16 do ROADMAP. Origem: card despachado pelo usuario via `/jdi-issue` em 2026-07-31 —
 "garanta que as funcionalidades esteja funcionado corretamente, como a conversao de livros, as
