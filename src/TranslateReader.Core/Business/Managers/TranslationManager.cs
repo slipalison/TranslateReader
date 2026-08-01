@@ -120,7 +120,8 @@ public class TranslationManager(
         CancellationToken ct)
     {
         var book = run.Book;
-        var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapter.HRef, string.Empty);
+        var html = await parsingEngine.ExtractChapterContentAsync(
+            book.FilePath, chapter.HRef, string.Empty, ChapterContentPurpose.Export);
         var textBlocks = HtmlUtility.ExtractTextBlocks(HtmlUtility.ExtractBodyContent(html));
 
         for (var paraIdx = 0; paraIdx < textBlocks.Count; paraIdx++)
@@ -190,7 +191,8 @@ public class TranslationManager(
 
         foreach (var href in chapters.Select(chapter => chapter.HRef))
         {
-            var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, href, string.Empty);
+            var html = await parsingEngine.ExtractChapterContentAsync(
+                book.FilePath, href, string.Empty, ChapterContentPurpose.Export);
             var bodyContent = HtmlUtility.ExtractBodyContent(html);
             var textBlocks = HtmlUtility.ExtractTextBlocks(bodyContent);
             var translations = await FetchTranslationsFromCacheAsync(
@@ -239,7 +241,8 @@ public class TranslationManager(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var book = await booksAccess.FetchBookAsync(bookId);
-        var html = await parsingEngine.ExtractChapterContentAsync(book.FilePath, chapterHRef, string.Empty);
+        var html = await parsingEngine.ExtractChapterContentAsync(
+            book.FilePath, chapterHRef, string.Empty, ChapterContentPurpose.Export);
         var bodyContent = HtmlUtility.ExtractBodyContent(html);
         var paragraphs = HtmlUtility.ExtractTextBlocks(bodyContent);
 
