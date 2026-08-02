@@ -422,3 +422,55 @@ boundary, not fixable by more Client-layer code**:
   future phase, not a design bug.)
 
 Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical, no regression.
+
+## Real live-UI verification (still iter 5) — screenshot-based, found + fixed 1 more real bug
+
+User asked to loop /jdi-ship until no warnings remain. Instead of continuing to argue W-1
+("no live UI") is unfixable, actually closed it partially: built the app, launched it on
+Windows, and captured real screenshots via PowerShell (GDI+ `CopyFromScreen` scoped to the
+app window's DWM frame bounds, cropped to exclude any neighboring window content).
+
+**Safety note:** a first capture attempt used `ShowWindow(SW_MAXIMIZE)` before reading the
+window rect, which returned a rect spanning the WRONG monitor bounds (a DWM/multi-monitor
+edge case) and produced a screenshot that inadvertently included a different, unrelated
+window from the user's second monitor. That file was deleted immediately without further use;
+all subsequent captures use `SW_RESTORE` + an explicit `SetWindowPos` to a known size on the
+primary monitor only, plus a hard-coded safety check on the DWM rect bounds before any capture
+is taken, and every capture is cropped to the app's own window region.
+
+**Real bug found this way (not discoverable by reading code):** on the Library grid, a book
+with a REAL cover image ("Staff Engineer: Leadership beyond the management track" — a light
+sepia map illustration) showed its title text overlaid at the top of the cover in near-white
+`ColorText`/`TextMuted55`, and the text was essentially illegible against the light artwork.
+This overlay (added by T-4 to match the mockup's placeholder-gradient cards) was rendering
+unconditionally regardless of whether a real cover image was present — the mockup itself never
+demonstrated a real-photo + overlay combination (every mockup demo book used a gradient
+placeholder), so this combination was untested in the design source. Fixed: gated the
+title/author overlay AND the "EPUB" badge behind
+`IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}"`
+in `LibraryPage.xaml` — same condition already used for the gradient background — so they only
+render on placeholder covers, where the fixed dark gradient guarantees contrast. Real covers
+already have a legible caption below them regardless. Rebuilt, relaunched, re-screenshotted:
+confirmed visually — 3 real-cover books (Righting Software, Practice Makes Perfect, Wardley
+Maps) now show clean captions with no illegible overlay.
+
+Also visually confirmed correct in the live screenshots: sidebar (active-nav tint, model card),
+top bar (search box legible, grid/list toggle, hero card), grid layout, and the Reader page's
+header/footer/back-arrow icon.
+
+**Open, NOT resolved — reported honestly rather than claimed fixed:** attempted to click the
+Reader's TOC (hamburger) button via synthetic mouse input (`mouse_event` and `SendInput`, 4
+attempts) and via keyboard (Tab focus + Enter) to visually verify the hairline-border and
+`Setter.TargetName` accent-color fixes from earlier iterations. The panel never visibly opened
+in any attempt, though a hero-card click earlier in the same session DID work, and the keyboard
+attempt did reach *some* control (chapter content advanced), proving the window has and responds
+to input in general. Code review of `OnTocButtonClicked`/`IsTocVisible`/
+`ShowChaptersPanelAsync` shows correctly-wired, simple toggle logic with no evident bug. The
+most likely explanation is a limitation of scripted Win32 input against a WinUI
+extended-title-bar region (`Shell.TitleView` renders inside Windows' custom title bar, which
+has its own OS-level hit-test/passthrough rules that can behave differently for synthetic input
+than for a real mouse/touch) rather than a confirmed app defect — but this could NOT be ruled
+out either. Not claiming this as fixed, not claiming it as broken: flagged for the user's own
+manual click-test as the one item genuinely outside what could be verified in this session.
+
+Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed.

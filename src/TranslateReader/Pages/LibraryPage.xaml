@@ -593,10 +593,16 @@
                                                      BackgroundColor="{StaticResource ColorAccent}"
                                                      Opacity="0.35" />
 
-                                            <!-- Titulo/autor dentro do topo da capa -->
+                                            <!-- Titulo/autor dentro do topo da capa: SO na capa placeholder
+                                                 (gradiente). Numa capa real (imagem de artwork arbitraria,
+                                                 sem scrim), texto claro cru fica ilegivel dependendo da
+                                                 imagem - achado ao vivo com um livro real (fundo claro do
+                                                 mapa deixava o titulo quase invisivel). A legenda abaixo da
+                                                 capa ja mostra titulo/autor de forma legivel sempre. -->
                                             <VerticalStackLayout Padding="12,14,12,0"
                                                                  VerticalOptions="Start"
-                                                                 Spacing="2">
+                                                                 Spacing="2"
+                                                                 IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}">
                                                 <Label Text="{Binding Title}"
                                                        FontSize="14"
                                                        FontFamily="InterMedium"
@@ -610,14 +616,15 @@
                                                        LineBreakMode="TailTruncation" />
                                             </VerticalStackLayout>
 
-                                            <!-- Badge EPUB no rodape da capa -->
+                                            <!-- Badge EPUB no rodape da capa: mesmo motivo, so placeholder -->
                                             <Label Text="EPUB"
                                                    VerticalOptions="End"
                                                    HorizontalOptions="Start"
                                                    Margin="12,0,0,14"
                                                    FontSize="9"
                                                    CharacterSpacing="0.72"
-                                                   TextColor="{StaticResource TextMuted40}" />
+                                                   TextColor="{StaticResource TextMuted40}"
+                                                   IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}" />
 
                                             <ProgressBar VerticalOptions="End"
                                                          HeightRequest="4"
