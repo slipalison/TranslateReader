@@ -84,6 +84,24 @@ public class ModelAccessTests : IDisposable
     }
 
     [Fact]
+    public void IsModelAvailable_ReturnsFalseWhenADifferentGgufFileExists()
+    {
+        Directory.CreateDirectory(_modelsDir);
+        File.WriteAllText(Path.Combine(_modelsDir, "other-model.gguf"), "different model data");
+
+        Assert.False(CreateSut().IsModelAvailable());
+    }
+
+    [Fact]
+    public void GetModelPath_ThrowsWhenOnlyADifferentGgufFileExists()
+    {
+        Directory.CreateDirectory(_modelsDir);
+        File.WriteAllText(Path.Combine(_modelsDir, "other-model.gguf"), "different model data");
+
+        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath());
+    }
+
+    [Fact]
     public async Task DeleteModelAsync_RemovesAllFiles()
     {
         Directory.CreateDirectory(_modelsDir);
