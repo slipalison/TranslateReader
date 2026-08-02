@@ -315,3 +315,34 @@ required (only Client-layer XAML/code-behind changed).
 `.jdi/todos/2026-08-02-opendyslexic-webfont.md` (new). `src/TranslateReader.Core/**` and
 `src/TranslateReader/Resources/Raw/**` remain untouched (verified empty diff against
 `.jdi/phases/pixel-perfect/BASELINE`).
+
+## Fix-round (iter 3) — residual review warnings
+
+User declined to ship on iter 2's `APPROVED_WITH_WARNINGS` and asked for the actionable residue
+resolved first. Iter 2's REVIEW.md Warnings section had 5 items; 2 were concrete, low-risk,
+single-line fixes with the exact cause already stated by the reviewer — applied directly by the
+orchestrator (no doer dispatch needed for a diagnosis that was already complete):
+
+- **W-3 (hairline color drift):** `SettingsOverlay.xaml`'s `PanelBorder` used
+  `Stroke="{StaticResource Neutral800}"`; `design/PIXEL-SPEC.md:222` specifies `Neutral500` for
+  this stroke. Fixed to `Neutral500`.
+- **W-2 (comment precision, item F):** the inline comment in `SettingsOverlay.xaml.cs` above
+  `UpdateReadingModeButtonBorders` claimed `FontImageSource.Color is not an observable bindable
+  property`, which is imprecise (`ColorProperty` IS a `BindableProperty`; the real gap is the
+  platform handler not re-rasterizing on an in-place mutation). Reworded to state the actual
+  mechanism and cite `dotnet/maui#8826` as "same family, different platform handler" rather than
+  an exact match.
+
+Not fixed (remain as accepted residue, per the reviewer's own iter-2 judgment — none is a code
+defect):
+- **W-1** — no live UI/screenshot available in this environment to confirm the 8 T-10 fixes
+  render correctly; deferred to PR review, same precedent the whole phase already operates under.
+- **W-4** — rapid on/off/on toggling of `IsTranslationModeActive` can overlap two `FadeToAsync`
+  calls; purely cosmetic on a low-frequency, user-click-driven event, reviewer judged not worth
+  cancellation-token complexity.
+- **W-5** and the iter-1-inherited items (TOC `Setter.TargetName`, `arrow-left E058` unused,
+  Qwen/Phi placeholder UX, `new Regex` test nit) — legacy/out-of-scope or already judged
+  not-worth-fixing by a prior review pass.
+
+Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical to iter 1/2 (no
+regression). No Core/Raw touched.

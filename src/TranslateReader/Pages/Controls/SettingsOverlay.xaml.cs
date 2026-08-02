@@ -210,9 +210,10 @@ public partial class SettingsOverlay : ContentView
         ScrollModeButton.TextColor = scrollActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
         PaginatedModeButton.TextColor = paginatedActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
 
-        // FontImageSource.Color is not an observable bindable property: mutating .Color on an
-        // already-rendered instance does not repaint the glyph on WinUI (confirmed dotnet/maui
-        // behavior - the handler only re-rasterizes when the whole ImageSource is replaced).
+        // Mutating FontImageSource.Color on an already-rendered instance does not reliably
+        // repaint the glyph on WinUI: the platform handler only re-rasterizes when the whole
+        // ImageSource is replaced, not on an in-place property change (see dotnet/maui#8826
+        // for the same FontImageSource-color-not-applied family on another platform handler).
         // Reassigning Button.ImageSource with a fresh instance forces the redraw.
         ScrollModeButton.ImageSource = CloneSegmentIcon(ScrollModeIcon, scrollActive);
         PaginatedModeButton.ImageSource = CloneSegmentIcon(PaginatedModeIcon, paginatedActive);

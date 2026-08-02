@@ -19,7 +19,7 @@
                 VerticalOptions="{OnIdiom Default=End, Desktop=Fill}"
                 WidthRequest="{OnIdiom Default=-1, Desktop=380}"
                 BackgroundColor="{StaticResource ColorSurface}"
-                Stroke="{StaticResource Neutral800}"
+                Stroke="{StaticResource Neutral500}"
                 StrokeThickness="1"
                 Shadow="{StaticResource ShadowLg}"
                 Padding="0"
