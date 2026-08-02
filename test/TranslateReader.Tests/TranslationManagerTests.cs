@@ -18,10 +18,12 @@ public class TranslationManagerTests
     private readonly IPromptUtility _promptUtility = Substitute.For<IPromptUtility>();
     private readonly IBooksAccess _booksAccess = Substitute.For<IBooksAccess>();
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
+    private readonly ISettingsAccess _settingsAccess = Substitute.For<ISettingsAccess>();
     private readonly TranslationManager _sut;
 
     public TranslationManagerTests()
     {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
         _sut = new TranslationManager(
             _translationEngine,
             _modelAccess,
@@ -29,7 +31,8 @@ public class TranslationManagerTests
             _jobAccess,
             _promptUtility,
             _booksAccess,
-            _parsingEngine);
+            _parsingEngine,
+            _settingsAccess);
     }
 
     [Fact]
@@ -74,6 +77,51 @@ public class TranslationManagerTests
 
         await _translationEngine.DidNotReceive().InitializeAsync(
             Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsSelectHyMt_DownloadsTheHyMtUrl()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "hy-mt1.5-1.8b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _settingsAccess.Received(1).FetchSettingsAsync();
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/HY-MT1.5-1.8B-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+        await _modelAccess.DidNotReceive().DownloadModelAsync(
+            "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsSelectAnUnregisteredModel_FallsBackToGemma()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "qwen-2.5-3b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _settingsAccess.Received(1).FetchSettingsAsync();
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InitializeEngineIfNeededAsync_WhenSettingsSelectHyMt_UsesTheHyMtFileName()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "hy-mt1.5-1.8b" });
+        _translationEngine.IsReady.Returns(false);
+        _modelAccess.GetModelPath("HY-MT1.5-1.8B-Q4_K_M.gguf").Returns("/models/HY-MT1.5-1.8B-Q4_K_M.gguf");
+
+        await _sut.InitializeEngineIfNeededAsync(CancellationToken.None);
+
+        await _settingsAccess.Received(1).FetchSettingsAsync();
+        await _translationEngine.Received(1).InitializeAsync(
+            "/models/HY-MT1.5-1.8B-Q4_K_M.gguf", Arg.Any<CancellationToken>());
     }
 
     [Fact]
