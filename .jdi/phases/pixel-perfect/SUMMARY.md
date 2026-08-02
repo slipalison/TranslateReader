@@ -346,3 +346,43 @@ defect):
 
 Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical to iter 1/2 (no
 regression). No Core/Raw touched.
+
+## Fix-round (iter 4) — TOC accent color + test nit
+
+User declined ship a second time on iter 3's remaining residue. Re-investigated the two
+previously-"accepted as impossible" items with a doc lookup instead of just re-asking:
+
+- **TOC active-item title color (inherited from iter 1, previously accepted as a MAUI limitation
+  — turned out to be wrong):** `Setter.TargetName` IS supported by .NET MAUI's Visual State
+  Manager (confirmed against the official docs, "Set state on multiple elements" section,
+  `learn.microsoft.com/dotnet/maui/user-interface/visual-states`) — a `VisualState.Setters` entry
+  declared on one element CAN target a named sibling/descendant in the same `NameScope` via
+  `TargetName` + a fully-qualified `Property` (e.g. `Label.TextColor`). Named the chapter-title
+  `Label` (`ChapterTitleLabel`) inside the TOC `DataTemplate` and added `TargetName` setters to
+  both `Normal` (`ColorText`) and `Selected` (`ColorAccent`) states in `ReaderPage.xaml`. The
+  active chapter's title now genuinely turns accent-colored, matching the mockup — this is a real
+  fix, not a residual re-litigated.
+- **`new Regex("Span")` test nit (W-7, iter 1):** `PixelSpecTests.cs`'s
+  `LibraryPage_GridSpanIsAdaptive` constructed a `Regex` object just to match a literal substring.
+  Replaced with `Assert.Contains("Span", codeBehind, StringComparison.Ordinal)`; removed the
+  now-unused `using System.Text.RegularExpressions;`.
+
+Deliberately NOT touched, with reasoning (to avoid re-litigating on a 3rd decline):
+- **W-1 (no live UI confirmation)** — structurally impossible in this environment; no more code
+  can close this gap, only an actual screenshot/device test can.
+- **W-4 (overlapping FadeToAsync on rapid toggle)** — cosmetic, low-frequency, and MAUI's
+  `Animate`/`FadeTo` family keys concurrent animations by (target, handle-name), so a second call
+  on the same view very likely already supersedes the first rather than visibly fighting it; adding
+  explicit cancellation logic for an unconfirmed, low-impact edge case was judged not worth the
+  added complexity, unchanged from iter 2/3's review.
+- **Arrow-left `E058` icon unused (Reader back button)** — PIXEL-SPEC lists it, but applying it
+  means replacing the native platform back button (`Shell.BackButtonBehavior`) with a fully custom
+  `Shell.TitleView` button, which trades away native back-gesture affordances (swipe-back on iOS,
+  Alt+Left on Windows) for a cosmetic icon match. That's an architecture trade-off, not a bug fix
+  — deliberately left alone pending an explicit decision, not silently "fixed".
+- **W-5 (legacy lint) / Qwen-Phi placeholder metadata** — both require touching files outside this
+  phase's locked Client-only boundary (`ThemeEngine.cs` is Core; the model metadata gap is in
+  `TranslationManager.cs`'s `ModelRegistry`, also Core) — D-...-1 forbids it, unchanged.
+
+Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical, no regression.
+Core/Raw diff against BASELINE still empty.

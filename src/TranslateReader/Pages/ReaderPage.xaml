@@ -208,11 +208,10 @@
                                     SelectionChanged="OnChapterSelected">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Chapter">
-                                <!-- Item ativo: bg AccentTint10 via VisualState (Border-level property).
-                                     O titulo permanece ColorText no estado ativo - MAUI VisualState
-                                     Setters so alcancam propriedades do proprio elemento (sem
-                                     TargetName tipo WPF), entao recolorir o Label filho exigiria
-                                     code-behind; ColorText fica como fallback consciente aqui. -->
+                                <!-- Item ativo: bg AccentTint10 no Border + titulo ColorAccent no Label
+                                     filho, ambos via Setter.TargetName (MAUI suporta - Setter tem
+                                     TargetName pra mirar um elemento nomeado no mesmo NameScope, doc:
+                                     "Set state on multiple elements" em learn.microsoft.com/dotnet/maui). -->
                                 <Border Margin="0,1"
                                         Padding="10,8"
                                         StrokeThickness="0"
@@ -224,7 +223,8 @@
                                                FontSize="11"
                                                TextColor="{StaticResource Neutral600}"
                                                VerticalOptions="Center" />
-                                        <Label Grid.Column="1"
+                                        <Label x:Name="ChapterTitleLabel"
+                                               Grid.Column="1"
                                                Text="{Binding Title}"
                                                FontSize="13"
                                                TextColor="{StaticResource ColorText}"
@@ -237,11 +237,17 @@
                                                 <VisualState x:Name="Normal">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="Transparent" />
+                                                        <Setter TargetName="ChapterTitleLabel"
+                                                                Property="Label.TextColor"
+                                                                Value="{StaticResource ColorText}" />
                                                     </VisualState.Setters>
                                                 </VisualState>
                                                 <VisualState x:Name="Selected">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="{StaticResource AccentTint10}" />
+                                                        <Setter TargetName="ChapterTitleLabel"
+                                                                Property="Label.TextColor"
+                                                                Value="{StaticResource ColorAccent}" />
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>

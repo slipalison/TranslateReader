@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace TranslateReader.Tests;
 
 /// <summary>
@@ -116,7 +114,7 @@ public class PixelSpecTests
         var codeBehind = File.ReadAllText(LibraryPageCodeBehindPath);
         Assert.Contains("SizeChanged", codeBehind, StringComparison.Ordinal);
         Assert.Contains("187", codeBehind, StringComparison.Ordinal);
-        Assert.Matches(new Regex("Span"), codeBehind);
+        Assert.Contains("Span", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]
