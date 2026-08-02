@@ -30,14 +30,14 @@ public class TranslationManager(
 
     public async Task DownloadModelIfNeededAsync(IProgress<double>? progress, CancellationToken ct)
     {
-        if (!modelAccess.IsModelAvailable())
+        if (!modelAccess.IsModelAvailable(DefaultModel.FileName))
             await modelAccess.DownloadModelAsync(DefaultModel.DownloadUrl, progress, ct);
     }
 
     public async Task InitializeEngineIfNeededAsync(CancellationToken ct)
     {
         if (!translationEngine.IsReady)
-            await translationEngine.InitializeAsync(modelAccess.GetModelPath(), ct);
+            await translationEngine.InitializeAsync(modelAccess.GetModelPath(DefaultModel.FileName), ct);
     }
 
     public async Task<BookTranslationResult> TranslateBookAsync(

@@ -35,7 +35,7 @@ public class TranslationManagerTests
     [Fact]
     public async Task DownloadModelIfNeededAsync_WhenModelExists_DoesNotDownload()
     {
-        _modelAccess.IsModelAvailable().Returns(true);
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(true);
 
         await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
 
@@ -46,7 +46,7 @@ public class TranslationManagerTests
     [Fact]
     public async Task DownloadModelIfNeededAsync_WhenModelMissing_Downloads()
     {
-        _modelAccess.IsModelAvailable().Returns(false);
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
 
         await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
 
@@ -58,7 +58,7 @@ public class TranslationManagerTests
     public async Task InitializeEngineIfNeededAsync_InitializesEngine()
     {
         _translationEngine.IsReady.Returns(false);
-        _modelAccess.GetModelPath().Returns("/models/model.gguf");
+        _modelAccess.GetModelPath(Arg.Any<string>()).Returns("/models/model.gguf");
 
         await _sut.InitializeEngineIfNeededAsync(CancellationToken.None);
 
@@ -557,8 +557,12 @@ public class TranslationManagerTests
             .Returns("<html><body><p>World</p></body></html>");
         _jobAccess.FetchActiveJobAsync(1).Returns(new BookTranslationJob
         {
-            Id = 10, BookId = 1, SourceLanguage = "English", TargetLanguage = "Portuguese",
-            Status = "Paused", LastCompletedChapterIndex = 0
+            Id = 10,
+            BookId = 1,
+            SourceLanguage = "English",
+            TargetLanguage = "Portuguese",
+            Status = "Paused",
+            LastCompletedChapterIndex = 0
         });
         _promptUtility.BuildTranslationMessages(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
