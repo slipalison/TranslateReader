@@ -52,7 +52,9 @@ public class DesignSystemTests
     private static readonly string[] LegacyChromeHexes =
     [
         "#2563EB", "#60A5FA", "#8B6914", "#1A1A2E", "#2A2A3E", "#1A1A1A",
-        "#E4E4E7", "#F0F0F0", "#E0E0E0", "#333333", "#666666", "#999999"
+        "#E4E4E7", "#F0F0F0", "#E0E0E0", "#333333", "#666666", "#999999",
+        // D-...-5 (pixel-perfect): #E53E3E is replaced everywhere by the ColorDanger token.
+        "#E53E3E"
     ];
 
     // The 9 mockup hexes DesignTokens.xaml must expose (D-...-3 / CONTEXT DoD 1).

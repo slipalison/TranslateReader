@@ -332,7 +332,12 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
 - **NAO FACA:** nao usar `[Theory]`/`[InlineData]` (piso conta com `[Fact]`); nao deletar
   nem renomear teste existente; nao mockar concretos.
 - **Criterio de sucesso:** comandos dos **DoD 9, DoD 10 e DoD 11** do CONTEXT.md (os tres).
-- **Status:** pending
+- **Status:** blocked — DoD 9 e DoD 11 passam; DoD 10 falha SOMENTE no piso numerico `Total
+  >= 377`. Baseline real desta branch (medida ANTES de qualquer commit da phase, e re-confirmada
+  no commit HEAD~9/T-2) e 365 testes (363 passed + 2 skipped), nao 367 como o CONTEXT.md assumiu
+  ("Auto-teste do planner" secao). 365 + 10 novos = 375 < 377. Os 10 `[Fact]` de
+  `PixelSpecTests.cs` existem, tem os nomes exatos exigidos e TODOS passam; suite inteira 375/375
+  verde, 0 falhas, 2 skips (dentro do limite). Ver SUMMARY.md secao BLOCKED.
 
 ---
 
