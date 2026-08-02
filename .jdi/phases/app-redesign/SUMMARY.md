@@ -31,3 +31,42 @@
 - Skipped: 2 (pre-existentes, `TranslationEngineTests` — dependem de modelo GGUF real, inalterados)
 - Failed: 0
 - Coverage: `line-rate=1.0` em `TranslateReader.Business.Managers.LibraryManager` e `TranslateReader.Business.Managers.TranslationManager` (piso exigido: >=0.90)
+
+## Fix round (iter 2 — REVIEW.md BLOCKED)
+
+Corrigido o blocker de DoD 1 e os warnings W-3/W-4 do `REVIEW.md` (iter 1), seguindo a opcao 1
+("correcao por codigo") da secao `## Recommendation` — sem editar o CONTEXT.md/DoD.
+
+- **Blocker (DoD 1):** `DesignTokens.xaml` ganhou 6 tokens novos de amostra dos temas de LEITURA
+  (`ReadingLightBg`/`ReadingLightText`, `ReadingDarkBg`/`ReadingDarkText`, `ReadingSepiaBg`/
+  `ReadingSepiaText`), com os hexes exatos de `ThemeEngine.ResolveThemeColors` (`ThemeEngine.cs:11-13`)
+  e documentados no XAML como CONTEUDO (nao chrome). `SettingsOverlay.xaml` — `LightThemeButton`,
+  `DarkThemeButton`, `SepiaThemeButton` — passaram a referenciar esses tokens em vez de hex literal
+  (`#FFFFFF`/`#1A1A1A`, `ColorSurface`/`ColorText`, `#F4ECD8`/`#5B4636`). Isso removeu o unico match
+  residual (`#1A1A1A` em `SettingsOverlay.xaml:67`) que fazia o `Verify:` do DoD 1 falhar, e de brinde
+  corrigiu W-2 (o `DarkThemeButton` mostrava `ColorSurface`/`ColorText`, cor da CHROME, em vez da cor
+  real do tema Escuro de leitura `#1A1A2E`/`#E4E4E7`). `test/TranslateReader.Tests/DesignSystemTests.cs`:
+  removida a excecao de `#1A1A1A` na denylist de `RedesignedXaml_HasNoLegacyChromeHex` (comentario
+  atualizado) — o hex nao aparece mais em nenhum XAML restilizado, entao a lista completa de 12 hexes
+  legados volta a valer sem excecao.
+- **W-3 (corrida de busca):** `LibraryPageModel.LoadBooksAsync` ganhou um contador de geracao
+  (`_loadBooksGeneration`, `Interlocked.Increment`/`Volatile.Read`) incrementado no inicio de cada
+  chamada; a atribuicao final a `Books`/`ContinueReadingBook` so acontece se a geracao ainda for a
+  mais recente apos os 2 `await`. Sem debounce (D-...-7 continua locked); `IsBusy` sempre volta a
+  `false` no `finally` mesmo no caminho de retorno antecipado.
+- **W-4 (XML doc):** `ILibraryManager.ListBookSummariesAsync`/`ListRecentBookSummariesAsync` ganharam
+  `<summary>`, no mesmo padrao ja usado por `ITranslationManager.GetSelectedModelStatusAsync`.
+- **Fora do escopo do fix-round (nao tocados, por instrucao explicita):** W-1 (formatacao legada em
+  `ThemeEngine.cs`/`ThemeEngineTests.cs` — reproduzido de novo, 3 erros WHITESPACE, arquivos fora do
+  diff da phase), W-5 (catches vazios/campo morto/etc pre-existentes), W-6 (`Colors.xaml`).
+
+**Reverificacao:** `Verify:` literal do DoD 1 (CONTEXT.md) → exit 0. DoD 8 (`DesignSystemTests`,
+filtro) → 8/8 passed. DoD 9 (suite completa + regressao + cobertura) → exit 0, `Failed: 0`,
+`Passed: 362`, `Skipped: 2`, `Total: 364` (`B=348`), `line-rate=1.0` em `LibraryManager` e
+`TranslationManager`. DoD 10 (escopo de diff fechado) → exit 0. `dotnet build -f
+net10.0-windows10.0.19041.0 -c Release`: 0 erros (16 warnings, todos pre-existentes — `CS0618`
+`DisplayAlert` obsoleto e `CS0414` `_needsInjection`, ja documentados no `REVIEW.md`/W-5). `dotnet
+format --verify-no-changes` escopado aos 5 arquivos tocados: limpo (exit 0); rodado sem escopo
+reproduz os mesmos 3 erros WHITESPACE de W-1 em arquivos fora desta phase — nao corrigidos, por
+instrucao (roteados para `baseline-de-estilo`). Commit: `6a5fb86` (`fix(app-redesign): resolve DoD 1
+hex blocker + review warnings`).
