@@ -8,11 +8,6 @@
              BackgroundColor="{StaticResource ColorBg}"
              Title="Biblioteca">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem Text="Importar"
-                     Command="{Binding ImportBookCommand}" />
-    </ContentPage.ToolbarItems>
-
     <Grid ColumnDefinitions="Auto,*">
 
         <!-- Sidebar: Desktop only (D-...-5). On mobile it collapses (IsVisible=False,
@@ -21,31 +16,45 @@
         <Border x:Name="SidebarPanel"
                 Grid.Column="0"
                 IsVisible="{OnIdiom Default=False, Desktop=True}"
-                WidthRequest="{OnIdiom Default=0, Desktop=240}"
+                WidthRequest="{OnIdiom Default=0, Desktop=232}"
                 BackgroundColor="{StaticResource ColorSurface}"
                 Stroke="{StaticResource Neutral800}"
                 StrokeThickness="0,0,1,0"
                 StrokeShape="Rectangle"
-                Padding="20,24">
-            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="28">
+                Padding="16,20">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="24">
 
-                <HorizontalStackLayout Grid.Row="0" Spacing="10">
-                    <Label Text="&#128218;"
-                           FontSize="20"
-                           VerticalOptions="Center" />
+                <HorizontalStackLayout Grid.Row="0" Spacing="10" Padding="6,4">
+                    <Border WidthRequest="32"
+                            HeightRequest="32"
+                            Padding="0"
+                            Stroke="{StaticResource ColorAccent}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 8"
+                            HorizontalOptions="Center"
+                            VerticalOptions="Center">
+                        <Label FontFamily="Phosphor"
+                               Text="&#xE4A2;"
+                               FontSize="18"
+                               TextColor="{StaticResource ColorAccent}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+                    </Border>
                     <Label Text="TranslateReader"
                            FontSize="16"
-                           FontAttributes="Bold"
+                           FontFamily="InterMedium"
+                           CharacterSpacing="-0.16"
                            TextColor="{StaticResource ColorText}"
                            VerticalOptions="Center" />
                 </HorizontalStackLayout>
 
-                <VerticalStackLayout Grid.Row="1" Spacing="4">
+                <VerticalStackLayout Grid.Row="1" Spacing="2">
                     <Border BackgroundColor="Transparent"
                             Stroke="Transparent"
                             StrokeThickness="0"
                             StrokeShape="RoundRectangle 8"
-                            Padding="12,10">
+                            HeightRequest="40"
+                            Padding="10,9">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ShowLibraryBooksCommand}" />
                         </Border.GestureRecognizers>
@@ -53,12 +62,38 @@
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsRecentFilterActive}"
                                          Value="False">
-                                <Setter Property="BackgroundColor" Value="{StaticResource Accent900}" />
+                                <Setter Property="BackgroundColor" Value="{StaticResource AccentTint10}" />
                             </DataTrigger>
                         </Border.Triggers>
-                        <Label Text="Biblioteca"
-                               FontSize="14"
-                               TextColor="{StaticResource ColorText}" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Label Grid.Column="0"
+                                   FontFamily="PhosphorFill"
+                                   Text="&#xE758;"
+                                   FontSize="17"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsRecentFilterActive}"
+                                                 Value="False">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <Label Grid.Column="1"
+                                   Text="Biblioteca"
+                                   FontSize="14"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsRecentFilterActive}"
+                                                 Value="False">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Grid>
                     </Border>
 
                     <Border x:Name="RecentFilterButton"
@@ -66,7 +101,8 @@
                             Stroke="Transparent"
                             StrokeThickness="0"
                             StrokeShape="RoundRectangle 8"
-                            Padding="12,10">
+                            HeightRequest="40"
+                            Padding="10,9">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ShowRecentBooksCommand}" />
                         </Border.GestureRecognizers>
@@ -74,12 +110,38 @@
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsRecentFilterActive}"
                                          Value="True">
-                                <Setter Property="BackgroundColor" Value="{StaticResource Accent900}" />
+                                <Setter Property="BackgroundColor" Value="{StaticResource AccentTint10}" />
                             </DataTrigger>
                         </Border.Triggers>
-                        <Label Text="Recentes"
-                               FontSize="14"
-                               TextColor="{StaticResource ColorText}" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Label Grid.Column="0"
+                                   FontFamily="Phosphor"
+                                   Text="&#xE1A0;"
+                                   FontSize="17"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsRecentFilterActive}"
+                                                 Value="True">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <Label Grid.Column="1"
+                                   Text="Recentes"
+                                   FontSize="14"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsRecentFilterActive}"
+                                                 Value="True">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Grid>
                     </Border>
                 </VerticalStackLayout>
 
@@ -94,12 +156,19 @@
                         StrokeThickness="1"
                         StrokeShape="RoundRectangle 8"
                         Padding="12">
-                    <VerticalStackLayout Spacing="4">
-                        <Label Text="Modelo de tradução"
-                               FontSize="11"
-                               TextColor="{StaticResource Neutral500}" />
+                    <VerticalStackLayout Spacing="8">
+                        <HorizontalStackLayout Spacing="8">
+                            <Label FontFamily="Phosphor"
+                                   Text="&#xE610;"
+                                   FontSize="15"
+                                   TextColor="{StaticResource Neutral400}"
+                                   VerticalOptions="Center" />
+                            <Label Text="Modelo de tradução"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Neutral400}"
+                                   VerticalOptions="Center" />
+                        </HorizontalStackLayout>
                         <Label FontSize="13"
-                               FontAttributes="Bold"
                                TextColor="{StaticResource ColorText}"
                                LineBreakMode="TailTruncation">
                             <Label.FormattedText>
@@ -112,7 +181,7 @@
                         </Label>
                         <Label Text="{Binding ModelStatusText}"
                                FontSize="11"
-                               TextColor="{StaticResource Neutral500}" />
+                               TextColor="{StaticResource Neutral600}" />
                     </VerticalStackLayout>
                 </Border>
             </Grid>
@@ -124,53 +193,186 @@
               Padding="24,20"
               RowSpacing="16">
 
-            <!-- Top bar: title + count, search, target-language chip. This is also the
-                 mobile compact header once SidebarPanel collapses to width 0. -->
+            <!-- Top bar: title + count, search, grid/list toggle, target-language chip, import.
+                 This is also the mobile compact header once SidebarPanel collapses to width 0
+                 (mobile-specific OnIdiom overrides applied in the "Library mobile" pass). -->
             <Grid Grid.Row="0"
-                  ColumnDefinitions="*,Auto,Auto"
+                  ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
                   ColumnSpacing="12"
+                  Padding="{OnIdiom Default='0', Desktop='28,16'}"
                   VerticalOptions="Center">
-                <VerticalStackLayout Grid.Column="0" Spacing="0">
+                <HorizontalStackLayout Grid.Column="0" Spacing="8" VerticalOptions="End">
                     <Label Text="Biblioteca"
-                           FontSize="24"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource ColorText}" />
+                           FontSize="20"
+                           FontFamily="InterMedium"
+                           CharacterSpacing="-0.3"
+                           TextColor="{StaticResource ColorText}"
+                           VerticalOptions="End" />
                     <Label x:Name="BookCountLabel"
                            Text="{Binding Books.Count, StringFormat='{0} livros'}"
                            FontSize="12"
-                           TextColor="{StaticResource Neutral500}" />
-                </VerticalStackLayout>
+                           TextColor="{StaticResource Neutral600}"
+                           VerticalOptions="End" />
+                </HorizontalStackLayout>
 
-                <Border Grid.Column="1"
-                        BackgroundColor="{StaticResource ColorSurface}"
-                        Stroke="{StaticResource Neutral800}"
-                        StrokeThickness="1"
-                        StrokeShape="RoundRectangle 8"
-                        Padding="10,0"
-                        WidthRequest="{OnIdiom Default=200, Desktop=280}"
-                        VerticalOptions="Center">
-                    <Entry x:Name="SearchEntry"
-                           Text="{Binding SearchQuery}"
-                           Placeholder="Buscar título ou autor..."
-                           TextColor="{StaticResource ColorText}"
-                           PlaceholderColor="{StaticResource Neutral500}"
-                           BackgroundColor="Transparent"
-                           FontSize="13" />
-                </Border>
+                <BoxView Grid.Column="1" BackgroundColor="Transparent" InputTransparent="True" />
 
-                <Border x:Name="TargetLanguageChip"
+                <Border x:Name="SearchBoxBorder"
                         Grid.Column="2"
                         BackgroundColor="{StaticResource ColorSurface}"
                         Stroke="{StaticResource Neutral800}"
                         StrokeThickness="1"
-                        StrokeShape="RoundRectangle 20"
-                        Padding="12,6"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="0,6,10,6"
+                        WidthRequest="{OnIdiom Default=200, Desktop=260}"
+                        HeightRequest="35"
                         VerticalOptions="Center">
-                    <Label Text="{Binding TargetLanguage}"
-                           FontSize="12"
-                           MaxLines="1"
-                           LineBreakMode="TailTruncation"
-                           TextColor="{StaticResource ColorText}" />
+                    <Grid ColumnDefinitions="Auto,*">
+                        <Label Grid.Column="0"
+                               FontFamily="Phosphor"
+                               Text="&#xE30C;"
+                               FontSize="15"
+                               Margin="10,0,6,0"
+                               TextColor="{StaticResource Neutral500}"
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="1"
+                               x:Name="SearchEntry"
+                               Text="{Binding SearchQuery}"
+                               Placeholder="Buscar título ou autor..."
+                               TextColor="{StaticResource ColorText}"
+                               PlaceholderColor="{StaticResource Neutral500}"
+                               BackgroundColor="Transparent"
+                               FontSize="13" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="3"
+                        IsVisible="{OnIdiom Default=False, Desktop=True}"
+                        WidthRequest="80"
+                        HeightRequest="30"
+                        BackgroundColor="Transparent"
+                        Stroke="{StaticResource Neutral800}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="0"
+                        VerticalOptions="Center">
+                    <Grid ColumnDefinitions="*,*">
+                        <Border x:Name="GridToggleButton"
+                                Grid.Column="0"
+                                BackgroundColor="Transparent"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 7"
+                                Margin="2"
+                                Padding="0">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsListView}" Value="False">
+                                    <Setter Property="Stroke" Value="{StaticResource ColorAccent}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsListView}" Value="True">
+                                    <Setter Property="Stroke" Value="Transparent" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowGridViewCommand}" />
+                            </Border.GestureRecognizers>
+                            <Label FontFamily="Phosphor"
+                                   Text="&#xE464;"
+                                   FontSize="15"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsListView}" Value="False">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Border>
+                        <Border x:Name="ListToggleButton"
+                                Grid.Column="1"
+                                BackgroundColor="Transparent"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 7"
+                                Margin="2"
+                                Padding="0">
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsListView}" Value="True">
+                                    <Setter Property="Stroke" Value="{StaticResource ColorAccent}" />
+                                </DataTrigger>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsListView}" Value="False">
+                                    <Setter Property="Stroke" Value="Transparent" />
+                                </DataTrigger>
+                            </Border.Triggers>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowListViewCommand}" />
+                            </Border.GestureRecognizers>
+                            <Label FontFamily="Phosphor"
+                                   Text="&#xE5A2;"
+                                   FontSize="15"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource Neutral500}">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding IsListView}" Value="True">
+                                        <Setter Property="TextColor" Value="{StaticResource ColorAccent}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="TargetLanguageChip"
+                        Grid.Column="4"
+                        BackgroundColor="{StaticResource ColorSurface}"
+                        Stroke="{StaticResource Neutral800}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        HeightRequest="{OnIdiom Default=34, Desktop=34}"
+                        Padding="10,6"
+                        VerticalOptions="Center">
+                    <HorizontalStackLayout Spacing="6">
+                        <Label FontFamily="Phosphor"
+                               Text="&#xE28C;"
+                               FontSize="15"
+                               TextColor="{StaticResource ColorText}"
+                               VerticalOptions="Center" />
+                        <Label Text="{Binding TargetLanguage}"
+                               FontSize="14"
+                               FontFamily="InterMedium"
+                               MaxLines="1"
+                               LineBreakMode="TailTruncation"
+                               TextColor="{StaticResource ColorText}"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </Border>
+
+                <Border x:Name="ImportButton"
+                        Grid.Column="5"
+                        HeightRequest="34"
+                        BackgroundColor="Transparent"
+                        Stroke="{StaticResource ColorAccent}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="10,6"
+                        VerticalOptions="Center">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ImportBookCommand}" />
+                    </Border.GestureRecognizers>
+                    <HorizontalStackLayout Spacing="6">
+                        <Label FontFamily="Phosphor"
+                               Text="&#xE3D4;"
+                               FontSize="15"
+                               TextColor="{StaticResource ColorAccent}"
+                               VerticalOptions="Center"
+                               IsVisible="{OnIdiom Default=True, Desktop=True}" />
+                        <Label Text="Importar"
+                               FontSize="14"
+                               FontFamily="InterMedium"
+                               TextColor="{StaticResource ColorAccent}"
+                               VerticalOptions="Center"
+                               IsVisible="{OnIdiom Default=False, Desktop=True}" />
+                    </HorizontalStackLayout>
                 </Border>
             </Grid>
 
@@ -183,10 +385,10 @@
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 14"
                     Padding="16">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="20">
                     <Border Grid.Column="0"
-                            WidthRequest="52"
-                            HeightRequest="76"
+                            WidthRequest="56"
+                            HeightRequest="84"
                             Padding="0"
                             Stroke="Transparent"
                             StrokeShape="RoundRectangle 4">
@@ -196,21 +398,27 @@
                                 <GradientStop Color="{StaticResource ColorSectionGlow}" Offset="1.0" />
                             </LinearGradientBrush>
                         </Border.Background>
-                        <Image Source="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
-                               Aspect="AspectFill"
-                               IsVisible="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+                        <Grid>
+                            <BoxView WidthRequest="3"
+                                     HorizontalOptions="Start"
+                                     BackgroundColor="{StaticResource ColorAccent}"
+                                     Opacity="0.5" />
+                            <Image Source="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
+                                   Aspect="AspectFill"
+                                   IsVisible="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+                        </Grid>
                     </Border>
 
                     <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                         <Label Text="CONTINUE LENDO"
-                               FontSize="11"
+                               FontSize="10"
                                CharacterSpacing="1"
+                               TextTransform="Uppercase"
                                TextColor="{StaticResource ColorAccent}" />
                         <Label Text="{Binding ContinueReadingBook.Title}"
-                               FontSize="16"
-                               FontAttributes="Bold"
+                               FontSize="17"
                                TextColor="{StaticResource ColorText}" />
-                        <Label FontSize="12" TextColor="{StaticResource Neutral400}">
+                        <Label FontSize="12" TextColor="{StaticResource Neutral500}">
                             <Label.FormattedText>
                                 <FormattedString>
                                     <Span Text="{Binding ContinueReadingBook.Author}" />
@@ -220,24 +428,35 @@
                             </Label.FormattedText>
                         </Label>
                         <ProgressBar Progress="{Binding ContinueReadingBook.ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
+                                     HeightRequest="3"
                                      ProgressColor="{StaticResource ColorAccent}"
-                                     BackgroundColor="{StaticResource Neutral800}" />
+                                     BackgroundColor="{StaticResource Neutral900}" />
                     </VerticalStackLayout>
 
                     <Border Grid.Column="2"
+                            HeightRequest="29"
                             VerticalOptions="Center"
                             BackgroundColor="Transparent"
-                            Stroke="{StaticResource Accent700}"
+                            Stroke="{StaticResource ColorAccent}"
                             StrokeThickness="1"
                             StrokeShape="RoundRectangle 8"
-                            Padding="16,8">
+                            Padding="10,6">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding OpenBookCommand}"
                                                    CommandParameter="{Binding ContinueReadingBook}" />
                         </Border.GestureRecognizers>
-                        <Label Text="Continuar &#8594;"
-                               FontSize="13"
-                               TextColor="{StaticResource ColorAccent}" />
+                        <HorizontalStackLayout Spacing="6">
+                            <Label Text="Continuar"
+                                   FontSize="14"
+                                   FontFamily="InterMedium"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource ColorAccent}" />
+                            <Label FontFamily="Phosphor"
+                                   Text="&#xE06C;"
+                                   FontSize="15"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource ColorAccent}" />
+                        </HorizontalStackLayout>
                     </Border>
                 </Grid>
             </Border>

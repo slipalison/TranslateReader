@@ -132,7 +132,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   ainda (T-4); nao criar rota nova.
 - **Criterio de sucesso:** o comando do **DoD 3** do CONTEXT.md, E
   `M=src/TranslateReader/PageModels/LibraryPageModel.cs; grep -q 'IsListView\|isListView' "$M" && grep -q 'ShowGridView' "$M" && grep -q 'ShowListView' "$M"`
-- **Status:** pending
+- **Status:** completed
 
 ### T-4: Library desktop — grid de capas, LIST VIEW e span adaptativo
 - **Files:** `Pages/LibraryPage.xaml`, `Pages/LibraryPage.xaml.cs`

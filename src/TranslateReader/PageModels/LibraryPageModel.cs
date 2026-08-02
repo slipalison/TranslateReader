@@ -25,6 +25,9 @@ public partial class LibraryPageModel(
     public partial bool IsRecentFilterActive { get; set; }
 
     [ObservableProperty]
+    public partial bool IsListView { get; set; }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContinueReadingBook))]
     public partial BookSummary? ContinueReadingBook { get; set; }
 
@@ -114,6 +117,12 @@ public partial class LibraryPageModel(
         IsRecentFilterActive = true;
         return LoadBooksAsync();
     }
+
+    [RelayCommand]
+    private void ShowGridView() => IsListView = false;
+
+    [RelayCommand]
+    private void ShowListView() => IsListView = true;
 
     [RelayCommand]
     private async Task LoadTargetLanguageAsync()
