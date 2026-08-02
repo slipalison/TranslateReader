@@ -19,6 +19,8 @@ public partial class LibraryPage : ContentPage
     {
         base.OnAppearing();
         _pageModel.LoadBooksCommand.Execute(null);
+        _pageModel.LoadTargetLanguageCommand.Execute(null);
+        _pageModel.LoadModelStatusCommand.Execute(null);
     }
 
     private void OnPageSizeChanged(object? sender, EventArgs e)

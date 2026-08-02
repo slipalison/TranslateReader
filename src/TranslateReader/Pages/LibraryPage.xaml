@@ -5,6 +5,7 @@
              xmlns:models="clr-namespace:TranslateReader.Models;assembly=TranslateReader.Core"
              x:Class="TranslateReader.Pages.LibraryPage"
              x:DataType="pm:LibraryPageModel"
+             BackgroundColor="{StaticResource ColorBg}"
              Title="Biblioteca">
 
     <ContentPage.ToolbarItems>
@@ -12,131 +13,343 @@
                      Command="{Binding ImportBookCommand}" />
     </ContentPage.ToolbarItems>
 
-    <Grid>
-        <ActivityIndicator IsRunning="{Binding IsBusy}"
-                           IsVisible="{Binding IsBusy}"
-                           VerticalOptions="Center"
-                           HorizontalOptions="Center"
-                           ZIndex="1" />
+    <Grid ColumnDefinitions="Auto,*">
 
-        <CollectionView x:Name="BooksCollection"
-                        ItemsSource="{Binding Books}"
-                        IsVisible="True"
-                        Margin="8,8,8,0"
-                        EmptyView="Nenhum livro importado. Toque em Importar para adicionar um EPUB.">
-            <CollectionView.ItemsLayout>
-                <GridItemsLayout Orientation="Vertical"
-                                 Span="3"
-                                 HorizontalItemSpacing="10"
-                                 VerticalItemSpacing="14" />
-            </CollectionView.ItemsLayout>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:BookSummary">
-                    <Grid Padding="2"
-                          MaximumWidthRequest="160"
-                          HorizontalOptions="Center">
-                        <FlyoutBase.ContextFlyout>
-                            <MenuFlyout>
-                                <MenuFlyoutItem Text="Traduzir livro"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
-                                                CommandParameter="{Binding}" />
-                                <MenuFlyoutItem Text="Excluir"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
-                                                CommandParameter="{Binding}" />
-                            </MenuFlyout>
-                        </FlyoutBase.ContextFlyout>
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=OpenBookCommand}"
-                                CommandParameter="{Binding}" />
-                        </Grid.GestureRecognizers>
+        <!-- Sidebar: Desktop only (D-...-5). On mobile it collapses (IsVisible=False,
+             WidthRequest=0) and the top bar in the main content column becomes the
+             compact header at the top, as in mobile-library.jpg. -->
+        <Border x:Name="SidebarPanel"
+                Grid.Column="0"
+                IsVisible="{OnIdiom Default=False, Desktop=True}"
+                WidthRequest="{OnIdiom Default=0, Desktop=240}"
+                BackgroundColor="{StaticResource ColorSurface}"
+                Stroke="{StaticResource Neutral800}"
+                StrokeThickness="0,0,1,0"
+                StrokeShape="Rectangle"
+                Padding="20,24">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="28">
 
-                            <!-- Livro físico: capa + info abaixo -->
-                            <Grid RowDefinitions="Auto,Auto,Auto">
+                <HorizontalStackLayout Grid.Row="0" Spacing="10">
+                    <Label Text="&#128218;"
+                           FontSize="20"
+                           VerticalOptions="Center" />
+                    <Label Text="TranslateReader"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource ColorText}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
 
-                                <!-- Capa com proporção 2:3, sombra e borda arredondada -->
-                                <Border Grid.Row="0"
-                                        StrokeShape="RoundRectangle 4"
-                                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
-                                        StrokeThickness="1"
-                                        Padding="0"
-                                        WidthRequest="140"
-                                        HeightRequest="210">
-                                    <Border.Shadow>
-                                        <Shadow Brush="{AppThemeBinding Light={StaticResource BlackBrush}, Dark={StaticResource BlackBrush}}"
-                                                Offset="3,4"
-                                                Radius="6"
-                                                Opacity="0.25" />
-                                    </Border.Shadow>
+                <VerticalStackLayout Grid.Row="1" Spacing="4">
+                    <Border BackgroundColor="Transparent"
+                            Stroke="Transparent"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 8"
+                            Padding="12,10">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ShowLibraryBooksCommand}" />
+                        </Border.GestureRecognizers>
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsRecentFilterActive}"
+                                         Value="False">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Accent900}" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Label Text="Biblioteca"
+                               FontSize="14"
+                               TextColor="{StaticResource ColorText}" />
+                    </Border>
 
-                                    <!-- Container da capa com progresso sobreposto -->
-                                    <Grid>
-                                        <!-- Placeholder quando não há capa -->
-                                        <Grid IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}"
-                                              BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource DarkSecondaryBackground}}">
-                                            <VerticalStackLayout VerticalOptions="Center"
-                                                                 HorizontalOptions="Center"
-                                                                 Spacing="6">
-                                                <Label Text="&#xf02d;"
-                                                       FontFamily="OpenSansRegular"
-                                                       FontSize="36"
-                                                       TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                                                       HorizontalOptions="Center" />
-                                                <Label Text="{Binding Title}"
-                                                       FontSize="10"
-                                                       FontAttributes="Bold"
-                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                                                       HorizontalTextAlignment="Center"
-                                                       MaxLines="3"
-                                                       LineBreakMode="WordWrap"
-                                                       Margin="6,0" />
-                                            </VerticalStackLayout>
+                    <Border x:Name="RecentFilterButton"
+                            BackgroundColor="Transparent"
+                            Stroke="Transparent"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 8"
+                            Padding="12,10">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ShowRecentBooksCommand}" />
+                        </Border.GestureRecognizers>
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsRecentFilterActive}"
+                                         Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Accent900}" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Label Text="Recentes"
+                               FontSize="14"
+                               TextColor="{StaticResource ColorText}" />
+                    </Border>
+                </VerticalStackLayout>
+
+                <BoxView Grid.Row="2"
+                         BackgroundColor="Transparent"
+                         InputTransparent="True" />
+
+                <Border x:Name="ModelStatusCard"
+                        Grid.Row="3"
+                        BackgroundColor="{StaticResource ColorBg}"
+                        Stroke="{StaticResource Neutral800}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="12">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Modelo de tradução"
+                               FontSize="11"
+                               TextColor="{StaticResource Neutral500}" />
+                        <Label FontSize="13"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource ColorText}"
+                               LineBreakMode="TailTruncation">
+                            <Label.FormattedText>
+                                <FormattedString>
+                                    <Span Text="{Binding ModelStatus.Name}" />
+                                    <Span Text=" · " />
+                                    <Span Text="{Binding ModelSizeDisplay}" />
+                                </FormattedString>
+                            </Label.FormattedText>
+                        </Label>
+                        <Label Text="{Binding ModelStatusText}"
+                               FontSize="11"
+                               TextColor="{StaticResource Neutral500}" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Main content -->
+        <Grid Grid.Column="1"
+              RowDefinitions="Auto,Auto,*"
+              Padding="24,20"
+              RowSpacing="16">
+
+            <!-- Top bar: title + count, search, target-language chip. This is also the
+                 mobile compact header once SidebarPanel collapses to width 0. -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="*,Auto,Auto"
+                  ColumnSpacing="12"
+                  VerticalOptions="Center">
+                <VerticalStackLayout Grid.Column="0" Spacing="0">
+                    <Label Text="Biblioteca"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource ColorText}" />
+                    <Label x:Name="BookCountLabel"
+                           Text="{Binding Books.Count, StringFormat='{0} livros'}"
+                           FontSize="12"
+                           TextColor="{StaticResource Neutral500}" />
+                </VerticalStackLayout>
+
+                <Border Grid.Column="1"
+                        BackgroundColor="{StaticResource ColorSurface}"
+                        Stroke="{StaticResource Neutral800}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="10,0"
+                        WidthRequest="{OnIdiom Default=200, Desktop=280}"
+                        VerticalOptions="Center">
+                    <Entry x:Name="SearchEntry"
+                           Text="{Binding SearchQuery}"
+                           Placeholder="Buscar título ou autor..."
+                           TextColor="{StaticResource ColorText}"
+                           PlaceholderColor="{StaticResource Neutral500}"
+                           BackgroundColor="Transparent"
+                           FontSize="13" />
+                </Border>
+
+                <Border x:Name="TargetLanguageChip"
+                        Grid.Column="2"
+                        BackgroundColor="{StaticResource ColorSurface}"
+                        Stroke="{StaticResource Neutral800}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 20"
+                        Padding="12,6"
+                        VerticalOptions="Center">
+                    <Label Text="{Binding TargetLanguage}"
+                           FontSize="12"
+                           MaxLines="1"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{StaticResource ColorText}" />
+                </Border>
+            </Grid>
+
+            <!-- Hero: continue reading (most recent book with progress) -->
+            <Border x:Name="ContinueReadingHero"
+                    Grid.Row="1"
+                    IsVisible="{Binding HasContinueReadingBook}"
+                    BackgroundColor="{StaticResource ColorSurface}"
+                    Stroke="{StaticResource Neutral800}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    Padding="16">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                    <Border Grid.Column="0"
+                            WidthRequest="52"
+                            HeightRequest="76"
+                            Padding="0"
+                            Stroke="Transparent"
+                            StrokeShape="RoundRectangle 4">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="{StaticResource ColorSection}" Offset="0.0" />
+                                <GradientStop Color="{StaticResource ColorSectionGlow}" Offset="1.0" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Image Source="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
+                               Aspect="AspectFill"
+                               IsVisible="{Binding ContinueReadingBook.CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+                    </Border>
+
+                    <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                        <Label Text="CONTINUE LENDO"
+                               FontSize="11"
+                               CharacterSpacing="1"
+                               TextColor="{StaticResource ColorAccent}" />
+                        <Label Text="{Binding ContinueReadingBook.Title}"
+                               FontSize="16"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource ColorText}" />
+                        <Label FontSize="12" TextColor="{StaticResource Neutral400}">
+                            <Label.FormattedText>
+                                <FormattedString>
+                                    <Span Text="{Binding ContinueReadingBook.Author}" />
+                                    <Span Text=" · " />
+                                    <Span Text="{Binding ContinueReadingBook.ProgressPercentage, StringFormat='{0:0}%'}" />
+                                </FormattedString>
+                            </Label.FormattedText>
+                        </Label>
+                        <ProgressBar Progress="{Binding ContinueReadingBook.ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
+                                     ProgressColor="{StaticResource ColorAccent}"
+                                     BackgroundColor="{StaticResource Neutral800}" />
+                    </VerticalStackLayout>
+
+                    <Border Grid.Column="2"
+                            VerticalOptions="Center"
+                            BackgroundColor="Transparent"
+                            Stroke="{StaticResource Accent700}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 8"
+                            Padding="16,8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenBookCommand}"
+                                                   CommandParameter="{Binding ContinueReadingBook}" />
+                        </Border.GestureRecognizers>
+                        <Label Text="Continuar &#8594;"
+                               FontSize="13"
+                               TextColor="{StaticResource ColorAccent}" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="2">
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Center"
+                                   Color="{StaticResource ColorAccent}"
+                                   ZIndex="1" />
+
+                <CollectionView x:Name="BooksCollection"
+                                ItemsSource="{Binding Books}"
+                                EmptyView="Nenhum livro importado. Toque em Importar para adicionar um EPUB.">
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical"
+                                         Span="3"
+                                         HorizontalItemSpacing="14"
+                                         VerticalItemSpacing="18" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:BookSummary">
+                            <Grid Padding="2"
+                                  MaximumWidthRequest="170"
+                                  HorizontalOptions="Center">
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Traduzir livro"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
+                                                        CommandParameter="{Binding}" />
+                                        <MenuFlyoutItem Text="Excluir"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
+                                                        CommandParameter="{Binding}" />
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=OpenBookCommand}"
+                                        CommandParameter="{Binding}" />
+                                </Grid.GestureRecognizers>
+
+                                <Grid RowDefinitions="Auto,Auto,Auto">
+
+                                    <!-- Capa 2:3, cantos arredondados, gradiente placeholder ou imagem real -->
+                                    <Border Grid.Row="0"
+                                            StrokeShape="RoundRectangle 8"
+                                            Stroke="{StaticResource Neutral800}"
+                                            StrokeThickness="1"
+                                            Shadow="{StaticResource ShadowMd}"
+                                            Padding="0"
+                                            HeightRequest="210">
+                                        <Grid>
+                                            <Grid IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNullOrEmptyConverter}}">
+                                                <Grid.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="{StaticResource ColorSection}" Offset="0.0" />
+                                                        <GradientStop Color="{StaticResource ColorSectionGlow}" Offset="1.0" />
+                                                    </LinearGradientBrush>
+                                                </Grid.Background>
+                                                <Label Text="EPUB"
+                                                       VerticalOptions="End"
+                                                       HorizontalOptions="Start"
+                                                       Margin="8,0,0,8"
+                                                       FontSize="9"
+                                                       CharacterSpacing="1"
+                                                       TextColor="{StaticResource Neutral300}" />
+                                            </Grid>
+
+                                            <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
+                                                   Aspect="AspectFill"
+                                                   IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+
+                                            <ProgressBar VerticalOptions="End"
+                                                         HeightRequest="4"
+                                                         Progress="{Binding ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
+                                                         ProgressColor="{StaticResource ColorAccent}"
+                                                         BackgroundColor="Transparent" />
                                         </Grid>
+                                    </Border>
 
-                                        <!-- Imagem da capa com path absoluto via converter -->
-                                        <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
-                                               Aspect="AspectFill"
-                                               IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+                                    <!-- Título -->
+                                    <Label Grid.Row="1"
+                                           Text="{Binding Title}"
+                                           FontSize="12"
+                                           FontAttributes="Bold"
+                                           TextColor="{StaticResource ColorText}"
+                                           MaxLines="2"
+                                           LineBreakMode="TailTruncation"
+                                           Margin="2,8,2,1" />
 
-                                        <!-- Barra de progresso sobre a capa (parte inferior) -->
-                                        <ProgressBar VerticalOptions="End"
-                                                     Margin="0,0,0,0"
-                                                     HeightRequest="5"
-                                                     Progress="{Binding ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
-                                                     ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}"
-                                                     BackgroundColor="Transparent" />
-                                    </Grid>
-                                </Border>
-
-                                <!-- Título -->
-                                <Label Grid.Row="1"
-                                       Text="{Binding Title}"
-                                       FontSize="11"
-                                       FontAttributes="Bold"
-                                       MaxLines="2"
-                                       LineBreakMode="TailTruncation"
-                                       HorizontalTextAlignment="Center"
-                                       Margin="2,6,2,1" />
-
-                                <!-- Autor -->
-                                <Label Grid.Row="2"
-                                       Text="{Binding Author}"
-                                       FontSize="10"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}"
-                                       MaxLines="1"
-                                       LineBreakMode="TailTruncation"
-                                       HorizontalTextAlignment="Center"
-                                       Margin="2,0,2,0" />
+                                    <!-- Autor -->
+                                    <Label Grid.Row="2"
+                                           Text="{Binding Author}"
+                                           FontSize="11"
+                                           TextColor="{StaticResource Neutral500}"
+                                           MaxLines="1"
+                                           LineBreakMode="TailTruncation"
+                                           Margin="2,0,2,0" />
+                                </Grid>
                             </Grid>
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
 
         <!-- Translation progress bar -->
-        <Border VerticalOptions="End"
+        <Border Grid.ColumnSpan="2"
+                VerticalOptions="End"
                 HorizontalOptions="Fill"
-                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                BackgroundColor="{StaticResource ColorSurface}"
                 Padding="16,12"
                 IsVisible="{Binding IsTranslatingBook}"
                 ZIndex="2">
@@ -145,7 +358,8 @@
             </Border.Shadow>
             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6">
                 <Label Grid.Row="0" Grid.Column="0"
-                       FontSize="13" FontAttributes="Bold">
+                       FontSize="13" FontAttributes="Bold"
+                       TextColor="{StaticResource ColorText}">
                     <Label.FormattedText>
                         <FormattedString>
                             <Span Text="Traduzindo: " />
@@ -164,35 +378,40 @@
                         MinimumHeightRequest="32" />
                 <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                              Progress="{Binding BookTranslationProgress}"
-                             ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                             ProgressColor="{StaticResource ColorAccent}" />
             </Grid>
         </Border>
 
         <!-- Model download/loading overlay -->
-        <Border VerticalOptions="End"
+        <Border Grid.ColumnSpan="2"
+                VerticalOptions="End"
                 HorizontalOptions="Fill"
-                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                BackgroundColor="{StaticResource ColorSurface}"
                 Padding="16,12"
                 IsVisible="{Binding IsModelDownloading}"
                 ZIndex="2">
             <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
                 <Label Grid.Row="0" Text="Baixando modelo de tradução..."
-                       FontSize="13" />
+                       FontSize="13"
+                       TextColor="{StaticResource ColorText}" />
                 <ProgressBar Grid.Row="1"
                              Progress="{Binding ModelDownloadProgress}"
-                             ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                             ProgressColor="{StaticResource ColorAccent}" />
             </Grid>
         </Border>
 
-        <Border VerticalOptions="End"
+        <Border Grid.ColumnSpan="2"
+                VerticalOptions="End"
                 HorizontalOptions="Fill"
-                BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                BackgroundColor="{StaticResource ColorSurface}"
                 Padding="16,12"
                 IsVisible="{Binding IsModelLoading}"
                 ZIndex="2">
             <VerticalStackLayout Spacing="6">
-                <Label Text="Carregando modelo..." FontSize="13" />
-                <ActivityIndicator IsRunning="True" HeightRequest="20" />
+                <Label Text="Carregando modelo..."
+                       FontSize="13"
+                       TextColor="{StaticResource ColorText}" />
+                <ActivityIndicator IsRunning="True" HeightRequest="20" Color="{StaticResource ColorAccent}" />
             </VerticalStackLayout>
         </Border>
     </Grid>

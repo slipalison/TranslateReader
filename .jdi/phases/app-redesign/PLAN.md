@@ -102,7 +102,7 @@ em desktop e mobile.
   - Mutacao de `[ObservableProperty]` vinda de background segue marshalada (`MainThread.BeginInvokeOnMainThread`); os 3 hex legados removidos.
 - **Dependencies:** T-1, T-2, T-3, T-5
 - **Test:** `LibraryPage_HasTheMockupStructure` + `EveryPageBinding_ResolvesToAKnownMember` (T-8); build Windows
-- **Status:** pending
+- **Status:** completed
 
 #### T-7: ReaderPage — painel de capitulos (TOC) animado
 - **Specialist:** jdi-doer-translatereader
