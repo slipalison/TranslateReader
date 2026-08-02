@@ -47,3 +47,23 @@ accompanied by a copy of the license agreement and a notice file containing:
 This file (`THIRD-PARTY-NOTICES.md`), together with the linked
 [License.txt](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/blob/main/License.txt), serves
 that purpose for this repository.
+
+## Inter (SIL Open Font License 1.1)
+
+- **Artifact:** [`rsms/inter`](https://github.com/rsms/inter) release v4.1, files
+  `Inter-Regular.ttf` and `Inter-Medium.ttf`, bundled in
+  `src/TranslateReader/Resources/Fonts/` and registered as the `InterRegular` /
+  `InterMedium` font aliases.
+- **License:** [SIL Open Font License 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt),
+  Copyright (c) 2020 The Inter Project Authors. Permits bundling and redistribution as part of
+  this application under the OFL's reserved-font-name and no-standalone-sale terms.
+
+## Phosphor Icons (MIT)
+
+- **Artifact:** [`phosphor-icons/web`](https://github.com/phosphor-icons/web) icon fonts,
+  files `Phosphor.ttf` (Regular) and `Phosphor-Fill.ttf` (Fill), bundled in
+  `src/TranslateReader/Resources/Fonts/` and registered as the `Phosphor` / `PhosphorFill`
+  font aliases.
+- **License:** [MIT License](https://github.com/phosphor-icons/web/blob/master/LICENSE),
+  Copyright (c) 2023 Phosphor Icons. Permits bundling and redistribution as part of this
+  application.

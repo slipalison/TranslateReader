@@ -69,7 +69,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
 - **NAO FACA:** nao apagar os OpenSans*.ttf; nao mexer em Styles.xaml ainda (e T-2).
 - **Criterio de sucesso:**
   `F=src/TranslateReader/Resources/Fonts; test -f .jdi/phases/pixel-perfect/BASELINE && for f in Inter-Regular.ttf Inter-Medium.ttf Phosphor.ttf Phosphor-Fill.ttf; do test -f "$F/$f" && test "$(wc -c < "$F/$f")" -gt 50000 || exit 1; done && for a in InterRegular InterMedium Phosphor PhosphorFill; do grep -q "\"$a\"" src/TranslateReader/MauiProgram.cs || exit 1; done && grep -qi "Phosphor" THIRD-PARTY-NOTICES.md && grep -qi "Inter" THIRD-PARTY-NOTICES.md`
-- **Status:** pending
+- **Status:** completed
 
 ### T-2: Tokens novos + default font + morte do #E53E3E
 - **Files:** `Resources/Styles/DesignTokens.xaml`, `Resources/Styles/Styles.xaml`,
