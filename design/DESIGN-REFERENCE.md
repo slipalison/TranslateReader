@@ -92,11 +92,12 @@ mapear pra `Border.Stroke` (cor da escala neutra) + `Border.Shadow` (offset/radi
    `Book.LastOpenedAt` ja existe no modelo — decisao de escopo: implementar
    "Recentes" como view filtrada (livros ordenados por `LastOpenedAt`) ou
    deixar fora do escopo desta fase.
-3. **Toggle grid/list na Biblioteca** — no mockup existe um botao pra alternar
-   entre grid de capas e lista; no proprio mockup (prototipo estatico) o
-   toggle nao mudava o layout de fato — pode ser decorativo no design
-   original. Decisao de escopo: implementar list view real ou manter so grid
-   (toggle nao aparece em nenhum lugar do app atual).
+3. **Toggle grid/list na Biblioteca** — ~~no proprio mockup (prototipo estatico) o
+   toggle nao mudava o layout de fato — pode ser decorativo~~ **CORRECAO
+   (2026-08-02): FALSO.** Testado ao vivo: o toggle FUNCIONA e troca para uma
+   list view completa (row 84px com capa, titulo/autor, progresso e menu ⋮).
+   Screenshot: `screenshots/desktop-library-list.jpg`; medidas na secao
+   "LIST VIEW" de `PIXEL-SPEC.md`. Ver D-2026-08-02-pixel-perfect-4 (aceito).
 4. **Busca na Biblioteca** — mockup tem campo de busca por titulo/autor
    funcional (ja existe endpoint equivalente? checar `LibraryManager`/
    `BooksAccess`). Se nao existir filtro, e feature nova sobre dado existente.
