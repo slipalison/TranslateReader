@@ -1,153 +1,87 @@
-# Phase 22: Pixel-perfect da chrome vs mockups — Review (slug: pixel-perfect, iter 1)
+# Phase 22: Pixel-perfect da chrome vs mockups — Review (slug: pixel-perfect, iter 2, fix-round)
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
-Revisao independente (reviewer `jdi-reviewer-translatereader`, mode=verify). Todos os 11 itens
-do DoD foram re-executados com os comandos LITERAIS do CONTEXT.md (pos-correcao D-...-9, que e o
-piso vigente: `Total >= 375`), da raiz do repo, em Git Bash — resultados abaixo sao medidos, nao
-copiados do SUMMARY.md do doer. Gates complementares: build PASS (DoD 9), testes PASS (DoD 10,
-375 >= piso 375 e >> baseline legada de 167 — zero regressao), coverage SKIPPED (nenhum `.cs` de
-produto novo nesta phase; D-...-1 dispensa exigencia nova de cobertura), lint WARN (3 achados
-WHITESPACE, todos em arquivos legados NAO tocados pela phase), Security/Layer PASS (nenhuma
-violacao nova), Consistency PASS (commits `style|feat|test|docs|chore(pixel-perfect)` atomicos
-por task, D-4), UI Validation SKIPPED (has_frontend=false), DoD PASS (11/11 auto, 0 manual —
-`dod=auto_only`).
+Review do fix-round T-10 (D-2026-08-02-pixel-perfect-10), diff real `7d00da8..06cb30f` lido na
+íntegra e conferido contra cada claim do SUMMARY — nada aceito só pela prosa do doer. Escopo do
+diff: 5 arquivos em `src/TranslateReader/Pages/**` + 1 todo novo em `.jdi/todos/` — exatamente o
+que o SUMMARY declara, nada além.
 
-## DoD 1-11 results
+## T-10 items A-H — verified
 
-| DoD | Description | Result | Evidence |
-|---|---|---|---|
-| 1 | Fontes Inter + Phosphor registradas e default trocado | PASS | comando literal, exit 0. 4 TTF > 50KB em `src/TranslateReader/Resources/Fonts/` (Bin 411-488KB no diff); 4 aliases em `MauiProgram.cs:33-36`; 0 `OpenSansRegular` em `Styles.xaml`; Inter (OFL) + Phosphor (MIT) em `THIRD-PARTY-NOTICES.md` |
-| 2 | Tokens novos + morte do #E53E3E | PASS | comando literal, exit 0. 9 tokens + `#E08A8A` em `DesignTokens.xaml:86-95`; 0 ocorrencias de `#E53E3E` em `src/TranslateReader/` |
-| 3 | Library desktop: top bar do mockup | PASS | comando literal, exit 0. 0 `<ToolbarItem`; 10 x:Name exigidos presentes (`ImportButton` LibraryPage.xaml:378, `GridToggleButton`:286, `ListToggleButton`:317); `FontFamily="Phosphor"` presente |
-| 4 | List view real no desktop | PASS | comando literal, exit 0. `BooksCollection`:519 + `BooksListCollection`:675 irmas; `IsListView` LibraryPageModel.cs:28, `ShowGridView`:122/`ShowListView`:125; `ShowAttachedFlyout` LibraryPage.xaml.cs:44 |
-| 5 | Grid adaptativo | PASS | comando literal, exit 0. `SizeChanged` LibraryPage.xaml.cs:16, const 187 (:8), `grid.Span = span` (:34), formula `max(3, (W+20)/187)` (:32), Phone idiom pulado (:29) |
-| 6 | Reader: subtitulo + footer do mockup | PASS | comando literal, exit 0. `ChapterSubtitleLabel` ReaderPage.xaml:42, `ChapterSubtitle` ReaderPageModel.cs (novo `[ObservableProperty]` + `UpdateChapterSubtitle()` chamado nos 2 load paths), `ReaderFooter`:98, `PageProgressBar`:141, `AccentTint10`:236 |
-| 7 | Settings: painel 380, cards de tema, segmented, lista de modelos | PASS | comando literal, exit 0. 380 em SettingsOverlay.xaml:20; `PaginatedModeButton`:133 < `ScrollModeButton`:149; `ModelsList`:296; 0 `Orientation="Horizontal"`; os 18 x:Name congelados presentes; atribuicao Tencent:397 |
-| 8 | Popup: banner DEPOIS dos pickers, botoes outline, 440w | PASS | comando literal, exit 0. `OfflineBanner`:93 > `SourcePicker`:65; 440 em TranslateBookPopup.xaml:12; `BookMetaLabel`:40 |
-| 9 | Compila (Windows Release 0 erros) | PASS | comando literal, exit 0 (`TestResults/pp-build.log`, `0 Error(s)`) |
-| 10 | Suite verde com 10 testes novos, piso `Total >= 375` (D-...-9) | PASS | comando literal, exit 0. `Passed! - Failed: 0, Passed: 373, Skipped: 2, Total: 375` (`TestResults/pp-suite.log`); os 10 `[Fact]` com nomes exatos existem em `PixelSpecTests.cs` e tem assercoes reais (nao hollow) |
-| 11 | Core intocado (prova da fronteira) | PASS | comando literal, exit 0. `BASELINE=82df8420...`; `git diff --name-only` vazio para `src/TranslateReader.Core/` e `Resources/Raw/` |
+- **A — CONFIRMADO.** `StrokeThickness="0,0,1,0"` sumiu dos dois arquivos (grep count = 0). LibraryPage: `SidebarPanel` agora `Stroke="Transparent"` + `StrokeThickness="0"` (`LibraryPage.xaml:22-23`) e BoxView irmão no mesmo `Grid.Column="0"`, `WidthRequest="1"`, `HorizontalOptions="End"`, `ColorDivider`, `IsVisible` OnIdiom idêntico ao da sidebar (`LibraryPage.xaml:191-198`) — declarado DEPOIS do Border no mesmo cell, logo renderiza por cima (z-order de Grid), na borda direita da coluna de 232px: visível e no lugar certo. ReaderPage: `ChaptersPanel` mesmo fix de stroke (`ReaderPage.xaml:186-187`); o novo `Grid` envolve o `ScrollView` original intacto + BoxView overlay em `End` (`ReaderPage.xaml:189-258`); as animações show/hide (`ShowChaptersPanelAsync`/`HideChaptersPanelAsync`, `ReaderPage.xaml.cs:259-276`) miram o próprio Border `ChaptersPanel` e não foram tocadas — filhos (Grid/BoxView) animam junto, nada quebra. O doer foi além do PLAN (zerou também o StrokeThickness) — melhoria, não desvio.
+- **B — CONFIRMADO e SUFICIENTE.** `MinimumHeightRequest="0"` está no `SearchEntry` especificamente (`LibraryPage.xaml:275-276`), não em outro Entry. A preocupação de FontSize residual não se aplica: `SearchEntry` já sobrescreve `FontSize="13"` explícito (`LibraryPage.xaml:282`) — fonte 13 num container de 35/38px é confortável; só o piso de 44 do estilo implícito era o problema, e foi removido.
+- **C — CONFIRMADO.** `Shell.NavBarIsVisible="False"` no elemento raiz `ContentPage` de `LibraryPage.xaml:9` (attached property válida; DoD 9 compila 0 erros). `LibraryPage` é o ÚNICO `ShellContent` raiz do `AppShell.xaml` — nunca teve back button para perder. `ReaderPage.xaml` mantém `Shell.TitleView` + `Shell.BackButtonBehavior` (`ReaderPage.xaml:16-18`) intactos; foi tocado pelo diff só para os itens A/D/H, não para C.
+- **D — CONFIRMADO.** `Padding="0"` nos 3 botões do `Shell.TitleView`: TocButton (`ReaderPage.xaml:29`), botão Aa/translate (`:56`), engrenagem (`:67`). Centralização: `Button` MAUI centra conteúdo por padrão; glifo 18/texto 15 numa caixa 36x36 com padding 0 centra com folga (~9px por lado) — risco de "cramped" é baixo; confirmação final só visual (warning geral W-1).
+- **E — CONFIRMADO.** `.jdi/todos/2026-08-02-opendyslexic-webfont.md` existe, segue o formato dos todos existentes (header `## De \`{phase}\` ({data})` + bullet com tag em negrito, igual `2026-08-02-app-redesign.md`), com causa raiz e passos futuros concretos. Critério literal (E) exit 0; diff do commit T-10 toca só 5 arquivos de `Pages/**` + o todo; `git diff BASELINE -- Core/ Raw/` vazio (DoD 11 PASS).
+- **F — CONFIRMADO como padrão seguro; teoria externa parcialmente conferida.** `UpdateReadingModeButtonBorders` agora reatribui `Button.ImageSource` com instância nova via `CloneSegmentIcon` (`SettingsOverlay.xaml.cs:217-227`) — factory `static`, lê dos templates x:Name'd nunca mutados (`SettingsOverlay.xaml:149,165`, ambos pré-existentes do T-7), cores de campos `static readonly` (`:26,:203`), sem closure, idempotente em chamadas repetidas. **Worst case é inofensivo-ou-melhor:** mesmo se a teoria WinUI estiver imprecisa, a instância nova com a cor certa renderiza certo — nunca pior que a mutação anterior. Ressalvas em W-2 (citação adjacente, comentário inline tecnicamente impreciso).
+- **G — CONFIRMADO; auditoria independente refeita.** As 2 divergências corrigidas são reais e batem com o texto literal da spec: (1) `Padding="{OnIdiom Default='6,10', Desktop='8,12'}"` nos 3 theme buttons (`SettingsOverlay.xaml:89,102,115`) = spec `p:8,12` desktop (PIXEL-SPEC:228) / `p:6,10` mobile (PIXEL-SPEC:281); (2) "Modelo local" (`SettingsOverlay.xaml:293`) = PIXEL-SPEC:227. Reli a seção "Settings — painel desktop" inteira contra o XAML atual: 380w, header `20,18`, corpo `20,4,20,28` gap 22, section headers 13/InterMedium/cs1/Neutral600, cards 67/59h r10 hairline `ColorDivider` não-selecionado, segmented 35h células `12,7` Paginado→Rolagem, labels 12 `TextMuted70` / valores 12 `ColorAccent`, pickers 36h 50/50 gap 12, rows de modelo 53h `12,10` gap 12 radio 16, status `E602` 14 + 12 Neutral600, delete `ColorDanger`/`ColorBg`, Tencent 12 Neutral500, handle 36x4 r2 + corner 18 — tudo confere como o doer afirmou. Um ponto que a auditoria não citou: PIXEL-SPEC:222 pede stroke do painel `Neutral500`, XAML usa `Neutral800` (`SettingsOverlay.xaml:22`) — mesma família de drift de hairline já aceita como W-3 no iter 1 (ver W-3 abaixo); fora da lista de foco que o PLAN deu ao item G, então claim não é falso, é residual.
+- **H — CONFIRMADO, animação real.** `TranslationModeIndicator` (x:Name novo) 3px→5px (`ReaderPage.xaml:82-86`); `OnTranslationModeChanged` (`ReaderPage.xaml.cs:189-201`) faz `Opacity = 0` + `await FadeToAsync(1, 200ms, CubicOut)` — não é flip de `IsVisible`; disparado do `case nameof(IsTranslationModeActive)` PRÉ-existente (`:98-99`), nenhum `+=` novo (pares OnAppearing `+=` / OnDisappearing `-=` intactos, 4/4, `:35-38`/`:59-62`); duração em `const` (`:14`); branch de desligar (CancelPageTranslation + ClearTranslationsAsync) preservado com guard invertido. Higiene csharp.md limpa (sem closure capturada, sem static mutável novo, `async void` é padrão pré-existente desse dispatch). Nit não-bloqueante em W-4.
 
-Nota sobre DoD 10: o "FAIL" reportado no SUMMARY.md era contra o piso ANTIGO (377). A correcao
-D-...-9 (arquivo `.jdi/decisions/D-2026-08-02-pixel-perfect-9.md`, commit `3964ed0`) fixou o piso
-em 375 apos root-cause do erro de contagem do planner (baseline real 365 = 316 `[Fact]` + 49
-`[InlineData]`, confirmado independentemente). Com o CONTEXT.md como esta HOJE escrito, DoD 10
-passa limpo. A recusa do doer de inflar a suite com testes de preenchimento foi a decisao correta.
+## DoD 1-11 re-verification (post fix-round)
 
-## Deltas conscientes — verified
+Todos os 11 comandos `Verify:` literais do CONTEXT.md re-executados neste working tree (HEAD = `06cb30f`):
 
-1. **Baseline 367 -> 365 / piso 377 -> 375** — CONCORDO. Verifiquei o decision file D-...-9 e
-   re-executei a suite: 375 total, 0 falhas, 2 skips. O erro era do planejamento (CONTEXT.md),
-   nao da execucao; corrigido na raiz (artefato errado), com precedente identico na phase
-   app-redesign. Nao e discrepancia — e o piso vigente.
-2. **TOC ativo: titulo fica ColorText (nao ColorAccent)** — CONCORDO COM RESSALVA (ver Warning
-   W-1). O fallback esta implementado e documentado inline (`ReaderPage.xaml:203-207` + VisualState
-   `Selected` com bg `AccentTint10` em :234-238), exatamente o que o PLAN pre-autorizou e mandou
-   registrar. POREM a justificativa tecnica absoluta ("MAUI VisualState setters so alcancam o
-   proprio elemento") e imprecisa: `Setter.TargetName` EXISTE no MAUI (confirmado por inspecao de
-   `Microsoft.Maui.Controls.dll` 10.0.60 — `TargetName` presente; docs "Visual states: set state
-   on multiple elements"), entao ha caminho XAML-only para o titulo ColorAccent. Nao e shortcut de
-   ma-fe — o proprio PLAN afirmou que TargetName nao era suportado — mas e melhoravel sem
-   code-behind. Warning, nao blocker.
-3. **`FlyoutBase.ShowAttachedFlyout` via `#if WINDOWS`** — CONCORDO. `LibraryPage.xaml.cs:40-46`:
-   handler definido FORA do `#if` (a assinatura existe em todos os TFMs, o wiring
-   `Tapped="OnCardMenuTapped"` compila em Android/iOS; corpo no-op fora do Windows), build Windows
-   0 erros. Verificacao independente do risco runtime: o WinUI `ShowAttachedFlyout` le a attached
-   property `AttachedFlyout` (nao `ContextFlyout`) — inspecionei `Microsoft.Maui.Controls.dll`
-   (net10.0-windows) e ele contem MemberRefs a `GetAttachedFlyout` E `SetAttachedFlyout`, ou seja,
-   o mapper Windows do MAUI popula o slot que `ShowAttachedFlyout` consulta. Cada botao ⋮ carrega
-   seu proprio `FlyoutBase.ContextFlyout` no MESMO elemento tocado (LibraryPage.xaml:628-637,
-   :757-766), entao o sender passado ao bridge e o dono do flyout. Padrao consistente com o
-   `#if WINDOWS` ja existente em `MauiProgram.cs` e com D-...-7. Smoke em device continua
-   "Deferred to PR review" (CONTEXT), corretamente.
-4. **`Tapped=` reutilizando handlers `(object?, EventArgs)`** — CONCORDO. `Tapped` e
-   `EventHandler<TappedEventArgs>`; um metodo `(object?, EventArgs)` e conversivel por
-   contravariancia de method group (C# spec), e o build Release com 0 erros e a prova empirica de
-   que o XamlC aceita. Handlers nao usam `e`, comportamento identico. Verificado em
-   SettingsOverlay.xaml:305/335/357/379 -> `OnGemmaClicked` etc. (SettingsOverlay.xaml.cs:260-286,
-   assinaturas intactas) e TranslateBookPopup.xaml:122/138 -> `OnCancelClicked`/`OnTranslateClicked`
-   (TranslateBookPopup.xaml.cs:66/73, contrato `(source, target)` inalterado). Os 3 eventos
-   publicos do SettingsOverlay (`CloseRequested`/`SettingsChanged`/`DeleteModelRequested`) e
-   `ShowAsync`/`HideAsync` animados preservados.
-5. **Gutter externo aproximado (delta #5)** — CONCORDO. `LibraryPage.xaml:193` (`Padding="24,20"`
-   na coluna principal) + :205 (top bar `OnIdiom Desktop='28,16'`, igual ao spec `p:16px 28px`) +
-   hero `p16` (:419). O PIXEL-SPEC define paddings por secao (aplicados) mas nao um gutter unico
-   da coluna; a aproximacao e razoavel e a paridade visual real e explicitamente "Deferred to PR
-   review" no CONTEXT.
-6. **(BLOCKED do doer) Qwen/Phi sem filename/tamanho** — RESOLUCAO CORRETA, NAO E BLOCKER.
-   Li `TranslationManager.cs` (somente leitura): `ModelRegistry` (linhas 23-39) tem SO
-   `gemma-2-2b` e `hy-mt1.5-1.8b`; `ResolveModel` (:47-48) faz fallback para Gemma em nome
-   desconhecido — o proprio Core comenta "Qwen/Phi are offered in the UI but have no real download
-   URL yet". Inventar filename/tamanho seria dado fabricado; adicionar entradas ao registry
-   violaria D-...-1 (Core intocado, provado vazio pelo DoD 11). As rows renderizam sao
-   (SettingsOverlay.xaml:327-369): labels estaticos, nenhum binding quebrado, nenhuma excecao
-   possivel, selecao/radio funcionam via code-behind como antes, e ha comentario inline apontando o
-   SUMMARY. Gap e do Core, para phase futura (ver W-6).
+| DoD | PASS/FAIL | Evidence |
+|---|---|---|
+| 1 — Fontes Inter + Phosphor | PASS | exit 0 (4 TTF >50KB, 4 aliases, 0 OpenSansRegular, notices OK) |
+| 2 — Tokens + morte do #E53E3E | PASS | exit 0 (9 tokens, #E08A8A presente, 0 hits #E53E3E) |
+| 3 — Library top bar | PASS | exit 0 (0 ToolbarItem, 10 x:Name, Phosphor presente) |
+| 4 — List view real | PASS | exit 0 (BooksListCollection, IsListView, Show*, ShowAttachedFlyout) |
+| 5 — Grid adaptativo | PASS | exit 0 (SizeChanged, 187, Span no code-behind) |
+| 6 — Reader subtítulo + footer | PASS | exit 0 (ChapterSubtitleLabel, ReaderFooter, PageProgressBar, AccentTint10) |
+| 7 — Settings painel/segmented/modelos | PASS | exit 0 (380, Paginado<Rolagem, ModelsList, 0 Horizontal, 18 x:Name, Tencent) |
+| 8 — Popup banner/440w | PASS | exit 0 (OfflineBanner depois de SourcePicker, 440, BookMetaLabel) |
+| 9 — Compila | PASS | exit 0 — `0 Error(s)`, 16 warnings pré-existentes (CS0618/CS0414) |
+| 10 — Suite verde, piso 375 | PASS | exit 0 — Total 375, Passed 373, Skipped 2, Failed 0 (idêntico ao iter 1 — nenhuma regressão) |
+| 11 — Core/Raw intocados | PASS | exit 0 — diff vazio contra BASELINE `82df842` |
 
-Verificacoes adicionais de higiene do diff completo (`82df842..HEAD`), alem do que o SUMMARY citou:
-zero `FontAttributes="Bold"` ADICIONADO (0 linhas `+` no diff; os Bold remanescentes em
-LibraryPage.xaml:798 e ReaderPage.xaml:267/307 sao overlays pre-existentes que o PIXEL-SPEC
-"Diferencas intencionais mantidas" #3 manda nao redesenhar); zero hex solto adicionado fora de
-`DesignTokens.xaml` (unico local com hex novo = os 9 tokens); todo `x:Name` removido no diff
-reaparece adicionado (nenhum nome perdido; novos: BooksListCollection, ChapterSubtitleLabel,
-GridToggleButton, ImportButton, ListToggleButton, ModelsList, PageProgressBar, ReaderFooter,
-SearchBoxBorder + 4 RadioIcons + 2 segmented icons); todo `Clicked=` removido foi religado
-(`Tapped=` ou `Clicked=` novo); todos os codepoints Phosphor usados batem com a tabela do
-PIXEL-SPEC (E4A2, E758-Fill, E1A0, E610, E30C, E464, E5A2, E28C, E3D4, E06C, E2F0, E272, E138,
-E13A, E4F6, E0E6, EB04, E184-Fill, E18A, E602, E208, E40C — conferidos um a um nos 4 XAML).
-Regras csharp.md no codigo novo: sem sync-over-async (grep limpo); pareamento de eventos
-INALTERADO vs baseline (5 `+=` / 4 `-=`, identico a `82df842` — o unico despareado e
-`SizeChanged += OnPageSizeChanged` da propria pagina em si mesma, self-subscription pre-existente
-que nao enraiza nada; a phase so trocou o corpo do handler); statics novos sao todos
-`static readonly` imutaveis (SettingsOverlay.xaml.cs:124/203/233-235 — leituras de resource, em
-conformidade com 5.12); CQS respeitado nos membros novos (`ShowGridView`/`ShowListView` so mutam,
-`ChapterSubtitle`/`IsListView` sao propriedades geradas; `UpdateChapterSubtitle` void);
-`PageProgressBar.Progress` atualizado dentro do mesmo dispatch de UI thread do
-`PageIndicatorLabel` (ReaderPage.xaml.cs:468-477).
+Critérios literais do T-10 também re-executados: **(itens A-D)** exit 0; **(item E)** exit 0.
+Gate 4 (lint, WARN-only) re-rodado: mesmos 3 WHITESPACE legados do iter 1 (`ThemeEngine.cs:12,14`,
+`ThemeEngineTests.cs:12` — Core, comprovadamente não tocado pela phase); zero drift novo nos
+arquivos tocados pelo T-10. Commits do round seguem Conventional Commits com scope da phase
+(`fix(pixel-perfect): T-10 ...`, `chore(pixel-perfect): ...`).
 
 ## Blockers
 
-Nenhum.
+Nenhum — verdict não é BLOCKED. Todos os claims A-H do doer conferem contra o diff real; nenhum
+gate regrediu; Core/Raw intocados; nenhuma claim FALSA encontrada.
 
 ## Warnings
 
-- **W-1 (paridade TOC):** o titulo do item ativo do TOC pode chegar ao `ColorAccent` do mockup
-  SEM code-behind via `Setter.TargetName` em VisualState (suportado pelo MAUI, ao contrario do que
-  PLAN/SUMMARY assumiram — evidencia: `TargetName` presente em `Microsoft.Maui.Controls.dll`
-  10.0.60 e documentado em "Visual states: set state on multiple elements"). Sugestao de follow-up
-  em `ReaderPage.xaml:203-241`: `x:Name` no Label do titulo + `<Setter TargetName=...
-  Property="Label.TextColor" Value="{StaticResource ColorAccent}">` no estado `Selected`.
-- **W-2 (legado, pre-existente em superficie redesenhada):** `StrokeThickness="0,0,1,0"` em
-  `LibraryPage.xaml:22` e `ReaderPage.xaml:183` — `Border.StrokeThickness` e `double`; o parse
-  invariant com AllowThousands avalia essa string como **10** (verificado:
-  `[double]::Parse('0,0,1,0', InvariantCulture)` = 10), nao "borda so na direita". Pre-existente
-  no BASELINE `82df842` (fora do escopo desta phase, shipped na app-redesign), mas afeta a
-  paridade visual que o humano vai julgar no PR: recomenda-se trocar por `StrokeThickness="1"` ou
-  um BoxView de 1px na borda desejada.
-- **W-3 (cor de hairline):** em LibraryPage, sidebar/busca/toggle/model-card usam
-  `Stroke="{StaticResource Neutral800}"` onde o PIXEL-SPEC pede hairline `ColorDivider`
-  (`#29E9E9ED`) para varios desses elementos (ex.: spec "Library — top bar" busca "borda hairline
-  ColorDivider"; "sidebar ... Borda direita: hairline ColorDivider"). Substituicao consistente e
-  visualmente proxima, mas nao e o token da spec. Julgamento final na comparacao lado a lado do PR.
-- **W-4 (icone nao aplicado):** `arrow-left E058` ("voltar (reader)") da tabela do PIXEL-SPEC nao
-  foi aplicado — o back button continua o nativo do Shell (`Shell.BackButtonBehavior`,
-  ReaderPage.xaml:16-18). Nenhuma task/DoD o exigia explicitamente; registrado como pendencia de
-  paridade para o PR review.
-- **W-5 (lint, legado):** `dotnet format --verify-no-changes` acusa 3 WHITESPACE em
-  `ThemeEngine.cs:12/14` e `ThemeEngineTests.cs:12` — arquivos NAO tocados pela phase (Core provado
-  intocado pelo DoD 11). WARN legado por D-2; vira BLOCK-on-new quando a phase
+- **W-1 (limitação estrutural, herdada do iter 1):** nem doer, nem reviewer, nem esta sessão têm
+  screenshot/UI viva para confirmar o RESULTADO visual dos 8 fixes (hairline de 1px de fato
+  renderizando, placeholder legível, glifos centrados em 36x36, fade perceptível). O código está
+  correto por leitura estática e os fixes atacam causas raiz confirmadas, mas a paridade visual
+  final permanece "Deferred to PR review" (CONTEXT.md) — mesmo precedente aceito pelo REVIEW do
+  iter 1 para a phase inteira. Não é blocker por convenção já estabelecida.
+- **W-2 (item F, precisão da justificativa):** a citação `dotnet/maui#8826` é real e da família
+  certa (FontImageSource.Color não aplicado em Button), mas é um report de HERANÇA de cor no
+  Android (closed/not-planned), não uma confirmação exata de "mutação pós-render não repinta no
+  WinUI" (verificado via fetch do issue — 1 lookup do budget). O comentário inline
+  "`FontImageSource.Color` is not an observable bindable property" é tecnicamente impreciso
+  (`ColorProperty` É um BindableProperty; o gap real é o handler de plataforma não re-rasterizar
+  em mutação interna do source). O FIX em si independe da teoria: substituir a instância é o
+  workaround canônico dessa família de bugs e é inofensivo-ou-melhor no pior caso. Sugestão: só
+  ajustar a redação do comentário se o arquivo for tocado de novo; não vale um commit próprio.
+- **W-3 (hairline drift remanescente, família do W-3 do iter 1):** `PanelBorder` do
+  SettingsOverlay usa `Stroke="{StaticResource Neutral800}"` (`SettingsOverlay.xaml:22`) onde
+  PIXEL-SPEC:222 pede `stroke Neutral500`; rows de modelo usam `Neutral800` onde a spec diz só
+  "borda hairline" (sem cor — não é divergência literal). A auditoria do item G não cobriu essa
+  linha (o PLAN focou o G em paddings/tamanhos). Julgamento final na comparação lado a lado do PR,
+  como todo o resto do W-3 original.
+- **W-4 (nit, item H):** toggles rápidos on→off→on de `IsTranslationModeActive` podem sobrepor
+  `FadeToAsync`s (a animação anterior não é cancelada). Efeito puramente cosmético num evento de
+  baixa frequência dirigido por clique de usuário — não vale complexidade de cancelamento.
+- **W-5 (lint, legado — persistente do iter 1):** 3 WHITESPACE em `ThemeEngine.cs`/
+  `ThemeEngineTests.cs`, arquivos fora do diff da phase (D-2 exime). Vira BLOCK-on-new quando
   `baseline-de-estilo` shippar `.editorconfig`.
-- **W-6 (UX dos modelos placeholder):** o usuario ainda PODE selecionar Qwen/Phi na UI e o Core
-  silenciosamente resolve para Gemma (`ResolveModel`, comportamento pre-existente e comentado no
-  Core). Com as rows agora mostrando so o nome (sem filename/size), a assimetria ficou visivel.
-  Follow-up sugerido (phase futura, fora desta fronteira): ou adicionar as entradas reais ao
-  `ModelRegistry` do Core, ou desabilitar/ocultar as rows sem registro.
-- **W-7 (nit de teste):** `PixelSpecTests.cs:119` usa `Assert.Matches(new Regex("Span"), ...)`
-  onde `Assert.Contains("Span", ...)` bastaria — `new Regex(...)` por chamada e contra o espirito
-  de csharp.md §2.1 (irrelevante em teste, mas gratuito).
+- **Herdados do iter 1, ainda válidos e não re-litigados:** W-1 (TOC `Setter.TargetName`),
+  W-4 (ícone `arrow-left E058` não aplicado), W-6 (UX dos modelos placeholder Qwen/Phi),
+  W-7 (nit `new Regex` em teste).
 
 ## Notes for next iteration
 
-N/A — verdict nao e BLOCKED. (Follow-ups nao-bloqueantes listados em Warnings; paridade visual
-real, hinting de fonte e smoke em device permanecem "Deferred to PR review" conforme CONTEXT.md.)
+N/A — verdict não é BLOCKED. (Fix-round honesto e completo: 8/8 itens com causa raiz real
+atacada ou registro justificado; DoD 1-11 íntegros; residual é exclusivamente visual/cosmético,
+listado acima.)
