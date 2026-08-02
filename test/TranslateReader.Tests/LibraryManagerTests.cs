@@ -174,4 +174,101 @@ public class LibraryManagerTests
         await _readingStateAccess.Received(1).RemoveStateForBookAsync(5);
         await _fileUtility.Received(1).DeleteDirectoryAsync(Arg.Is<string>(p => p.Contains("images") && p.Contains('5')));
     }
+
+    [Fact]
+    public async Task ListBookSummariesAsync_WithoutQuery_ReturnsEveryBook()
+    {
+        var books = new List<Book>
+        {
+            new() { Id = 1, Title = "Dom Casmurro", Author = "Machado" },
+            new() { Id = 2, Title = "Iracema", Author = "Alencar" }
+        };
+        _booksAccess.FetchAllBooksAsync().Returns(books);
+        _readingStateAccess.FetchProgressAsync(Arg.Any<int>()).Returns((ReadingProgress?)null);
+
+        var result = await _sut.ListBookSummariesAsync();
+
+        Assert.Equal(2, result.Count);
+        await _booksAccess.Received(1).FetchAllBooksAsync();
+    }
+
+    [Fact]
+    public async Task ListBookSummariesAsync_WithQuery_FiltersByTitleOrAuthorIgnoringCase()
+    {
+        var books = new List<Book>
+        {
+            new() { Id = 1, Title = "Dom Casmurro", Author = "Machado" },
+            new() { Id = 2, Title = "Iracema", Author = "Alencar" },
+            new() { Id = 3, Title = "O Cortico", Author = "Azevedo" }
+        };
+        _booksAccess.FetchAllBooksAsync().Returns(books);
+        _readingStateAccess.FetchProgressAsync(Arg.Any<int>()).Returns((ReadingProgress?)null);
+
+        var result = await _sut.ListBookSummariesAsync("ALENCAR");
+
+        Assert.Single(result);
+        Assert.Equal("Iracema", result[0].Title);
+    }
+
+    [Fact]
+    public async Task ListBookSummariesAsync_ProjectsLastReadAtAndTotalChapters()
+    {
+        var readAt = new DateTime(2026, 7, 1, 10, 0, 0, DateTimeKind.Utc);
+        var books = new List<Book>
+        {
+            new() { Id = 1, Title = "Dom Casmurro", Author = "Machado", TotalChapters = 12 },
+            new() { Id = 2, Title = "Iracema", Author = "Alencar", TotalChapters = 8 }
+        };
+        var progress1 = new ReadingProgress { BookId = 1, UpdatedAt = readAt };
+        _booksAccess.FetchAllBooksAsync().Returns(books);
+        _readingStateAccess.FetchProgressAsync(1).Returns(progress1);
+        _readingStateAccess.FetchProgressAsync(2).Returns((ReadingProgress?)null);
+
+        var result = await _sut.ListBookSummariesAsync();
+
+        Assert.Equal(readAt, result[0].LastReadAt);
+        Assert.Equal(12, result[0].TotalChapters);
+        Assert.Null(result[1].LastReadAt);
+        Assert.Equal(8, result[1].TotalChapters);
+    }
+
+    [Fact]
+    public async Task ListRecentBookSummariesAsync_OrdersByLastReadDescending()
+    {
+        var older = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var newer = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var books = new List<Book>
+        {
+            new() { Id = 1, Title = "Dom Casmurro" },
+            new() { Id = 2, Title = "Iracema" }
+        };
+        _booksAccess.FetchAllBooksAsync().Returns(books);
+        _readingStateAccess.FetchProgressAsync(1).Returns(new ReadingProgress { BookId = 1, UpdatedAt = older });
+        _readingStateAccess.FetchProgressAsync(2).Returns(new ReadingProgress { BookId = 2, UpdatedAt = newer });
+
+        var result = await _sut.ListRecentBookSummariesAsync();
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Iracema", result[0].Title);
+        Assert.Equal("Dom Casmurro", result[1].Title);
+    }
+
+    [Fact]
+    public async Task ListRecentBookSummariesAsync_ExcludesBooksWithoutReadingProgress()
+    {
+        var readAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var books = new List<Book>
+        {
+            new() { Id = 1, Title = "Dom Casmurro" },
+            new() { Id = 2, Title = "Iracema" }
+        };
+        _booksAccess.FetchAllBooksAsync().Returns(books);
+        _readingStateAccess.FetchProgressAsync(1).Returns(new ReadingProgress { BookId = 1, UpdatedAt = readAt });
+        _readingStateAccess.FetchProgressAsync(2).Returns((ReadingProgress?)null);
+
+        var result = await _sut.ListRecentBookSummariesAsync();
+
+        Assert.Single(result);
+        Assert.Equal("Dom Casmurro", result[0].Title);
+    }
 }

@@ -18,23 +18,31 @@ public class LibraryManager(
     public Task<IReadOnlyList<Book>> ListBooksAsync() =>
         booksAccess.FetchAllBooksAsync();
 
-    public async Task<IReadOnlyList<BookSummary>> ListBookSummariesAsync()
+    public async Task<IReadOnlyList<BookSummary>> ListBookSummariesAsync(string query = "")
     {
         var books = await booksAccess.FetchAllBooksAsync();
+        var matches = string.IsNullOrEmpty(query) ? books : FilterByTitleOrAuthor(books, query);
         var summaries = new List<BookSummary>(books.Count);
+        foreach (var book in matches)
+        {
+            var progress = await readingStateAccess.FetchProgressAsync(book.Id);
+            summaries.Add(ToSummary(book, progress));
+        }
+        return summaries;
+    }
+
+    public async Task<IReadOnlyList<BookSummary>> ListRecentBookSummariesAsync()
+    {
+        var books = await booksAccess.FetchAllBooksAsync();
+        var recent = new List<BookSummary>(books.Count);
         foreach (var book in books)
         {
             var progress = await readingStateAccess.FetchProgressAsync(book.Id);
-            summaries.Add(new BookSummary
-            {
-                Id = book.Id,
-                Title = book.Title,
-                Author = book.Author,
-                CoverImagePath = book.CoverImagePath,
-                ProgressPercentage = progress?.ProgressPercentage ?? 0
-            });
+            if (progress is null)
+                continue;
+            recent.Add(ToSummary(book, progress));
         }
-        return summaries;
+        return recent.OrderByDescending(s => s.LastReadAt).ToList();
     }
 
     public async Task<Book> ImportBookAsync(string filePath)
@@ -77,6 +85,22 @@ public class LibraryManager(
                      || b.Author.Contains(query, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
+
+    private static IEnumerable<Book> FilterByTitleOrAuthor(IEnumerable<Book> books, string query) =>
+        books.Where(b => b.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                       || b.Author.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+    private static BookSummary ToSummary(Book book, ReadingProgress? progress) =>
+        new()
+        {
+            Id = book.Id,
+            Title = book.Title,
+            Author = book.Author,
+            CoverImagePath = book.CoverImagePath,
+            ProgressPercentage = progress?.ProgressPercentage ?? 0,
+            LastReadAt = progress?.UpdatedAt,
+            TotalChapters = book.TotalChapters
+        };
 
     private async Task<string> SaveCoverImageAsync(string epubPath)
     {
