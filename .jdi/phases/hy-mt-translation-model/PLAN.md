@@ -66,7 +66,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** none
 - **Test:** os proprios (xUnit, `Path.GetTempPath()` isolado por `Guid`, ja e o padrao do arquivo)
 - **Commit:** `test(hy-mt-translation-model): cover model lookup with a foreign gguf on disk`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** item 3 (metade vermelha)
 
 #### T-2: `THIRD-PARTY-NOTICES.md` na raiz
@@ -87,7 +87,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** none
 - **Test:** N/A (artefato de documentacao; coberto pelo `Verify:` do DoD 4)
 - **Commit:** `docs(hy-mt-translation-model): add third-party notices for the Tencent HY model`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** item 4 (parte do arquivo)
 
 #### T-3: 4o botao de modelo + atribuicao no `SettingsOverlay`
@@ -117,7 +117,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** none
 - **Test:** build do TFM Windows (`src/TranslateReader/` nao tem projeto de teste — D-2026-07-30-regression-suite-2)
 - **Commit:** `feat(hy-mt-translation-model): add the HY-MT model button to the settings overlay`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** item 4 (parte da UI)
 
 ### Wave 2
@@ -156,7 +156,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** T-1
 - **Test:** os 8 do filtro do DoD 3 + suite completa como regressao
 - **Commit:** `fix(hy-mt-translation-model): make model availability checks filename-aware`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 3 e 6
 
 ### Wave 3
@@ -204,7 +204,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** T-4
 - **Test:** os 7 do filtro do DoD 2 + suite completa
 - **Commit:** `feat(hy-mt-translation-model): resolve the translation model from persisted settings`
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 1, 2, 5 e 6
 
 ### Wave 4
@@ -228,7 +228,7 @@ nem `.jdi/todos.md` (views geradas). Scope creep -> arquivo NOVO em `.jdi/todos/
 - **Dependencies:** T-3, T-5
 - **Test:** suite C# completa + build do TFM Windows
 - **Commit:** nenhum (sem diff versionado)
-- **Status:** pending
+- **Status:** completed
 - **DoD:** itens 1 a 6 (corrida de fechamento)
 
 ## Riscos nomeados
