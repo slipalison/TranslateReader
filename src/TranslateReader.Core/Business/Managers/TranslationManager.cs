@@ -356,6 +356,14 @@ public class TranslationManager(
     public Task DeleteModelAsync() =>
         modelAccess.DeleteModelAsync();
 
+    public async Task<TranslationModelStatus> GetSelectedModelStatusAsync()
+    {
+        var settings = await settingsAccess.FetchSettingsAsync();
+        var model = ResolveModel(settings.TranslationModelName);
+        var isDownloaded = modelAccess.IsModelAvailable(model.FileName);
+        return new TranslationModelStatus(model.Name, model.FileName, model.SizeBytes, isDownloaded);
+    }
+
     private static string ComputeHash(string text, string sourceLanguage, string targetLanguage)
     {
         var input = $"{sourceLanguage}|{targetLanguage}|{text}";

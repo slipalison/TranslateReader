@@ -218,6 +218,43 @@ public class TranslationManagerTests
     }
 
     [Fact]
+    public async Task GetSelectedModelStatusAsync_ReturnsTheModelSelectedInSettings()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "hy-mt1.5-1.8b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        var status = await _sut.GetSelectedModelStatusAsync();
+
+        Assert.Equal("hy-mt1.5-1.8b", status.Name);
+        Assert.Equal("HY-MT1.5-1.8B-Q4_K_M.gguf", status.FileName);
+        Assert.Equal(1_133_080_512, status.SizeBytes);
+    }
+
+    [Fact]
+    public async Task GetSelectedModelStatusAsync_ReportsDownloadedWhenTheFileExists()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
+        _modelAccess.IsModelAvailable("gemma-2-2b-it-Q4_K_M.gguf").Returns(true);
+
+        var status = await _sut.GetSelectedModelStatusAsync();
+
+        Assert.True(status.IsDownloaded);
+    }
+
+    [Fact]
+    public async Task GetSelectedModelStatusAsync_FallsBackToGemmaForAnUnregisteredName()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "qwen-2.5-3b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        var status = await _sut.GetSelectedModelStatusAsync();
+
+        Assert.Equal("gemma-2-2b", status.Name);
+        Assert.Equal("gemma-2-2b-it-Q4_K_M.gguf", status.FileName);
+        Assert.False(status.IsDownloaded);
+    }
+
+    [Fact]
     public async Task TranslateChapterAsync_SkipsEmptyParagraphs()
     {
         SetupBookAndChapter("<html><body><p>Hello</p><p>   </p><p>World</p></body></html>");
