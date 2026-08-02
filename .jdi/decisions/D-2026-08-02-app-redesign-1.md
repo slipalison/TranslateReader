@@ -1,0 +1,1 @@
+D-2026-08-02-app-redesign-1: Phase 'Redesign visual do app (Library, Reader, Settings)' (slug: app-redesign) added. Reason: design/ folder mockups (Claude artifact exports, TranslateReader Desktop.html + Mobile.html) - pasted card via /jdi-issue.
