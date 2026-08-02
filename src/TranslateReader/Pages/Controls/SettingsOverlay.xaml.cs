@@ -169,6 +169,7 @@ public partial class SettingsOverlay : ContentView
         GemmaModelButton.BorderColor = modelName == "gemma-2-2b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
         QwenModelButton.BorderColor = modelName == "qwen-2.5-3b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
         PhiModelButton.BorderColor = modelName == "phi-3.5" ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        HyMtModelButton.BorderColor = modelName == "hy-mt1.5-1.8b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
     }
 
     private void UpdateModelStatus()
@@ -195,6 +196,13 @@ public partial class SettingsOverlay : ContentView
     {
         _settings.TranslationModelName = "phi-3.5";
         UpdateModelButtonBorders("phi-3.5");
+        NotifySettingsChanged();
+    }
+
+    private void OnHyMtClicked(object? sender, EventArgs e)
+    {
+        _settings.TranslationModelName = "hy-mt1.5-1.8b";
+        UpdateModelButtonBorders("hy-mt1.5-1.8b");
         NotifySettingsChanged();
     }
 

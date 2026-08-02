@@ -189,38 +189,54 @@
 
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Modelo" FontSize="14" />
-                    <HorizontalStackLayout Spacing="12">
-                        <Button x:Name="GemmaModelButton"
-                                Text="Gemma 2B"
-                                Clicked="OnGemmaClicked"
-                                BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
-                                TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
-                                BorderColor="#2563EB"
-                                BorderWidth="2"
-                                CornerRadius="20"
-                                Padding="12,6"
-                                FontSize="12" />
-                        <Button x:Name="QwenModelButton"
-                                Text="Qwen 3B"
-                                Clicked="OnQwenClicked"
-                                BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
-                                TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
-                                BorderColor="Transparent"
-                                BorderWidth="2"
-                                CornerRadius="20"
-                                Padding="12,6"
-                                FontSize="12" />
-                        <Button x:Name="PhiModelButton"
-                                Text="Phi 3.5"
-                                Clicked="OnPhiClicked"
-                                BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
-                                TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
-                                BorderColor="Transparent"
-                                BorderWidth="2"
-                                CornerRadius="20"
-                                Padding="12,6"
-                                FontSize="12" />
-                    </HorizontalStackLayout>
+                    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                        <HorizontalStackLayout Spacing="12">
+                            <Button x:Name="GemmaModelButton"
+                                    Text="Gemma 2B"
+                                    Clicked="OnGemmaClicked"
+                                    BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                    TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                    BorderColor="#2563EB"
+                                    BorderWidth="2"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    FontSize="12" />
+                            <Button x:Name="QwenModelButton"
+                                    Text="Qwen 3B"
+                                    Clicked="OnQwenClicked"
+                                    BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                    TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                    BorderColor="Transparent"
+                                    BorderWidth="2"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    FontSize="12" />
+                            <Button x:Name="PhiModelButton"
+                                    Text="Phi 3.5"
+                                    Clicked="OnPhiClicked"
+                                    BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                    TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                    BorderColor="Transparent"
+                                    BorderWidth="2"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    FontSize="12" />
+                            <Button x:Name="HyMtModelButton"
+                                    Text="HY-MT 1.8B"
+                                    Clicked="OnHyMtClicked"
+                                    BackgroundColor="{AppThemeBinding Light=#F0F0F0, Dark=#2A2A3E}"
+                                    TextColor="{AppThemeBinding Light=#1A1A1A, Dark=#E4E4E7}"
+                                    BorderColor="Transparent"
+                                    BorderWidth="2"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    FontSize="12" />
+                        </HorizontalStackLayout>
+                    </ScrollView>
+                    <Label Text="Powered by Tencent HY. Nao afiliado a Tencent. Detalhes em THIRD-PARTY-NOTICES.md."
+                           FontSize="12"
+                           LineBreakMode="WordWrap"
+                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
                 </VerticalStackLayout>
 
                 <Label x:Name="ModelStatusLabel"
