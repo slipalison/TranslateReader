@@ -31,6 +31,9 @@ public partial class ReaderPageModel(
     public partial string CurrentCss { get; set; } = string.Empty;
 
     [ObservableProperty]
+    public partial string ChapterSubtitle { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -119,6 +122,7 @@ public partial class ReaderPageModel(
             ChapterContent = bodyHtml;
             HasPreviousChapter = CurrentChapterIndex > 0;
             HasNextChapter = CurrentChapterIndex < Chapters.Count - 1;
+            UpdateChapterSubtitle();
         }
         catch (Exception ex)
         {
@@ -142,6 +146,18 @@ public partial class ReaderPageModel(
         ChapterContent = HtmlUtility.BuildContinuousScrollHtml(chapterContents);
         HasPreviousChapter = false;
         HasNextChapter = false;
+        UpdateChapterSubtitle();
+    }
+
+    // Desktop shows the author, mobile drops it to fit the compact header
+    // (PIXEL-SPEC "Reader - top bar" / "Reader mobile").
+    private void UpdateChapterSubtitle()
+    {
+        var chapterNumber = CurrentChapterIndex + 1;
+        var totalChapters = Chapters.Count;
+        ChapterSubtitle = DeviceInfo.Current.Idiom == DeviceIdiom.Phone
+            ? $"Cap. {chapterNumber} de {totalChapters}"
+            : $"Capítulo {chapterNumber} de {totalChapters} — {Book?.Author}";
     }
 
     public async Task ApplySettingsAsync(ReadingSettings settings)

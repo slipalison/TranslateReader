@@ -231,7 +231,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   esquecer que `PreviousButton/NextButton/PageIndicatorLabel` tem visibilidade controlada no
   code-behind — preservar a logica, so mudar visual/formato.
 - **Criterio de sucesso:** comando do **DoD 6** do CONTEXT.md.
-- **Status:** pending
+- **Status:** completed
 
 ### T-7: SettingsOverlay — painel 380, cards de tema, segmented, lista de modelos
 - **Files:** `Pages/Controls/SettingsOverlay.xaml`, `Pages/Controls/SettingsOverlay.xaml.cs`
