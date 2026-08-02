@@ -121,11 +121,13 @@ public partial class SettingsOverlay : ContentView
         WordSpacingLabel.Text = $"{_settings.WordSpacing:F1}px";
     }
 
+    private static readonly Color UnselectedCardBorderColor = (Color)Application.Current!.Resources["ColorDivider"];
+
     private void UpdateThemeButtonBorders(ThemeType theme)
     {
-        LightThemeButton.BorderColor = theme == ThemeType.Light ? SelectedIndicatorColor : Colors.Transparent;
-        DarkThemeButton.BorderColor = theme == ThemeType.Dark ? SelectedIndicatorColor : Colors.Transparent;
-        SepiaThemeButton.BorderColor = theme == ThemeType.Sepia ? SelectedIndicatorColor : Colors.Transparent;
+        LightThemeButton.BorderColor = theme == ThemeType.Light ? SelectedIndicatorColor : UnselectedCardBorderColor;
+        DarkThemeButton.BorderColor = theme == ThemeType.Dark ? SelectedIndicatorColor : UnselectedCardBorderColor;
+        SepiaThemeButton.BorderColor = theme == ThemeType.Sepia ? SelectedIndicatorColor : UnselectedCardBorderColor;
     }
 
     private void NotifySettingsChanged()
@@ -198,10 +200,20 @@ public partial class SettingsOverlay : ContentView
         NotifySettingsChanged();
     }
 
+    private static readonly Color InactiveSegmentTextColor = (Color)Application.Current!.Resources["ColorText"];
+
     private void UpdateReadingModeButtonBorders(ReadingMode mode)
     {
-        ScrollModeButton.BorderColor = mode == ReadingMode.Scroll ? SelectedIndicatorColor : Colors.Transparent;
-        PaginatedModeButton.BorderColor = mode == ReadingMode.Paginated ? SelectedIndicatorColor : Colors.Transparent;
+        var scrollActive = mode == ReadingMode.Scroll;
+        var paginatedActive = mode == ReadingMode.Paginated;
+
+        ScrollModeButton.TextColor = scrollActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
+        PaginatedModeButton.TextColor = paginatedActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
+
+        if (ScrollModeButton.ImageSource is FontImageSource scrollIcon)
+            scrollIcon.Color = scrollActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
+        if (PaginatedModeButton.ImageSource is FontImageSource paginatedIcon)
+            paginatedIcon.Color = paginatedActive ? SelectedIndicatorColor : InactiveSegmentTextColor;
     }
 
     private void OnScrollModeClicked(object? sender, EventArgs e)
@@ -218,12 +230,25 @@ public partial class SettingsOverlay : ContentView
         NotifySettingsChanged();
     }
 
+    private static readonly Color UnselectedRowBorderColor = (Color)Application.Current!.Resources["Neutral800"];
+    private static readonly Color UnselectedRowIconColor = (Color)Application.Current!.Resources["Neutral500"];
+    private static readonly Color SelectedRowBackground = (Color)Application.Current!.Resources["AccentTint08"];
+
     private void UpdateModelButtonBorders(string modelName)
     {
-        GemmaModelButton.BorderColor = modelName == "gemma-2-2b" ? SelectedIndicatorColor : Colors.Transparent;
-        QwenModelButton.BorderColor = modelName == "qwen-2.5-3b" ? SelectedIndicatorColor : Colors.Transparent;
-        PhiModelButton.BorderColor = modelName == "phi-3.5" ? SelectedIndicatorColor : Colors.Transparent;
-        HyMtModelButton.BorderColor = modelName == "hy-mt1.5-1.8b" ? SelectedIndicatorColor : Colors.Transparent;
+        SetModelRowSelected(GemmaModelButton, GemmaModelRadioIcon, modelName == "gemma-2-2b");
+        SetModelRowSelected(QwenModelButton, QwenModelRadioIcon, modelName == "qwen-2.5-3b");
+        SetModelRowSelected(PhiModelButton, PhiModelRadioIcon, modelName == "phi-3.5");
+        SetModelRowSelected(HyMtModelButton, HyMtModelRadioIcon, modelName == "hy-mt1.5-1.8b");
+    }
+
+    private static void SetModelRowSelected(Border row, Label radioIcon, bool isSelected)
+    {
+        row.Stroke = isSelected ? SelectedIndicatorColor : UnselectedRowBorderColor;
+        row.BackgroundColor = isSelected ? SelectedRowBackground : Colors.Transparent;
+        radioIcon.FontFamily = isSelected ? "PhosphorFill" : "Phosphor";
+        radioIcon.Text = isSelected ? "\uE184" : "\uE18A";
+        radioIcon.TextColor = isSelected ? SelectedIndicatorColor : UnselectedRowIconColor;
     }
 
     private void UpdateModelStatus()

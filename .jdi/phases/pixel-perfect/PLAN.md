@@ -274,7 +274,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   valores/logica de settings (so visual); nao esquecer que `Color.FromArgb` no code-behind
   vira leitura de resource.
 - **Criterio de sucesso:** comando do **DoD 7** do CONTEXT.md.
-- **Status:** pending
+- **Status:** completed
 
 ### T-8: TranslateBookPopup — 440w, banner depois dos pickers, botoes outline
 - **Files:** `Pages/Controls/TranslateBookPopup.xaml`
