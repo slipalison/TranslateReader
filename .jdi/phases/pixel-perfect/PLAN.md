@@ -341,7 +341,141 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
 
 ---
 
-## Encerramento da phase (apos T-9)
+## Fix-round (iter 2) — bugs reportados pelo usuario em teste manual ao vivo
+
+> D-...-10. O loop convergiu (iter 1, APPROVED_WITH_WARNINGS) mas o usuario testou o app de
+> verdade e achou 8 defeitos que nenhum DoD automatico pega sem rodar a UI. Investigacao ja feita
+> (nao repita — execute): causa raiz confirmada por leitura de codigo para os itens A-D; item E e
+> so registro de todo (nao mexer em `Resources/Raw/**` nem Core); itens F-H precisam de
+> investigacao dirigida (hipotese dada, pode terminar BLOCKED se nao confirmavel sem screenshot
+> real).
+
+### T-10: Fix-round — bordas, busca, titulo duplicado, botoes cortados, e 3 investigacoes
+- **Files:** `Pages/LibraryPage.xaml`, `Pages/ReaderPage.xaml`, `Pages/Controls/SettingsOverlay.xaml`,
+  `Pages/Controls/SettingsOverlay.xaml.cs`, `.jdi/todos/` (novo item, registro do E)
+- **Passos:**
+
+  **A — Borda grossa errada (Sidebar Library + painel TOC Reader).**
+  Causa: `Border.StrokeThickness` e `double` em MAUI (nao `Thickness`); `"0,0,1,0"` vira `10` via
+  `double.TryParse` com `NumberStyles.Any` (virgulas tratadas como separador de milhar) —
+  confirmado nesta sessao. Fix (hairline de verdade, nao aproximacao):
+  1. `LibraryPage.xaml`, `Border x:Name="SidebarPanel"` (~linha 16-24): trocar
+     `Stroke="{StaticResource Neutral800}"` `StrokeThickness="0,0,1,0"` por
+     `Stroke="Transparent"` (remove a stroke quebrada do Border). Logo APOS o `</Border>` de
+     fechamento do `SidebarPanel` (ainda dentro do `Grid ColumnDefinitions="Auto,*"` raiz,
+     mesmo `Grid.Column="0"`), adicionar:
+     ```xml
+     <BoxView Grid.Column="0"
+              IsVisible="{OnIdiom Default=False, Desktop=True}"
+              WidthRequest="1"
+              HorizontalOptions="End"
+              BackgroundColor="{StaticResource ColorDivider}" />
+     ```
+  2. `ReaderPage.xaml`, `Border x:Name="ChaptersPanel"` (~linha 176-187): trocar
+     `Stroke="{StaticResource Neutral800}"` `StrokeThickness="0,0,1,0"` por `Stroke="Transparent"`.
+     O conteudo do Border hoje e `<ScrollView>...</ScrollView>` direto (Padding do Border ja e
+     `0`, entao nao ha inset a corrigir) — envolver o `ScrollView` existente e um novo `BoxView`
+     em um `Grid` (ambos filhos do MESMO Grid, se sobrepondo — comportamento padrao de Grid sem
+     Row/Column explicito):
+     ```xml
+     <Grid>
+         <ScrollView> ... (conteudo existente, sem mudar) ... </ScrollView>
+         <BoxView WidthRequest="1" HorizontalOptions="End" BackgroundColor="{StaticResource ColorDivider}" />
+     </Grid>
+     ```
+     (substitui o `<ScrollView>` direto como filho do Border por esse `<Grid>` envolvendo o
+     mesmo `ScrollView`).
+  3. Grep de confirmacao: `grep -c 'StrokeThickness="0,0,1,0"' src/TranslateReader/Pages/LibraryPage.xaml src/TranslateReader/Pages/ReaderPage.xaml` deve dar `0` nos dois.
+
+  **B — Campo de busca ilegivel / placeholder cortado (Library).**
+  Causa: estilo implicito `Entry` (`Styles.xaml`) forca `MinimumHeightRequest="44"`; o `Border`
+  que envolve `SearchEntry` tem `HeightRequest` 35 (Desktop) / 38 (mobile), menor que o minimo
+  do filho. Fix: em `LibraryPage.xaml`, no `<Entry x:Name="SearchEntry" ...>`, adicionar
+  `MinimumHeightRequest="0"` explicito (sobrescreve o piso herdado; a altura visual continua
+  controlada pelo `Border` pai).
+
+  **C — "Biblioteca" aparecendo duas vezes (Library).**
+  Causa: `LibraryPage.xaml` nao suprime a nav bar nativa do Shell nem define `Shell.TitleView`;
+  a pagina ja tem seu proprio cabecalho customizado completo. Fix: no elemento raiz
+  `<ContentPage ...>` de `LibraryPage.xaml`, adicionar o atributo
+  `Shell.NavBarIsVisible="False"`. Conferir depois que `ReaderPage.xaml` (que usa
+  `Shell.TitleView` custom, nao este atributo) continua funcionando sem alteracao — nao mexer
+  em `ReaderPage.xaml` por esta causa.
+
+  **D — Botoes de configuracoes/traducao cortados (Reader, `Shell.TitleView`).**
+  Causa: estilo implicito `Button` (`Styles.xaml`) forca `Padding="14,10"`; os 3 botoes do
+  `Shell.TitleView` de `ReaderPage.xaml` (`TocButton`, botao "Aa" com
+  `Clicked="OnTranslateButtonClicked"`, botao engrenagem com `Clicked="OnSettingsButtonClicked"`)
+  foram fixados em 36x36 sem sobrescrever `Padding` — o padding herdado nao cabe na caixa. Fix:
+  adicionar `Padding="0"` explicito nos 3 `<Button>` do `Shell.TitleView`.
+
+  **E — Fonte "OpenDyslexic" nao funciona (leitura, WebView). FORA DE ESCOPO — so registrar.**
+  Confirmado: e fonte de CONTEUDO (CSS dentro do WebView), nao fonte nativa MAUI; nao ha arquivo
+  de fonte nem `@font-face` em `Resources/Raw/wwwroot`; corrigir tocaria `Resources/Raw/**`,
+  proibido por D-...-1 (fronteira desta phase, provada pelo DoD 11). NAO editar nenhum arquivo em
+  `Resources/Raw/` nem em `src/TranslateReader.Core/`. NAO remover "OpenDyslexic" do array
+  `FontOptions` em `SettingsOverlay.xaml.cs` (seria regressao funcional, so o efeito visual que
+  falta). Acao: criar `.jdi/todos/2026-08-02-opendyslexic-webfont.md` (formato igual aos outros
+  arquivos de `.jdi/todos/`) descrevendo o gap (falta `.woff`/`.ttf` + `@font-face` em
+  `Resources/Raw/wwwroot`) para uma phase futura resolver.
+
+  **F — "Modo de leitura" nao bate com o mockup (Settings). Investigar, hipotese dada.**
+  O codigo de `UpdateReadingModeButtonBorders` em `SettingsOverlay.xaml.cs` parece correto no
+  papel (troca `TextColor` do `Button` e `Color` do `FontImageSource` do estado ativo/inativo).
+  Hipotese a testar: `FontImageSource.Color` mutado APOS a construcao pode nao re-renderizar em
+  alguns handlers de plataforma (o glifo e rasterizado uma vez). Se, apos investigar
+  (ex.: procurar issues conhecidas do MAUI sobre `FontImageSource.Color` nao atualizar em
+  runtime, ou testar/inspecionar o comportamento), essa for a causa: trocar a mutacao de
+  `.Color` por criar uma NOVA instancia de `FontImageSource` e reatribuir
+  `Button.ImageSource` inteiro a cada troca de estado (em `UpdateReadingModeButtonBorders`),
+  tanto para `PaginatedModeButton` quanto `ScrollModeButton`. Se a causa for outra (ex.: o
+  `ReadingSettings.ReadingMode` persistido default nao bate com o botao que a UI mostra ativo
+  por padrao no XAML), corrigir a causa real encontrada. Se nao for possivel confirmar SEM
+  rodar a UI ao vivo, marcar este item como BLOCKED no SUMMARY com a hipotese testada e o que
+  falta pra confirmar (ex.: "precisa de screenshot real do estado inicial e apos 1 clique").
+
+  **G — Layout do Settings nao bate com o modelo. Re-auditar contra PIXEL-SPEC.**
+  Reler `design/PIXEL-SPEC.md` secao "Settings — painel desktop" INTEIRA e comparar, linha a
+  linha, contra `SettingsOverlay.xaml` atual. Focar no que e mais facil de ter divergido
+  silenciosamente: paddings exatos do header/corpo, tamanho dos cards de tema (67h desktop/59h
+  mobile), o segmented control (35h), os paddings dos 4 sliders, e a lista de modelos (53h por
+  row). Corrigir qualquer divergencia real encontrada (nao cosmetica-a-esmo — so o que
+  literalmente diverge do texto da spec). Se nada divergir da spec escrita, documentar no
+  SUMMARY que a auditoria foi feita e nada foi encontrado alem do que ja e conhecido (deltas
+  conscientes do SUMMARY.md do iter 1) — nao é permitido responder "tudo igual" sem mostrar o
+  que foi comparado.
+
+  **H — Animacao/indicador de traducao automatica "nao aparece". Investigar.**
+  `ReaderPageModel.IsTranslationModeActive` ja existe e esta ligado a um `BoxView` de 3px de
+  altura (`ReaderPage.xaml`, logo abaixo do `Shell.TitleView`) que fica visivel quando o modo
+  de traducao esta ativo. Hipotese: 3px e sutil demais pra ser percebido como "esta ativo", e
+  nao ha nenhuma animacao de entrada (so `IsVisible` binding direto). Se confirmado que e so
+  isso (sem bug de binding/logica), aumentar a percepcao SEM inventar logica de negocio nova:
+  (a) aumentar a `HeightRequest` do BoxView para algo mais perceptivel (ex. 4-6px, ainda discreto
+  mas visivel) e (b) animar a entrada com `FadeToAsync` (0 -> 1 de opacidade, ~200ms) disparado
+  no code-behind quando `IsTranslationModeActive` muda pra `true` (seguir o padrao
+  `PropertyChanged` que `ReaderPage.xaml.cs` ja usa pra outras props do PageModel — ver o
+  `case nameof(ReaderPageModel.IsTranslationModeActive):` ja existente no arquivo, so falta a
+  animacao dentro dele). NAO adicionar animacao no Manager/Engine — isso e puramente View. Se a
+  causa raiz for outra (ex.: `IsTranslationModeActive` nunca vira `true` de verdade em uso
+  normal — bug de logica no PageModel, nao so de percepcao visual), NAO mexer no PageModel (fora
+  do escopo Client-view desta phase) — documentar como BLOCKED com a causa encontrada, pra virar
+  bug de outra phase.
+
+- **NAO FACA:** nao tocar `src/TranslateReader.Core/**` nem `src/TranslateReader/Resources/Raw/**`
+  em NENHUM dos itens A-H (DoD 11 continua valendo); nao remover a opcao "OpenDyslexic" do
+  picker; nao inventar logica de negocio nova em Manager/Engine pro item H.
+- **Criterio de sucesso (itens A-D, mecanicos):**
+  `L=src/TranslateReader/Pages/LibraryPage.xaml; R=src/TranslateReader/Pages/ReaderPage.xaml; test "$(grep -c 'StrokeThickness=\"0,0,1,0\"' "$L" "$R" | awk -F: '{s+=$2} END{print s+0}')" -eq 0 && grep -q 'x:Name="SearchEntry"' "$L" && grep -A3 'x:Name="SearchEntry"' "$L" | grep -q 'MinimumHeightRequest="0"' && grep -q 'Shell.NavBarIsVisible="False"' "$L" && grep -c 'Padding="0"' "$R" | awk '{exit ($1>=3)?0:1}'`
+- **Criterio de sucesso (item E):** `test -f .jdi/todos/2026-08-02-opendyslexic-webfont.md && BASE=$(cat .jdi/phases/pixel-perfect/BASELINE) && test -z "$(git diff --name-only "$BASE" -- src/TranslateReader.Core/ src/TranslateReader/Resources/Raw/)"`
+- **Criterio de sucesso (itens F-H):** subjetivo — reviewer julga se a investigacao foi real
+  (hipotese testada, nao so repetida) e se o fix (ou o BLOCKED) e honesto.
+- **Dependencies:** T-1..T-9 (todas completed)
+- **Status:** pending
+
+---
+
+## Encerramento da phase (apos T-9 + T-10)
 1. Rodar os 11 DoD do CONTEXT.md em sequencia; todos exit 0.
 2. Escrever `SUMMARY.md` da phase (o que mudou por task, deltas conscientes, BLOCKED se houver).
 3. Abrir PR de `feat/pixel-perfect` para a branch alvo do momento (se o PR #20 de
