@@ -100,10 +100,11 @@ footer/TOC) e Settings/TranslatePopup, desktop E mobile, sem tocar no Core.
       **Verify:** `mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 > TestResults/pp-build.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/pp-build.log`
       **Source:** D-app-redesign-10
 - [ ] **DoD 10 — Suite inteira verde com os 10 testes novos.** `PixelSpecTests.cs` existe com
-      os 10 `[Fact]` nomeados no PLAN, zero regressao, piso fixo `Total >= 377`,
+      os 10 `[Fact]` nomeados no PLAN, zero regressao, piso fixo `Total >= 375` (365 baseline
+      real + 10 novos — corrigido por D-...-9, o 377 original tinha erro de contagem de +2),
       `Skipped <= 2`
-      **Verify:** `D=test/TranslateReader.Tests/PixelSpecTests.cs; test -f "$D" && for n in DesignTokens_ExposeThePixelSpecExtensions Fonts_InterAndPhosphorAreRegistered Chrome_UsesNoLegacyDangerRed LibraryPage_HasTheListViewAndToggle LibraryPage_ImportButtonLivesInTheTopBar LibraryPage_GridSpanIsAdaptive ReaderPage_HasChapterSubtitleAndStyledFooter SettingsOverlay_ModelsAreAVerticalRadioList SettingsOverlay_UsesPhosphorGlyphsNotAsciiArt TranslateBookPopup_BannerFollowsThePickers; do grep -q "$n" "$D" || exit 1; done && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/pp-suite.log 2>&1 && grep -q "Passed!" TestResults/pp-suite.log && awk '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Skipped:")s=$(i+1);if($i=="Total:")t=$(i+1)}} END{exit (k&&f+0==0&&t+0>=377&&s+0<=2)?0:1}' TestResults/pp-suite.log`
-      **Source:** D-...-8
+      **Verify:** `D=test/TranslateReader.Tests/PixelSpecTests.cs; test -f "$D" && for n in DesignTokens_ExposeThePixelSpecExtensions Fonts_InterAndPhosphorAreRegistered Chrome_UsesNoLegacyDangerRed LibraryPage_HasTheListViewAndToggle LibraryPage_ImportButtonLivesInTheTopBar LibraryPage_GridSpanIsAdaptive ReaderPage_HasChapterSubtitleAndStyledFooter SettingsOverlay_ModelsAreAVerticalRadioList SettingsOverlay_UsesPhosphorGlyphsNotAsciiArt TranslateBookPopup_BannerFollowsThePickers; do grep -q "$n" "$D" || exit 1; done && mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/pp-suite.log 2>&1 && grep -q "Passed!" TestResults/pp-suite.log && awk '/Passed!/{k=1;for(i=1;i<=NF;i++){if($i=="Failed:")f=$(i+1);if($i=="Skipped:")s=$(i+1);if($i=="Total:")t=$(i+1)}} END{exit (k&&f+0==0&&t+0>=375&&s+0<=2)?0:1}' TestResults/pp-suite.log`
+      **Source:** D-...-8, D-...-9
 - [ ] **DoD 11 — Core intocado (prova da fronteira).** Diff da phase inteira nao toca Core nem
       Raw. `PHASE_BASE` = commit registrado em `.jdi/phases/pixel-perfect/BASELINE` (criado no
       inicio da execucao, antes do primeiro commit da phase)
@@ -131,4 +132,7 @@ footer/TOC) e Settings/TranslatePopup, desktop E mobile, sem tocar no Core.
 - **Auto-teste do planner**: nenhum dos nomes novos existe hoje no repo (grep confirmado nesta
   sessao); `#E53E3E` existe em 5 pontos hoje (LibraryPage 1, ReaderPage 2, SettingsOverlay 2 —
   DoD 2 nao passa vazio); `<ToolbarItem` existe hoje (DoD 3 nao passa vazio); suite atual =
-  367 (DoD 10 exige +10).
+  365 (DoD 10 exige +10 = 375). **CORRIGIDO em 2026-08-02 (ver D-...-9): o numero 367 citado
+  aqui originalmente estava errado** (contagem `[Fact]`+`[InlineData]` no commit BASELINE
+  `82df8420ab306c3f5a06e07edc72a0469e5af65c` = 316+49 = 365, confirmado por `git grep` e por
+  `dotnet test` rodando 375/375 apos a phase, 0 falhas, 2 skips — 365 real + 10 novos = 375).
