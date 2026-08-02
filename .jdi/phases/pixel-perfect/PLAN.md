@@ -295,7 +295,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
 - **NAO FACA:** nao mudar o ctor nem o contrato de retorno `(source, target)`; nao renomear
   `BookMetaLabel`/`OfflineBanner`/`SourcePicker`/`TargetPicker`.
 - **Criterio de sucesso:** comando do **DoD 8** do CONTEXT.md.
-- **Status:** pending
+- **Status:** completed
 
 ### T-9: Testes estruturais PixelSpecTests + atualizacao do DesignSystemTests
 - **Files:** `test/TranslateReader.Tests/PixelSpecTests.cs` (novo),
