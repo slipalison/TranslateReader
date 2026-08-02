@@ -70,3 +70,33 @@ format --verify-no-changes` escopado aos 5 arquivos tocados: limpo (exit 0); rod
 reproduz os mesmos 3 erros WHITESPACE de W-1 em arquivos fora desta phase — nao corrigidos, por
 instrucao (roteados para `baseline-de-estilo`). Commit: `6a5fb86` (`fix(app-redesign): resolve DoD 1
 hex blocker + review warnings`).
+
+## Fix round (warnings — iter 2 APPROVED_WITH_WARNINGS, rodada autonoma do `/jdi-issue`)
+
+Corrigidos os 2 warnings novos do `REVIEW.md` (iter 2) marcados como corrigiveis (W-7, W-8). W-1,
+W-5, W-6 sao legado/fora do escopo locked da phase — instrucao explicita para nao tocar, mantidos
+como estao (roteados para `baseline-de-estilo`/`the-method-refactor`).
+
+- **W-7 (DRY sem guarda):** novo `[Fact] ReadingThemeSampleTokens_MatchThemeEngineResolvedColors`
+  em `test/TranslateReader.Tests/DesignSystemTests.cs`. Le os 6 tokens `Reading{Light,Dark,Sepia}
+  {Bg,Text}` de `DesignTokens.xaml` do disco (mesmo padrao dos outros testes da classe) e compara,
+  para cada `ThemeType`, contra `new ThemeEngine().ResolveThemeColors(theme)` (`Background`/`Text`).
+  Se `ThemeEngine.cs` mudar esses hexes no futuro sem atualizar `DesignTokens.xaml`, o teste falha —
+  a duplicacao Core/Client continua sendo a escolha certa pra arquitetura (The Method: Client nao
+  pode chamar Engine), agora com um teste amarrando os dois lados.
+- **W-8 (spinner escondido cedo):** `LibraryPageModel.LoadBooksAsync` — o `finally` que zera
+  `IsBusy` agora usa o MESMO guard de geracao que ja protege a escrita de `Books`/
+  `ContinueReadingBook` (`if (generation == Volatile.Read(ref _loadBooksGeneration)) IsBusy =
+  false;`). Uma chamada obsoleta que termina depois que uma mais nova ja comecou nao esconde mais o
+  spinner enquanto a busca mais recente ainda esta em voo.
+
+**Nota de execucao:** `dotnet format` (sem `--include`) reformatou de raspao 2 arquivos legados fora
+do escopo (`ThemeEngine.cs`, `ThemeEngineTests.cs` — os mesmos 3 erros WHITESPACE de W-1) por serem
+parte da mesma solucao; revertidos com `git checkout --` antes do commit, por instrucao explicita de
+nao tocar W-1. `dotnet format --verify-no-changes` rodado escopado aos 2 arquivos desta rodada
+(`--include LibraryPageModel.cs DesignSystemTests.cs`): limpo (exit 0).
+
+**Reverificacao:** `dotnet build -f net10.0-windows10.0.19041.0`: 0 erros, 16 warnings (identicos
+aos ja documentados, todos pre-existentes). `dotnet test` completo: `Failed: 0`, `Passed: 363`,
+`Skipped: 2`, `Total: 365` (+1 sobre o piso `B+16=364` do DoD 9 — o `[Fact]` novo de W-7; nenhum
+nome de teste anterior removido, sem regressao).

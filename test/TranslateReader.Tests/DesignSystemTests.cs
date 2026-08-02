@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using TranslateReader.Business.Engines;
 using TranslateReader.Models;
 
 namespace TranslateReader.Tests;
@@ -61,6 +62,16 @@ public class DesignSystemTests
         "#F3F5FE", "#292B31", "#F5F4FF", "#2B2741"
     ];
 
+    // Reading-theme sample swatches in DesignTokens.xaml (D-...-3 fix-round) must stay identical
+    // to what ThemeEngine.ResolveThemeColors actually resolves for each ThemeType - otherwise the
+    // SettingsOverlay theme-picker preview silently lies if ThemeEngine's palette ever changes.
+    private static readonly (ThemeType Theme, string BgKey, string TextKey)[] ReadingThemeSampleTokenKeys =
+    [
+        (ThemeType.Light, "ReadingLightBg", "ReadingLightText"),
+        (ThemeType.Dark, "ReadingDarkBg", "ReadingDarkText"),
+        (ThemeType.Sepia, "ReadingSepiaBg", "ReadingSepiaText")
+    ];
+
     private static readonly string[] LibraryPageRequiredNames =
     [
         "SidebarPanel", "BookCountLabel", "SearchEntry", "ContinueReadingHero",
@@ -114,6 +125,21 @@ public class DesignSystemTests
 
         foreach (var hex in MockupPaletteHexes)
             Assert.Contains(hex, tokens, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReadingThemeSampleTokens_MatchThemeEngineResolvedColors()
+    {
+        var tokens = File.ReadAllText(DesignTokensPath);
+        var engine = new ThemeEngine();
+
+        foreach (var (theme, bgKey, textKey) in ReadingThemeSampleTokenKeys)
+        {
+            var resolved = engine.ResolveThemeColors(theme);
+
+            Assert.Equal(resolved.Background, ExtractColorToken(tokens, bgKey), StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(resolved.Text, ExtractColorToken(tokens, textKey), StringComparer.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -241,6 +267,13 @@ public class DesignSystemTests
             yield return RootOf(match.Groups[1].Value);
         foreach (Match match in BindingPathRegex.Matches(xaml))
             yield return RootOf(match.Groups[1].Value);
+    }
+
+    private static string ExtractColorToken(string xaml, string key)
+    {
+        var match = Regex.Match(xaml, $@"x:Key=""{Regex.Escape(key)}"">(#[0-9A-Fa-f]{{6,8}})</Color>");
+        Assert.True(match.Success, $"Token '{key}' not found in DesignTokens.xaml.");
+        return match.Groups[1].Value;
     }
 
     private static string RootOf(string path)

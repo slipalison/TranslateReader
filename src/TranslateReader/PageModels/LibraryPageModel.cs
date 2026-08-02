@@ -93,7 +93,11 @@ public partial class LibraryPageModel(
         }
         finally
         {
-            IsBusy = false;
+            // Same generation guard as the Books/ContinueReadingBook write above: a stale call
+            // finishing after a newer one has already started must not hide the busy indicator
+            // while the newer call is still in flight.
+            if (generation == Volatile.Read(ref _loadBooksGeneration))
+                IsBusy = false;
         }
     }
 
