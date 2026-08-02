@@ -386,3 +386,39 @@ Deliberately NOT touched, with reasoning (to avoid re-litigating on a 3rd declin
 
 Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical, no regression.
 Core/Raw diff against BASELINE still empty.
+
+## Fix-round (iter 5) — arrow-left icon via IconOverride + real animation guard
+
+User asked to loop /jdi-ship attempts until no warnings remain. Re-examined the 2 remaining
+"architecture trade-off" items instead of accepting them as permanently out of reach:
+
+- **Arrow-left icon on Reader back button.** Previously assumed applying PIXEL-SPEC's `E058`
+  glyph meant replacing native `Shell.BackButtonBehavior` with a custom title-bar button (losing
+  native back-gesture platform affordances). Wrong: `BackButtonBehavior` has a documented
+  `IconOverride` property (`Microsoft.Maui.Controls.BackButtonBehavior.IconOverride`, confirmed
+  against the official API reference and present in the repo's own
+  `microsoft.maui.controls.core/10.0.51` assembly) — it swaps ONLY the visual icon, native back
+  navigation/gestures stay fully intact. Added a `FontImageSource` (Phosphor `E058`, `ColorText`)
+  as `IconOverride` in `ReaderPage.xaml`'s existing `Shell.BackButtonBehavior` block. No behavior
+  change, no trade-off — this was a real, closeable gap, not a permanent limitation.
+- **W-4 (overlapping FadeToAsync on rapid mode toggle).** Added
+  `TranslationModeIndicator.CancelAnimations();` before starting the fade in
+  `OnTranslationModeChanged` (`ReaderPage.xaml.cs`) — the standard MAUI guard against exactly this
+  class of overlap. Previously judged "not worth the complexity"; the actual fix is one line.
+
+Still NOT touched, now the only remaining residue, both **structurally outside this phase's
+boundary, not fixable by more Client-layer code**:
+- **W-1 (no live UI confirmation)** — being addressed next by actually building+launching the app
+  and capturing a real screenshot (Windows, via PowerShell) to compare against
+  `design/screenshots/*.jpg` and `design/PIXEL-SPEC.md` directly, instead of continuing to accept
+  this as unverifiable.
+- **W-5 (legacy lint in `ThemeEngine.cs`/`ThemeEngineTests.cs`) and the Qwen/Phi placeholder
+  metadata gap in `TranslationManager.cs`'s `ModelRegistry`** — both live in
+  `src/TranslateReader.Core/`, outside this phase's locked Client-only boundary (D-...-1), which
+  DoD 11 verifies via an empty git diff against `BASELINE`. Fixing these here would mean silently
+  reversing a locked decision instead of actually resolving the phase's own DoD anchor — they stay
+  as accepted, phase-scoped-out residue. (W-5 is already covered by the separate
+  `baseline-de-estilo` roadmap phase; the Qwen/Phi gap is a Core registry completeness item for a
+  future phase, not a design bug.)
+
+Build: 0 errors. Tests: 375 total, 373 passed, 2 skipped, 0 failed — identical, no regression.

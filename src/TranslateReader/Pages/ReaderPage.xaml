@@ -14,7 +14,11 @@
     </ContentPage.Resources>
 
     <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsEnabled="True" />
+        <BackButtonBehavior IsEnabled="True">
+            <BackButtonBehavior.IconOverride>
+                <FontImageSource FontFamily="Phosphor" Glyph="&#xE058;" Size="18" Color="{StaticResource ColorText}" />
+            </BackButtonBehavior.IconOverride>
+        </BackButtonBehavior>
     </Shell.BackButtonBehavior>
 
     <Shell.TitleView>

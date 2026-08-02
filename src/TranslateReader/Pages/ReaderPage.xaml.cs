@@ -193,6 +193,8 @@ public partial class ReaderPage : ContentPage
             // 3px was too subtle to read as "translation mode is on" (user-reported). A visible
             // fade-in on entry makes the state change perceivable without inventing new business
             // logic - the indicator itself already existed, only the entrance was silent.
+            // CancelAnimations guards against a rapid on/off/on toggle overlapping two fades.
+            TranslationModeIndicator.CancelAnimations();
             TranslationModeIndicator.Opacity = 0;
             await TranslationModeIndicator.FadeToAsync(1, TranslationIndicatorFadeMs, Easing.CubicOut);
             return;
