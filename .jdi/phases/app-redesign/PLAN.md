@@ -129,7 +129,7 @@ em desktop e mobile.
   - Suite inteira: `Failed: 0`, `Total >= B+16`, nenhum nome de teste de `origin/main` ausente no HEAD.
 - **Dependencies:** T-1, T-2, T-3, T-4, T-5, T-6, T-7
 - **Test:** os proprios 8 `[Fact]` + `dotnet test` completo com `--collect:"XPlat Code Coverage"`
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 - Total tasks: 8 | Waves: 4 | Estimated parallel speedup: 2x
