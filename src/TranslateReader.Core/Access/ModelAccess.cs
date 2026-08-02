@@ -50,21 +50,13 @@ public class ModelAccess(HttpClient httpClient, string modelsDirectory) : IModel
         File.Move(tmpPath, finalPath, overwrite: true);
     }
 
-    public bool IsModelAvailable()
+    public bool IsModelAvailable(string fileName) =>
+        File.Exists(Path.Combine(_modelsDirectory, fileName));
+
+    public string GetModelPath(string fileName)
     {
-        if (!Directory.Exists(_modelsDirectory))
-            return false;
-
-        return Directory.EnumerateFiles(_modelsDirectory, "*.gguf").Any();
-    }
-
-    public string GetModelPath()
-    {
-        if (!Directory.Exists(_modelsDirectory))
-            throw new FileNotFoundException("Models directory does not exist.");
-
-        var modelFile = Directory.EnumerateFiles(_modelsDirectory, "*.gguf").FirstOrDefault();
-        return modelFile ?? throw new FileNotFoundException("No model file found.");
+        var path = Path.Combine(_modelsDirectory, fileName);
+        return File.Exists(path) ? path : throw new FileNotFoundException("Model file not found.");
     }
 
     public Task DeleteModelAsync()

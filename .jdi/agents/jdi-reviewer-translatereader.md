@@ -1,6 +1,7 @@
 ---
 name: jdi-reviewer-translatereader
 description: Reviewer specialist for project TranslateReader. Runs project-defined quality gates: build, test, coverage, lint, The Method layer rules, C# security/perf rules, and Definition of Done verification.
+model: opus
 runtime_intent:
   role: project_reviewer
   reasoning: xhigh

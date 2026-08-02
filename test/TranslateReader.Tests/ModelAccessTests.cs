@@ -37,7 +37,7 @@ public class ModelAccessTests : IDisposable
     [Fact]
     public void IsModelAvailable_ReturnsFalseWhenDirectoryDoesNotExist()
     {
-        Assert.False(CreateSut().IsModelAvailable());
+        Assert.False(CreateSut().IsModelAvailable(ModelFileName));
     }
 
     [Fact]
@@ -46,41 +46,59 @@ public class ModelAccessTests : IDisposable
         Directory.CreateDirectory(_modelsDir);
         File.WriteAllText(Path.Combine(_modelsDir, "readme.txt"), "not a model");
 
-        Assert.False(CreateSut().IsModelAvailable());
+        Assert.False(CreateSut().IsModelAvailable(ModelFileName));
     }
 
     [Fact]
     public void IsModelAvailable_ReturnsTrueWhenGgufExists()
     {
         Directory.CreateDirectory(_modelsDir);
-        File.WriteAllText(Path.Combine(_modelsDir, "model.gguf"), "fake model data");
+        File.WriteAllText(Path.Combine(_modelsDir, ModelFileName), "fake model data");
 
-        Assert.True(CreateSut().IsModelAvailable());
+        Assert.True(CreateSut().IsModelAvailable(ModelFileName));
     }
 
     [Fact]
     public void GetModelPath_ThrowsWhenDirectoryDoesNotExist()
     {
-        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath());
+        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath(ModelFileName));
     }
 
     [Fact]
     public void GetModelPath_ThrowsWhenNoGgufFiles()
     {
         Directory.CreateDirectory(_modelsDir);
-        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath());
+        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath(ModelFileName));
     }
 
     [Fact]
     public void GetModelPath_ReturnsPathToGgufFile()
     {
         Directory.CreateDirectory(_modelsDir);
-        var expectedPath = Path.Combine(_modelsDir, "test-model.gguf");
+        var expectedPath = Path.Combine(_modelsDir, ModelFileName);
         File.WriteAllText(expectedPath, "fake model data");
 
-        var result = CreateSut().GetModelPath();
+        var result = CreateSut().GetModelPath(ModelFileName);
 
         Assert.Equal(expectedPath, result);
+    }
+
+    [Fact]
+    public void IsModelAvailable_ReturnsFalseWhenADifferentGgufFileExists()
+    {
+        Directory.CreateDirectory(_modelsDir);
+        File.WriteAllText(Path.Combine(_modelsDir, "other-model.gguf"), "different model data");
+
+        Assert.False(CreateSut().IsModelAvailable(ModelFileName));
+    }
+
+    [Fact]
+    public void GetModelPath_ThrowsWhenOnlyADifferentGgufFileExists()
+    {
+        Directory.CreateDirectory(_modelsDir);
+        File.WriteAllText(Path.Combine(_modelsDir, "other-model.gguf"), "different model data");
+
+        Assert.Throws<FileNotFoundException>(() => CreateSut().GetModelPath(ModelFileName));
     }
 
     [Fact]

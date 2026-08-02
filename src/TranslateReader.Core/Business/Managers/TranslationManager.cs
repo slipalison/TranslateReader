@@ -17,27 +17,53 @@ public class TranslationManager(
     IBookTranslationJobAccess bookTranslationJobAccess,
     IPromptUtility promptUtility,
     IBooksAccess booksAccess,
-    IParsingEngine parsingEngine) : ITranslationManager
+    IParsingEngine parsingEngine,
+    ISettingsAccess settingsAccess) : ITranslationManager
 {
-    private static readonly ModelInfo DefaultModel = new(
+    private static readonly ModelInfo GemmaModel = new(
         Name: "gemma-2-2b",
         FileName: "gemma-2-2b-it-Q4_K_M.gguf",
         DownloadUrl: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
         SizeBytes: 1_629_413_888);
 
+    private static readonly ModelInfo HyMtModel = new(
+        Name: "hy-mt1.5-1.8b",
+        FileName: "HY-MT1.5-1.8B-Q4_K_M.gguf",
+        DownloadUrl: "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/HY-MT1.5-1.8B-Q4_K_M.gguf",
+        SizeBytes: 1_133_080_512);
+
+    private static readonly IReadOnlyDictionary<string, ModelInfo> ModelRegistry =
+        new Dictionary<string, ModelInfo>(StringComparer.Ordinal)
+        {
+            [GemmaModel.Name] = GemmaModel,
+            [HyMtModel.Name] = HyMtModel,
+        };
+
     private const float TranslationTemperature = 0.1f;
     private const int MaxTokenMultiplier = 3;
 
+    // Qwen/Phi are offered in the UI but have no real download URL yet (D-...-4); an unknown or
+    // legacy settings value must resolve to a model that is actually downloadable, not throw.
+    private static ModelInfo ResolveModel(string modelName) =>
+        ModelRegistry.TryGetValue(modelName, out var model) ? model : GemmaModel;
+
     public async Task DownloadModelIfNeededAsync(IProgress<double>? progress, CancellationToken ct)
     {
-        if (!modelAccess.IsModelAvailable())
-            await modelAccess.DownloadModelAsync(DefaultModel.DownloadUrl, progress, ct);
+        var settings = await settingsAccess.FetchSettingsAsync();
+        var model = ResolveModel(settings.TranslationModelName);
+
+        if (!modelAccess.IsModelAvailable(model.FileName))
+            await modelAccess.DownloadModelAsync(model.DownloadUrl, progress, ct);
     }
 
     public async Task InitializeEngineIfNeededAsync(CancellationToken ct)
     {
-        if (!translationEngine.IsReady)
-            await translationEngine.InitializeAsync(modelAccess.GetModelPath(), ct);
+        if (translationEngine.IsReady)
+            return;
+
+        var settings = await settingsAccess.FetchSettingsAsync();
+        var model = ResolveModel(settings.TranslationModelName);
+        await translationEngine.InitializeAsync(modelAccess.GetModelPath(model.FileName), ct);
     }
 
     public async Task<BookTranslationResult> TranslateBookAsync(
