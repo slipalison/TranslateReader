@@ -38,7 +38,7 @@ em desktop e mobile.
   - Build Windows Release com 0 erros.
 - **Dependencies:** none
 - **Test:** sem unit test possivel (ResourceDictionary) — coberto por `DesignTokens_ExposeTheMockupPalette` (T-8) + DoD 1/2
-- **Status:** pending
+- **Status:** completed
 
 #### T-2: Core — busca, recentes e projecao em `BookSummary`
 - **Specialist:** jdi-doer-translatereader
@@ -51,7 +51,7 @@ em desktop e mobile.
   - `line-rate >= 0.90` em `TranslateReader.Business.Managers.LibraryManager`.
 - **Dependencies:** none
 - **Test:** 5 `[Fact]` novos (sem `[Theory]`/`[InlineData]`): `ListBookSummariesAsync_WithoutQuery_ReturnsEveryBook`, `ListBookSummariesAsync_WithQuery_FiltersByTitleOrAuthorIgnoringCase`, `ListBookSummariesAsync_ProjectsLastReadAtAndTotalChapters`, `ListRecentBookSummariesAsync_OrdersByLastReadDescending`, `ListRecentBookSummariesAsync_ExcludesBooksWithoutReadingProgress`
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: Core — status do modelo selecionado
 - **Specialist:** jdi-doer-translatereader
@@ -63,7 +63,7 @@ em desktop e mobile.
   - `line-rate >= 0.90` em `TranslateReader.Business.Managers.TranslationManager`.
 - **Dependencies:** none
 - **Test:** 3 `[Fact]` novos: `GetSelectedModelStatusAsync_ReturnsTheModelSelectedInSettings`, `GetSelectedModelStatusAsync_ReportsDownloadedWhenTheFileExists`, `GetSelectedModelStatusAsync_FallsBackToGemmaForAnUnregisteredName`
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 (parallel-eligible)
 
