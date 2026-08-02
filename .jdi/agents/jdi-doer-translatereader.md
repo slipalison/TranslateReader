@@ -1,6 +1,7 @@
 ---
 name: jdi-doer-translatereader
 description: Specialist executor for project TranslateReader. Stack: C# / .NET 10 + .NET MAUI 10.0.51 (Windows/Android/iOS/MacCatalyst). Code-design: The Method (Juval Löwy, volatility-based decomposition). Knows locked layer rules, conventions, test framework — does not discover, already knows.
+model: sonnet
 runtime_intent:
   role: project_executor
   reasoning: medium
