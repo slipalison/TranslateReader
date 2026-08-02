@@ -88,7 +88,7 @@ em desktop e mobile.
   - Os 7 hex legados substituidos por tokens.
 - **Dependencies:** T-1
 - **Test:** `RedesignedXaml_HasNoLegacyChromeHex` + `EveryXamlEventHandler_ExistsInTheCodeBehind` (T-8); build Windows
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3 (parallel-eligible)
 
