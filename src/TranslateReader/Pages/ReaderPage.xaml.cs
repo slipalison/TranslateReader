@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using TranslateReader.Models;
@@ -9,6 +10,8 @@ namespace TranslateReader.Pages;
 
 public partial class ReaderPage : ContentPage
 {
+    private const uint TocAnimationDurationMs = 260;
+
     private readonly ReaderPageModel _pageModel;
     private int _currentPage;
     private int _totalPages;
@@ -33,7 +36,7 @@ public partial class ReaderPage : ContentPage
         SettingsOverlay.CloseRequested += OnSettingsCloseRequested;
         SettingsOverlay.DeleteModelRequested += OnDeleteModelRequested;
         SyncNavigationButtons();
-        SyncSettingsOverlay();
+        _ = SyncSettingsOverlayAsync();
         _ = EnsureWebViewReadyAsync();
     }
 
@@ -89,10 +92,16 @@ public partial class ReaderPage : ContentPage
                 Dispatcher.Dispatch(SyncNavigationButtons);
                 break;
             case nameof(ReaderPageModel.IsSettingsVisible):
-                Dispatcher.Dispatch(SyncSettingsOverlay);
+                Dispatcher.Dispatch(() => _ = SyncSettingsOverlayAsync());
                 break;
             case nameof(ReaderPageModel.IsTranslationModeActive):
                 Dispatcher.Dispatch(() => OnTranslationModeChanged());
+                break;
+            case nameof(ReaderPageModel.IsTocVisible):
+                Dispatcher.Dispatch(() => _ = SyncChaptersPanelAsync());
+                break;
+            case nameof(ReaderPageModel.CurrentChapterIndex):
+                Dispatcher.Dispatch(SyncChaptersSelection);
                 break;
         }
     }
@@ -120,7 +129,7 @@ public partial class ReaderPage : ContentPage
 
             await ContentWebView.EvaluateJavaScriptAsync($"setMode({JsStr(mode)})");
             await ContentWebView.EvaluateJavaScriptAsync($"applyCss({JsStr(_pageModel.CurrentCss)})");
-            
+
             // Give CSS and Mode a tiny bit of time to settle if needed
             await Task.Delay(50);
 
@@ -207,10 +216,51 @@ public partial class ReaderPage : ContentPage
         }
     }
 
-    private void SyncSettingsOverlay()
+    private Task SyncSettingsOverlayAsync() => _pageModel.IsSettingsVisible
+        ? SettingsOverlay.ShowAsync()
+        : SettingsOverlay.HideAsync();
+
+    private void OnTocButtonClicked(object? sender, EventArgs e) =>
+        _pageModel.IsTocVisible = !_pageModel.IsTocVisible;
+
+    private async void OnChapterSelected(object? sender, SelectionChangedEventArgs e)
     {
-        SettingsOverlay.IsVisible = _pageModel.IsSettingsVisible;
-        SettingsOverlay.InputTransparent = !_pageModel.IsSettingsVisible;
+        if (e.CurrentSelection.FirstOrDefault() is Chapter chapter)
+            await _pageModel.GoToChapterAsync(chapter.OrderIndex);
+    }
+
+    private void SyncChaptersSelection()
+    {
+        if (_pageModel.CurrentChapterIndex < 0 || _pageModel.CurrentChapterIndex >= _pageModel.Chapters.Count)
+            return;
+
+        var chapter = _pageModel.Chapters[_pageModel.CurrentChapterIndex];
+        if (!ReferenceEquals(ChaptersCollection.SelectedItem, chapter))
+            ChaptersCollection.SelectedItem = chapter;
+    }
+
+    private Task SyncChaptersPanelAsync() => _pageModel.IsTocVisible
+        ? ShowChaptersPanelAsync()
+        : HideChaptersPanelAsync();
+
+    private async Task ShowChaptersPanelAsync()
+    {
+        ChaptersPanel.IsVisible = true;
+        ChaptersPanel.Opacity = 0;
+        ChaptersPanel.TranslationX = -ChaptersPanel.WidthRequest;
+
+        await Task.WhenAll(
+            ChaptersPanel.FadeToAsync(1, TocAnimationDurationMs, Easing.CubicOut),
+            ChaptersPanel.TranslateToAsync(0, 0, TocAnimationDurationMs, Easing.CubicOut));
+    }
+
+    private async Task HideChaptersPanelAsync()
+    {
+        await Task.WhenAll(
+            ChaptersPanel.FadeToAsync(0, TocAnimationDurationMs, Easing.CubicIn),
+            ChaptersPanel.TranslateToAsync(-ChaptersPanel.WidthRequest, 0, TocAnimationDurationMs, Easing.CubicIn));
+
+        ChaptersPanel.IsVisible = false;
     }
 
     private async void OnPreviousButtonClicked(object? sender, EventArgs e)
@@ -485,4 +535,17 @@ public partial class ReaderPage : ContentPage
 
     private static string JsStr(string? value) =>
         JsonSerializer.Serialize(value ?? string.Empty);
+}
+
+/// <summary>
+/// Displays a zero-based <see cref="Chapter.OrderIndex"/> as the 1-based ordinal shown in the
+/// TOC panel (chapter 1, 2, 3...), matching the mockup numbering.
+/// </summary>
+internal sealed class OneBasedIndexConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is int index ? (index + 1).ToString(culture) : string.Empty;
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }

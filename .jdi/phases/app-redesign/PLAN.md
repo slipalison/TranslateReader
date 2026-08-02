@@ -114,7 +114,7 @@ em desktop e mobile.
   - Os 8 hex legados removidos; `ContentWebView` e os `.js` de `Resources/Raw/` intocados.
 - **Dependencies:** T-1, T-4
 - **Test:** `ReaderPage_HasTheChapterNavigationPanel` + `Overlays_UseAnimatedTransitions` (T-8); build Windows
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 

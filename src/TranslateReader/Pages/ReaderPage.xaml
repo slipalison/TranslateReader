@@ -3,28 +3,43 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:pm="clr-namespace:TranslateReader.PageModels"
              xmlns:controls="clr-namespace:TranslateReader.Pages.Controls"
+             xmlns:models="clr-namespace:TranslateReader.Models;assembly=TranslateReader.Core"
+             xmlns:local="clr-namespace:TranslateReader.Pages"
              x:Class="TranslateReader.Pages.ReaderPage"
              x:DataType="pm:ReaderPageModel"
              Title="{Binding Book.Title}">
+
+    <ContentPage.Resources>
+        <local:OneBasedIndexConverter x:Key="OneBasedIndexConverter" />
+    </ContentPage.Resources>
 
     <Shell.BackButtonBehavior>
         <BackButtonBehavior IsEnabled="True" />
     </Shell.BackButtonBehavior>
 
     <Shell.TitleView>
-        <Grid ColumnDefinitions="*,Auto,Auto" HorizontalOptions="Fill">
-            <Label Grid.Column="0"
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" HorizontalOptions="Fill">
+            <Button Grid.Column="0"
+                    x:Name="TocButton"
+                    Text="&#9776;"
+                    FontSize="18"
+                    BackgroundColor="Transparent"
+                    Clicked="OnTocButtonClicked"
+                    WidthRequest="44"
+                    HeightRequest="44"
+                    IsVisible="{OnIdiom Default=False, Desktop=True}" />
+            <Label Grid.Column="1"
                    Text="{Binding Book.Title}"
                    VerticalOptions="Center"
                    LineBreakMode="TailTruncation" />
-            <Button Grid.Column="1"
+            <Button Grid.Column="2"
                     Text="Aa"
                     FontSize="16"
                     BackgroundColor="Transparent"
                     Clicked="OnTranslateButtonClicked"
                     WidthRequest="44"
                     HeightRequest="44" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     Text="⚙"
                     FontSize="18"
                     BackgroundColor="Transparent"
@@ -43,13 +58,13 @@
 
         <BoxView Grid.Row="0"
                  HeightRequest="3"
-                 Color="#2563EB"
+                 Color="{StaticResource ColorAccent}"
                  IsVisible="{Binding IsTranslationModeActive}" />
 
         <ProgressBar Grid.Row="1"
                      Progress="{Binding TranslationProgress}"
                      IsVisible="{Binding IsTranslating}"
-                     ProgressColor="#2563EB"
+                     ProgressColor="{StaticResource ColorAccent}"
                      HeightRequest="4" />
 
         <HybridWebView Grid.Row="2" 
@@ -79,6 +94,78 @@
                     IsVisible="False" />
         </Grid>
 
+        <!-- Painel de capitulos (TOC): drawer fixo de ~250px que desliza a partir da borda
+             esquerda sobre o conteudo (D-...-4). Diferente do SettingsOverlay, nao ha backdrop
+             escurecido nem bloqueio de input no resto da tela - e um painel opaco ancorado,
+             nao um overlay modal flutuante. Visivel so no Desktop (gatilho = TocButton). -->
+        <Border Grid.RowSpan="4"
+                x:Name="ChaptersPanel"
+                HorizontalOptions="Start"
+                VerticalOptions="Fill"
+                WidthRequest="250"
+                BackgroundColor="{StaticResource ColorBg}"
+                Stroke="{StaticResource Neutral800}"
+                StrokeThickness="0,0,1,0"
+                StrokeShape="Rectangle"
+                Padding="0"
+                IsVisible="False"
+                Opacity="0">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4" Padding="16,20">
+                    <Label Text="Capítulos"
+                           FontSize="12"
+                           TextTransform="Uppercase"
+                           CharacterSpacing="1"
+                           TextColor="{StaticResource Neutral400}"
+                           Margin="4,0,0,8" />
+                    <CollectionView x:Name="ChaptersCollection"
+                                    ItemsSource="{Binding Chapters}"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnChapterSelected">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Chapter">
+                                <Border Margin="0,2"
+                                        Padding="10,8"
+                                        StrokeThickness="0"
+                                        BackgroundColor="Transparent"
+                                        StrokeShape="RoundRectangle 8">
+                                    <Grid ColumnDefinitions="24,*" ColumnSpacing="8">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding OrderIndex, Converter={StaticResource OneBasedIndexConverter}}"
+                                               FontSize="12"
+                                               TextColor="{StaticResource Neutral500}"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding Title}"
+                                               FontSize="14"
+                                               TextColor="{StaticResource ColorText}"
+                                               LineBreakMode="TailTruncation"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroupList>
+                                            <VisualStateGroup x:Name="CommonStates">
+                                                <VisualState x:Name="Normal">
+                                                    <VisualState.Setters>
+                                                        <Setter Property="BackgroundColor" Value="Transparent" />
+                                                    </VisualState.Setters>
+                                                </VisualState>
+                                                <VisualState x:Name="Selected">
+                                                    <VisualState.Setters>
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Accent800}" />
+                                                    </VisualState.Setters>
+                                                </VisualState>
+                                            </VisualStateGroup>
+                                        </VisualStateGroupList>
+                                    </VisualStateManager.VisualStateGroups>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+
         <!-- Overlay de download do modelo -->
         <Grid Grid.RowSpan="4"
               IsVisible="{Binding IsModelDownloading}"
@@ -86,26 +173,27 @@
             <BoxView Color="Black" Opacity="0.4" />
             <Border VerticalOptions="Center"
                     HorizontalOptions="Center"
-                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                    BackgroundColor="{StaticResource ColorSurface}"
+                    Stroke="{StaticResource Neutral800}"
+                    StrokeThickness="1"
+                    Shadow="{StaticResource ShadowMd}"
+                    StrokeShape="RoundRectangle 16"
                     Padding="24"
                     WidthRequest="320">
-                <Border.StrokeShape>
-                    <RoundRectangle CornerRadius="16" />
-                </Border.StrokeShape>
                 <VerticalStackLayout Spacing="16">
                     <Label Text="Baixando modelo de traducao..."
                            FontSize="16"
                            FontAttributes="Bold"
                            HorizontalOptions="Center" />
                     <ProgressBar Progress="{Binding ModelDownloadProgress}"
-                                 ProgressColor="#2563EB" />
+                                 ProgressColor="{StaticResource ColorAccent}" />
                     <Label Text="{Binding ModelDownloadProgress, StringFormat='{0:P0}'}"
                            HorizontalOptions="Center"
                            FontSize="14" />
                     <Label Text="Tamanho aproximado: ~1.6 GB"
                            HorizontalOptions="Center"
                            FontSize="12"
-                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                           TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
                             BackgroundColor="#E53E3E"
@@ -125,24 +213,25 @@
             <BoxView Color="Black" Opacity="0.4" />
             <Border VerticalOptions="Center"
                     HorizontalOptions="Center"
-                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#1A1A2E}"
+                    BackgroundColor="{StaticResource ColorSurface}"
+                    Stroke="{StaticResource Neutral800}"
+                    StrokeThickness="1"
+                    Shadow="{StaticResource ShadowMd}"
+                    StrokeShape="RoundRectangle 16"
                     Padding="24"
                     WidthRequest="320">
-                <Border.StrokeShape>
-                    <RoundRectangle CornerRadius="16" />
-                </Border.StrokeShape>
                 <VerticalStackLayout Spacing="16">
                     <Label Text="Carregando modelo..."
                            FontSize="16"
                            FontAttributes="Bold"
                            HorizontalOptions="Center" />
                     <ActivityIndicator IsRunning="True"
-                                       Color="#2563EB"
+                                       Color="{StaticResource ColorAccent}"
                                        HorizontalOptions="Center" />
                     <Label Text="Preparando o modelo para traducao"
                            HorizontalOptions="Center"
                            FontSize="12"
-                           TextColor="{AppThemeBinding Light=#666666, Dark=#999999}" />
+                           TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
                             BackgroundColor="#E53E3E"
