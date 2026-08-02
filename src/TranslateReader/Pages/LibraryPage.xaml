@@ -194,38 +194,64 @@
               RowSpacing="16">
 
             <!-- Top bar: title + count, search, grid/list toggle, target-language chip, import.
-                 This is also the mobile compact header once SidebarPanel collapses to width 0
-                 (mobile-specific OnIdiom overrides applied in the "Library mobile" pass). -->
+                 This is also the mobile compact header once SidebarPanel collapses to width 0.
+                 Mobile (Default idiom): logo chip + title/count + language chip + "+" button on
+                 row 0, search moves to its own full-width row 1 below (D-...-8 "Library mobile"). -->
             <Grid Grid.Row="0"
-                  ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
+                  RowDefinitions="Auto,Auto"
+                  RowSpacing="0"
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto"
                   ColumnSpacing="12"
                   Padding="{OnIdiom Default='0', Desktop='28,16'}"
                   VerticalOptions="Center">
-                <HorizontalStackLayout Grid.Column="0" Spacing="8" VerticalOptions="End">
+
+                <!-- Mobile-only logo chip (Desktop shows the sidebar logo instead) -->
+                <Border Grid.Row="0" Grid.Column="0"
+                        IsVisible="{OnIdiom Default=True, Desktop=False}"
+                        WidthRequest="30"
+                        HeightRequest="30"
+                        Padding="0"
+                        Stroke="{StaticResource ColorAccent}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        VerticalOptions="Center">
+                    <Label FontFamily="Phosphor"
+                           Text="&#xE4A2;"
+                           FontSize="16"
+                           TextColor="{StaticResource ColorAccent}"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+                </Border>
+
+                <HorizontalStackLayout Grid.Row="0" Grid.Column="1" Spacing="8" VerticalOptions="End">
                     <Label Text="Biblioteca"
-                           FontSize="20"
+                           FontSize="{OnIdiom Default=17, Desktop=20}"
                            FontFamily="InterMedium"
                            CharacterSpacing="-0.3"
                            TextColor="{StaticResource ColorText}"
                            VerticalOptions="End" />
                     <Label x:Name="BookCountLabel"
                            Text="{Binding Books.Count, StringFormat='{0} livros'}"
-                           FontSize="12"
+                           FontSize="{OnIdiom Default=11, Desktop=12}"
                            TextColor="{StaticResource Neutral600}"
                            VerticalOptions="End" />
                 </HorizontalStackLayout>
 
-                <BoxView Grid.Column="1" BackgroundColor="Transparent" InputTransparent="True" />
+                <BoxView Grid.Row="0" Grid.Column="2" BackgroundColor="Transparent" InputTransparent="True" />
 
+                <!-- Desktop: inline in the header row. Mobile: own full-width row below. -->
                 <Border x:Name="SearchBoxBorder"
-                        Grid.Column="2"
+                        Grid.Row="{OnIdiom Default=1, Desktop=0}"
+                        Grid.Column="{OnIdiom Default=0, Desktop=3}"
+                        Grid.ColumnSpan="{OnIdiom Default=7, Desktop=1}"
+                        Margin="{OnIdiom Default='0,8,0,0', Desktop='0'}"
                         BackgroundColor="{StaticResource ColorSurface}"
                         Stroke="{StaticResource Neutral800}"
                         StrokeThickness="1"
-                        StrokeShape="RoundRectangle 8"
+                        StrokeShape="{OnIdiom Default='RoundRectangle 10', Desktop='RoundRectangle 8'}"
                         Padding="0,6,10,6"
-                        WidthRequest="{OnIdiom Default=200, Desktop=260}"
-                        HeightRequest="35"
+                        WidthRequest="{OnIdiom Default=-1, Desktop=260}"
+                        HeightRequest="{OnIdiom Default=38, Desktop=35}"
                         VerticalOptions="Center">
                     <Grid ColumnDefinitions="Auto,*">
                         <Label Grid.Column="0"
@@ -246,7 +272,7 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Column="3"
+                <Border Grid.Row="0" Grid.Column="4"
                         IsVisible="{OnIdiom Default=False, Desktop=True}"
                         WidthRequest="80"
                         HeightRequest="30"
@@ -323,22 +349,24 @@
                 </Border>
 
                 <Border x:Name="TargetLanguageChip"
-                        Grid.Column="4"
+                        Grid.Row="0" Grid.Column="5"
                         BackgroundColor="{StaticResource ColorSurface}"
                         Stroke="{StaticResource Neutral800}"
                         StrokeThickness="1"
                         StrokeShape="RoundRectangle 8"
-                        HeightRequest="{OnIdiom Default=34, Desktop=34}"
-                        Padding="10,6"
+                        WidthRequest="{OnIdiom Default=36, Desktop=-1}"
+                        HeightRequest="34"
+                        Padding="{OnIdiom Default='4,6', Desktop='10,6'}"
                         VerticalOptions="Center">
-                    <HorizontalStackLayout Spacing="6">
+                    <HorizontalStackLayout Spacing="6" HorizontalOptions="Center">
                         <Label FontFamily="Phosphor"
                                Text="&#xE28C;"
                                FontSize="15"
                                TextColor="{StaticResource ColorText}"
-                               VerticalOptions="Center" />
+                               VerticalOptions="Center"
+                               IsVisible="{OnIdiom Default=False, Desktop=True}" />
                         <Label Text="{Binding TargetLanguage}"
-                               FontSize="14"
+                               FontSize="{OnIdiom Default=11, Desktop=14}"
                                FontFamily="InterMedium"
                                MaxLines="1"
                                LineBreakMode="TailTruncation"
@@ -348,23 +376,25 @@
                 </Border>
 
                 <Border x:Name="ImportButton"
-                        Grid.Column="5"
+                        Grid.Row="0" Grid.Column="6"
                         HeightRequest="34"
+                        WidthRequest="{OnIdiom Default=34, Desktop=-1}"
                         BackgroundColor="Transparent"
                         Stroke="{StaticResource ColorAccent}"
                         StrokeThickness="1"
                         StrokeShape="RoundRectangle 8"
-                        Padding="10,6"
+                        Padding="{OnIdiom Default='0', Desktop='10,6'}"
                         VerticalOptions="Center">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Command="{Binding ImportBookCommand}" />
                     </Border.GestureRecognizers>
-                    <HorizontalStackLayout Spacing="6">
+                    <HorizontalStackLayout Spacing="6" HorizontalOptions="Center">
                         <Label FontFamily="Phosphor"
                                Text="&#xE3D4;"
-                               FontSize="15"
+                               FontSize="{OnIdiom Default=17, Desktop=15}"
                                TextColor="{StaticResource ColorAccent}"
                                VerticalOptions="Center"
+                               HorizontalOptions="Center"
                                IsVisible="{OnIdiom Default=True, Desktop=True}" />
                         <Label Text="Importar"
                                FontSize="14"
@@ -376,7 +406,9 @@
                 </Border>
             </Grid>
 
-            <!-- Hero: continue reading (most recent book with progress) -->
+            <!-- Hero: continue reading (most recent book with progress). Mobile: compact, no
+                 author/progress line, no Continuar button - the whole card is tappable and shows
+                 a plain arrow-right instead (PIXEL-SPEC "Library mobile - hero compacto"). -->
             <Border x:Name="ContinueReadingHero"
                     Grid.Row="1"
                     IsVisible="{Binding HasContinueReadingBook}"
@@ -384,11 +416,15 @@
                     Stroke="{StaticResource Neutral800}"
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 14"
-                    Padding="16">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="20">
+                    Padding="{OnIdiom Default=12, Desktop=16}">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenBookCommand}"
+                                           CommandParameter="{Binding ContinueReadingBook}" />
+                </Border.GestureRecognizers>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{OnIdiom Default=12, Desktop=20}">
                     <Border Grid.Column="0"
-                            WidthRequest="56"
-                            HeightRequest="84"
+                            WidthRequest="{OnIdiom Default=44, Desktop=56}"
+                            HeightRequest="{OnIdiom Default=66, Desktop=84}"
                             Padding="0"
                             Stroke="Transparent"
                             StrokeShape="RoundRectangle 4">
@@ -411,14 +447,16 @@
 
                     <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                         <Label Text="CONTINUE LENDO"
-                               FontSize="10"
-                               CharacterSpacing="1"
+                               FontSize="{OnIdiom Default=9, Desktop=10}"
+                               CharacterSpacing="{OnIdiom Default=0.9, Desktop=1}"
                                TextTransform="Uppercase"
                                TextColor="{StaticResource ColorAccent}" />
                         <Label Text="{Binding ContinueReadingBook.Title}"
-                               FontSize="17"
+                               FontSize="{OnIdiom Default=14, Desktop=17}"
                                TextColor="{StaticResource ColorText}" />
-                        <Label FontSize="12" TextColor="{StaticResource Neutral500}">
+                        <Label FontSize="12"
+                               TextColor="{StaticResource Neutral500}"
+                               IsVisible="{OnIdiom Default=False, Desktop=True}">
                             <Label.FormattedText>
                                 <FormattedString>
                                     <Span Text="{Binding ContinueReadingBook.Author}" />
@@ -434,6 +472,7 @@
                     </VerticalStackLayout>
 
                     <Border Grid.Column="2"
+                            IsVisible="{OnIdiom Default=False, Desktop=True}"
                             HeightRequest="29"
                             VerticalOptions="Center"
                             BackgroundColor="Transparent"
@@ -458,6 +497,14 @@
                                    TextColor="{StaticResource ColorAccent}" />
                         </HorizontalStackLayout>
                     </Border>
+
+                    <Label Grid.Column="2"
+                           IsVisible="{OnIdiom Default=True, Desktop=False}"
+                           FontFamily="Phosphor"
+                           Text="&#xE06C;"
+                           FontSize="17"
+                           VerticalOptions="Center"
+                           TextColor="{StaticResource ColorAccent}" />
                 </Grid>
             </Border>
 

@@ -193,7 +193,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   nao esconder a sidebar de outro jeito (ja funciona).
 - **Criterio de sucesso:**
   `X=src/TranslateReader/Pages/LibraryPage.xaml; test "$(grep -c 'OnIdiom' "$X")" -ge 8 && grep -q 'E4A2' "$X" && dotnet build src/TranslateReader/TranslateReader.csproj -f net10.0-windows10.0.19041.0 -c Release --nologo -v q`
-- **Status:** pending
+- **Status:** completed
 
 ### T-6: Reader — subtitulo, footer do mockup, TOC restyle
 - **Files:** `Pages/ReaderPage.xaml`, `Pages/ReaderPage.xaml.cs`, `PageModels/ReaderPageModel.cs`
