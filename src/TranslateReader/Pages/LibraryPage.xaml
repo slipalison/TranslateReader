@@ -471,12 +471,18 @@
 
                 <CollectionView x:Name="BooksCollection"
                                 ItemsSource="{Binding Books}"
+                                IsVisible="True"
                                 EmptyView="Nenhum livro importado. Toque em Importar para adicionar um EPUB.">
+                    <CollectionView.Triggers>
+                        <DataTrigger TargetType="CollectionView" Binding="{Binding IsListView}" Value="True">
+                            <Setter Property="IsVisible" Value="False" />
+                        </DataTrigger>
+                    </CollectionView.Triggers>
                     <CollectionView.ItemsLayout>
                         <GridItemsLayout Orientation="Vertical"
                                          Span="3"
-                                         HorizontalItemSpacing="14"
-                                         VerticalItemSpacing="18" />
+                                         HorizontalItemSpacing="{OnIdiom Default=14, Desktop=20}"
+                                         VerticalItemSpacing="{OnIdiom Default=18, Desktop=24}" />
                     </CollectionView.ItemsLayout>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:BookSummary">
@@ -503,7 +509,7 @@
 
                                     <!-- Capa 2:3, cantos arredondados, gradiente placeholder ou imagem real -->
                                     <Border Grid.Row="0"
-                                            StrokeShape="RoundRectangle 8"
+                                            StrokeShape="RoundRectangle 6"
                                             Stroke="{StaticResource Neutral800}"
                                             StrokeThickness="1"
                                             Shadow="{StaticResource ShadowMd}"
@@ -517,24 +523,81 @@
                                                         <GradientStop Color="{StaticResource ColorSectionGlow}" Offset="1.0" />
                                                     </LinearGradientBrush>
                                                 </Grid.Background>
-                                                <Label Text="EPUB"
-                                                       VerticalOptions="End"
-                                                       HorizontalOptions="Start"
-                                                       Margin="8,0,0,8"
-                                                       FontSize="9"
-                                                       CharacterSpacing="1"
-                                                       TextColor="{StaticResource Neutral300}" />
                                             </Grid>
 
                                             <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
                                                    Aspect="AspectFill"
                                                    IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
 
+                                            <!-- Lombada -->
+                                            <BoxView WidthRequest="4"
+                                                     HorizontalOptions="Start"
+                                                     BackgroundColor="{StaticResource ColorAccent}"
+                                                     Opacity="0.35" />
+
+                                            <!-- Titulo/autor dentro do topo da capa -->
+                                            <VerticalStackLayout Padding="12,14,12,0"
+                                                                 VerticalOptions="Start"
+                                                                 Spacing="2">
+                                                <Label Text="{Binding Title}"
+                                                       FontSize="14"
+                                                       FontFamily="InterMedium"
+                                                       TextColor="{StaticResource ColorText}"
+                                                       MaxLines="2"
+                                                       LineBreakMode="TailTruncation" />
+                                                <Label Text="{Binding Author}"
+                                                       FontSize="10"
+                                                       TextColor="{StaticResource TextMuted55}"
+                                                       MaxLines="1"
+                                                       LineBreakMode="TailTruncation" />
+                                            </VerticalStackLayout>
+
+                                            <!-- Badge EPUB no rodape da capa -->
+                                            <Label Text="EPUB"
+                                                   VerticalOptions="End"
+                                                   HorizontalOptions="Start"
+                                                   Margin="12,0,0,14"
+                                                   FontSize="9"
+                                                   CharacterSpacing="0.72"
+                                                   TextColor="{StaticResource TextMuted40}" />
+
                                             <ProgressBar VerticalOptions="End"
                                                          HeightRequest="4"
                                                          Progress="{Binding ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
                                                          ProgressColor="{StaticResource ColorAccent}"
-                                                         BackgroundColor="Transparent" />
+                                                         BackgroundColor="{StaticResource ProgressTrackOnCover}" />
+
+                                            <!-- Botao de menu (dots-three-vertical) -->
+                                            <Border WidthRequest="28"
+                                                    HeightRequest="28"
+                                                    Margin="0,6,6,0"
+                                                    HorizontalOptions="End"
+                                                    VerticalOptions="Start"
+                                                    BackgroundColor="{StaticResource CoverScrim}"
+                                                    Stroke="Transparent"
+                                                    StrokeThickness="0"
+                                                    StrokeShape="RoundRectangle 6"
+                                                    Padding="0">
+                                                <FlyoutBase.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuFlyoutItem Text="Traduzir livro"
+                                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
+                                                                        CommandParameter="{Binding}" />
+                                                        <MenuFlyoutItem Text="Excluir"
+                                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
+                                                                        CommandParameter="{Binding}" />
+                                                    </MenuFlyout>
+                                                </FlyoutBase.ContextFlyout>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer Tapped="OnCardMenuTapped" />
+                                                </Border.GestureRecognizers>
+                                                <Label Text="&#xE208;"
+                                                       FontFamily="Phosphor"
+                                                       FontSize="16"
+                                                       TextColor="{StaticResource ColorText}"
+                                                       HorizontalOptions="Center"
+                                                       VerticalOptions="Center" />
+                                            </Border>
                                         </Grid>
                                     </Border>
 
@@ -542,7 +605,6 @@
                                     <Label Grid.Row="1"
                                            Text="{Binding Title}"
                                            FontSize="12"
-                                           FontAttributes="Bold"
                                            TextColor="{StaticResource ColorText}"
                                            MaxLines="2"
                                            LineBreakMode="TailTruncation"
@@ -552,11 +614,120 @@
                                     <Label Grid.Row="2"
                                            Text="{Binding Author}"
                                            FontSize="11"
-                                           TextColor="{StaticResource Neutral500}"
+                                           TextColor="{StaticResource Neutral600}"
                                            MaxLines="1"
                                            LineBreakMode="TailTruncation"
                                            Margin="2,0,2,0" />
                                 </Grid>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <!-- LIST VIEW (desktop-only toggle, D-...-4) -->
+                <CollectionView x:Name="BooksListCollection"
+                                ItemsSource="{Binding Books}"
+                                IsVisible="False"
+                                EmptyView="Nenhum livro importado. Toque em Importar para adicionar um EPUB.">
+                    <CollectionView.Triggers>
+                        <DataTrigger TargetType="CollectionView" Binding="{Binding IsListView}" Value="True">
+                            <Setter Property="IsVisible" Value="True" />
+                        </DataTrigger>
+                    </CollectionView.Triggers>
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="4" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:BookSummary">
+                            <Grid HeightRequest="84"
+                                  Padding="10,12"
+                                  ColumnDefinitions="Auto,*,Auto"
+                                  ColumnSpacing="16">
+                                <FlyoutBase.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Traduzir livro"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
+                                                        CommandParameter="{Binding}" />
+                                        <MenuFlyoutItem Text="Excluir"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
+                                                        CommandParameter="{Binding}" />
+                                    </MenuFlyout>
+                                </FlyoutBase.ContextFlyout>
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=OpenBookCommand}"
+                                        CommandParameter="{Binding}" />
+                                </Grid.GestureRecognizers>
+
+                                <Border Grid.Column="0"
+                                        WidthRequest="40"
+                                        HeightRequest="60"
+                                        Padding="0"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 3">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="{StaticResource ColorSection}" Offset="0.0" />
+                                            <GradientStop Color="{StaticResource ColorSectionGlow}" Offset="1.0" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageSourceConverter}}"
+                                           Aspect="AspectFill"
+                                           IsVisible="{Binding CoverImagePath, Converter={StaticResource StringIsNotNullOrEmptyConverter}}" />
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}"
+                                           FontSize="14"
+                                           TextColor="{StaticResource ColorText}"
+                                           MaxLines="1"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Text="{Binding Author}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Neutral600}"
+                                           MaxLines="1"
+                                           LineBreakMode="TailTruncation" />
+                                </VerticalStackLayout>
+
+                                <HorizontalStackLayout Grid.Column="2" Spacing="10" VerticalOptions="Center">
+                                    <ProgressBar WidthRequest="96"
+                                                 HeightRequest="3"
+                                                 Progress="{Binding ProgressPercentage, Converter={StaticResource PercentageToDecimalConverter}}"
+                                                 ProgressColor="{StaticResource ColorAccent}"
+                                                 BackgroundColor="{StaticResource Neutral900}"
+                                                 VerticalOptions="Center" />
+                                    <Label Text="{Binding ProgressPercentage, StringFormat='{0:0}%'}"
+                                           FontSize="11"
+                                           TextColor="{StaticResource Neutral500}"
+                                           VerticalOptions="Center" />
+                                    <Border WidthRequest="30"
+                                            HeightRequest="30"
+                                            BackgroundColor="Transparent"
+                                            Stroke="Transparent"
+                                            StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 8"
+                                            Padding="0">
+                                        <FlyoutBase.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="Traduzir livro"
+                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=TranslateBookCommand}"
+                                                                CommandParameter="{Binding}" />
+                                                <MenuFlyoutItem Text="Excluir"
+                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pm:LibraryPageModel}}, Path=DeleteBookCommand}"
+                                                                CommandParameter="{Binding}" />
+                                            </MenuFlyout>
+                                        </FlyoutBase.ContextFlyout>
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnCardMenuTapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label Text="&#xE208;"
+                                               FontFamily="Phosphor"
+                                               FontSize="16"
+                                               TextColor="{StaticResource ColorText}"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center" />
+                                    </Border>
+                                </HorizontalStackLayout>
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>

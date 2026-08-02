@@ -168,7 +168,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   nao duplicar os 2 `MenuFlyoutItem` com Commands diferentes dos atuais; nao esquecer
   `x:DataType="models:BookSummary"` no template novo.
 - **Criterio de sucesso:** comandos dos **DoD 4 e DoD 5** do CONTEXT.md (ambos).
-- **Status:** pending
+- **Status:** completed
 
 ### T-5: Library mobile — header compacto, busca cheia, hero compacto
 - **Files:** `Pages/LibraryPage.xaml`
