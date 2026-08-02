@@ -196,7 +196,7 @@
                            TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
-                            BackgroundColor="#E53E3E"
+                            BackgroundColor="{StaticResource ColorDanger}"
                             TextColor="White"
                             CornerRadius="8"
                             HorizontalOptions="Center"
@@ -234,7 +234,7 @@
                            TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
-                            BackgroundColor="#E53E3E"
+                            BackgroundColor="{StaticResource ColorDanger}"
                             TextColor="White"
                             CornerRadius="8"
                             HorizontalOptions="Center"

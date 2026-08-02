@@ -93,7 +93,7 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
   `Resources/Raw/`.
 - **Criterio de sucesso:** o comando do **DoD 2** do CONTEXT.md (copiar literal), E
   `test "$(grep -c 'OpenSansRegular' src/TranslateReader/Resources/Styles/Styles.xaml)" -eq 0`
-- **Status:** pending
+- **Status:** completed
 
 ### T-3: Library desktop — sidebar, top bar e hero
 - **Files:** `Pages/LibraryPage.xaml`, `Pages/LibraryPage.xaml.cs`, `PageModels/LibraryPageModel.cs`

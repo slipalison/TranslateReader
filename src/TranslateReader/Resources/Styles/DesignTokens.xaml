@@ -83,4 +83,17 @@
     <Color x:Key="ReadingSepiaBg">#F4ECD8</Color>
     <Color x:Key="ReadingSepiaText">#5B4636</Color>
 
+    <!-- Pixel-spec extensions (design/PIXEL-SPEC.md "Cores -> tokens", D-...-5) -->
+    <Color x:Key="ColorDanger">#E08A8A</Color>
+    <Color x:Key="AccentTint10">#1A9184D9</Color>
+    <Color x:Key="AccentTint08">#149184D9</Color>
+    <Color x:Key="OverlayScrim">#80292B31</Color>
+    <Color x:Key="CoverScrim">#A6161826</Color>
+    <Color x:Key="TextMuted70">#B3E9E9ED</Color>
+    <Color x:Key="TextMuted55">#8CE9E9ED</Color>
+    <Color x:Key="TextMuted40">#66E9E9ED</Color>
+    <Color x:Key="ProgressTrackOnCover">#59000000</Color>
+
+    <SolidColorBrush x:Key="ColorDangerBrush" Color="{StaticResource ColorDanger}" />
+
 </ResourceDictionary>

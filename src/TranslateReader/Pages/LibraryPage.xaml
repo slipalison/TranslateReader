@@ -370,7 +370,7 @@
                 <Button Grid.Row="0" Grid.Column="1"
                         Text="Pausar"
                         Command="{Binding PauseBookTranslationCommand}"
-                        BackgroundColor="#E53E3E"
+                        BackgroundColor="{StaticResource ColorDanger}"
                         TextColor="White"
                         CornerRadius="6"
                         Padding="10,4"

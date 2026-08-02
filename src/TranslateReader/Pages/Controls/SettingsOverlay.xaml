@@ -278,7 +278,7 @@
                 <Button x:Name="DeleteModelButton"
                         Text="Excluir modelo"
                         Clicked="OnDeleteModelClicked"
-                        BackgroundColor="#E53E3E"
+                        BackgroundColor="{StaticResource ColorDanger}"
                         TextColor="White"
                         CornerRadius="8"
                         MinimumHeightRequest="44"
