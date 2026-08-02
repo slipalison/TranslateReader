@@ -71,4 +71,16 @@
     <Shadow x:Key="ShadowMd" Brush="Black" Offset="0,6" Radius="18" Opacity="0.55" />
     <Shadow x:Key="ShadowLg" Brush="Black" Offset="0,16" Radius="40" Opacity="0.65" />
 
+    <!-- Reading-theme sample swatches (CONTENT, not chrome): the exact bg/text pairs
+         ThemeEngine.ResolveThemeColors returns for each reading theme (Light/Dark/Sepia),
+         applied inside the WebView reading pane. SettingsOverlay's theme-picker buttons use
+         these so the preview matches what the reader will actually see - the app chrome
+         itself stays dark-only (see header note) and these tokens are not chrome colors. -->
+    <Color x:Key="ReadingLightBg">#FFFFFF</Color>
+    <Color x:Key="ReadingLightText">#1A1A1A</Color>
+    <Color x:Key="ReadingDarkBg">#1A1A2E</Color>
+    <Color x:Key="ReadingDarkText">#E4E4E7</Color>
+    <Color x:Key="ReadingSepiaBg">#F4ECD8</Color>
+    <Color x:Key="ReadingSepiaText">#5B4636</Color>
+
 </ResourceDictionary>

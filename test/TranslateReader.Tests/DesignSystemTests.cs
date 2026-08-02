@@ -44,13 +44,13 @@ public class DesignSystemTests
     ];
 
     // Old chrome palette, pre-redesign (D-...-3). Must not survive anywhere in the restyled pages.
-    // #1A1A1A is intentionally excluded from this denylist: SettingsOverlay.xaml's
-    // LightThemeButton pairs BackgroundColor="#FFFFFF" with TextColor="#1A1A1A" as a preview
-    // swatch of the Light reading theme - the same content pattern already carved out for the
-    // Sepia swatch (#F4ECD8/#5B4636), not a leftover chrome color.
+    // SettingsOverlay.xaml's theme-picker buttons (Light/Dark/Sepia) preview the reading theme's
+    // real bg/text pair via the ReadingLight*/ReadingDark*/ReadingSepia* tokens in
+    // DesignTokens.xaml instead of these literal hexes, so every entry below - including
+    // #1A1A1A and #1A1A2E - is unambiguously leftover chrome, not content, when found in XAML.
     private static readonly string[] LegacyChromeHexes =
     [
-        "#2563EB", "#60A5FA", "#8B6914", "#1A1A2E", "#2A2A3E",
+        "#2563EB", "#60A5FA", "#8B6914", "#1A1A2E", "#2A2A3E", "#1A1A1A",
         "#E4E4E7", "#F0F0F0", "#E0E0E0", "#333333", "#666666", "#999999"
     ];
 

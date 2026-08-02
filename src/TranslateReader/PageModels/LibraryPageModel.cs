@@ -56,6 +56,7 @@ public partial class LibraryPageModel(
 
     private CancellationTokenSource? _translationCts;
     private int? _translatingBookId;
+    private int _loadBooksGeneration;
 
     public bool HasContinueReadingBook => ContinueReadingBook is not null;
 
@@ -72,15 +73,23 @@ public partial class LibraryPageModel(
     [RelayCommand]
     private async Task LoadBooksAsync()
     {
+        var generation = Interlocked.Increment(ref _loadBooksGeneration);
         IsBusy = true;
         try
         {
             var recentBooks = await libraryManager.ListRecentBookSummariesAsync();
-            ContinueReadingBook = recentBooks.Count > 0 ? recentBooks[0] : null;
-
-            Books = IsRecentFilterActive
+            var books = IsRecentFilterActive
                 ? recentBooks
                 : await libraryManager.ListBookSummariesAsync(SearchQuery);
+
+            // A newer call (from a later keystroke) may have started and finished while this
+            // one was awaiting - discard this stale result instead of overwriting Books/
+            // ContinueReadingBook with out-of-order data (no debounce per D-...-7).
+            if (generation != Volatile.Read(ref _loadBooksGeneration))
+                return;
+
+            ContinueReadingBook = recentBooks.Count > 0 ? recentBooks[0] : null;
+            Books = books;
         }
         finally
         {
