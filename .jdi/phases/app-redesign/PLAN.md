@@ -77,7 +77,7 @@ em desktop e mobile.
   - Os 25 hex legados do `.xaml` e os 9 `Color.FromArgb` do `.xaml.cs` viram chave de `DesignTokens.xaml`; amostras dos temas de leitura mantidas como conteudo.
 - **Dependencies:** T-1
 - **Test:** `SettingsOverlay_BranchesLayoutByIdiomWithoutDuplicatingTheControl` + `Overlays_UseAnimatedTransitions` (T-8); build Windows
-- **Status:** pending
+- **Status:** completed
 
 #### T-5: TranslateBookPopup — metadados do livro + banner offline
 - **Specialist:** jdi-doer-translatereader
