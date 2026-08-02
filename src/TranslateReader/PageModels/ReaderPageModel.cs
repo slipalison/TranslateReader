@@ -13,52 +13,55 @@ public partial class ReaderPageModel(
     ITranslationManager translationManager) : ObservableObject
 {
     [ObservableProperty]
-    private int _bookId;
+    public partial int BookId { get; set; }
 
     [ObservableProperty]
-    private Book? _book;
+    public partial Book? Book { get; set; }
 
     [ObservableProperty]
-    private IReadOnlyList<Chapter> _chapters = [];
+    public partial IReadOnlyList<Chapter> Chapters { get; set; } = [];
 
     [ObservableProperty]
-    private int _currentChapterIndex;
+    public partial int CurrentChapterIndex { get; set; }
 
     [ObservableProperty]
-    private string _chapterContent = string.Empty;
+    public partial string ChapterContent { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _currentCss = string.Empty;
+    public partial string CurrentCss { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    private bool _hasPreviousChapter;
+    public partial bool HasPreviousChapter { get; set; }
 
     [ObservableProperty]
-    private bool _hasNextChapter;
+    public partial bool HasNextChapter { get; set; }
 
     [ObservableProperty]
-    private bool _isSettingsVisible;
+    public partial bool IsSettingsVisible { get; set; }
 
     [ObservableProperty]
-    private bool _isTranslating;
+    public partial bool IsTocVisible { get; set; }
 
     [ObservableProperty]
-    private double _translationProgress;
+    public partial bool IsTranslating { get; set; }
 
     [ObservableProperty]
-    private bool _isTranslationModeActive;
+    public partial double TranslationProgress { get; set; }
 
     [ObservableProperty]
-    private bool _isModelDownloading;
+    public partial bool IsTranslationModeActive { get; set; }
 
     [ObservableProperty]
-    private double _modelDownloadProgress;
+    public partial bool IsModelDownloading { get; set; }
 
     [ObservableProperty]
-    private bool _isModelLoading;
+    public partial double ModelDownloadProgress { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsModelLoading { get; set; }
 
     private CancellationTokenSource? _translationCts;
 
@@ -175,6 +178,19 @@ public partial class ReaderPageModel(
         if (!HasNextChapter) return;
         CurrentChapterIndex++;
         await LoadCurrentChapterAsync();
+    }
+
+    public async Task GoToChapterAsync(int index)
+    {
+        if (index < 0 || index >= Chapters.Count) return;
+
+        if (index != CurrentChapterIndex)
+        {
+            CurrentChapterIndex = index;
+            await LoadCurrentChapterAsync();
+        }
+
+        IsTocVisible = false;
     }
 
     public async Task SaveScrollProgressAsync(string chapterHRef, double relativeScroll)

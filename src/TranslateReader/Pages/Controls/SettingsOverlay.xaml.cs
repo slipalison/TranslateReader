@@ -4,6 +4,9 @@ namespace TranslateReader.Pages.Controls;
 
 public partial class SettingsOverlay : ContentView
 {
+    private const uint AnimationDurationMs = 260;
+    private const double BackdropOpacity = 0.4;
+
     private static readonly string[] FontOptions = ["Georgia", "serif", "sans-serif", "monospace", "OpenDyslexic"];
 
     private static readonly string[] LanguageOptions =
@@ -20,6 +23,8 @@ public partial class SettingsOverlay : ContentView
         "Russian"
     ];
 
+    private static readonly Color SelectedIndicatorColor = (Color)Application.Current!.Resources["ColorAccent"];
+
     public event EventHandler? CloseRequested;
     public event EventHandler<ReadingSettings>? SettingsChanged;
     public event EventHandler? DeleteModelRequested;
@@ -35,6 +40,55 @@ public partial class SettingsOverlay : ContentView
         SourceLanguagePicker.ItemsSource = LanguageOptions;
         TargetLanguagePicker.ItemsSource = LanguageOptions;
     }
+
+    /// <summary>
+    /// Reveals the overlay: backdrop fades in and the panel slides in (from the right on
+    /// Desktop, from the bottom otherwise), matching the layout <see cref="PanelBorder"/>
+    /// takes for the current <see cref="DeviceIdiom"/>.
+    /// </summary>
+    public async Task ShowAsync()
+    {
+        IsVisible = true;
+        InputTransparent = false;
+        Backdrop.Opacity = 0;
+        PositionPanelOffscreen();
+
+        await Task.WhenAll(
+            Backdrop.FadeToAsync(BackdropOpacity, AnimationDurationMs, Easing.CubicOut),
+            PanelBorder.TranslateToAsync(0, 0, AnimationDurationMs, Easing.CubicOut));
+    }
+
+    /// <summary>
+    /// Hides the overlay: backdrop fades out and the panel slides back off-screen, then the
+    /// control is collapsed and made input-transparent.
+    /// </summary>
+    public async Task HideAsync()
+    {
+        await Task.WhenAll(
+            Backdrop.FadeToAsync(0, AnimationDurationMs, Easing.CubicIn),
+            AnimatePanelOffscreenAsync());
+
+        IsVisible = false;
+        InputTransparent = true;
+    }
+
+    private static bool IsDesktopIdiom => DeviceInfo.Current.Idiom == DeviceIdiom.Desktop;
+
+    private static double ScreenWidth =>
+        DeviceDisplay.Current.MainDisplayInfo.Width / DeviceDisplay.Current.MainDisplayInfo.Density;
+
+    private static double ScreenHeight =>
+        DeviceDisplay.Current.MainDisplayInfo.Height / DeviceDisplay.Current.MainDisplayInfo.Density;
+
+    private void PositionPanelOffscreen()
+    {
+        PanelBorder.TranslationX = IsDesktopIdiom ? ScreenWidth : 0;
+        PanelBorder.TranslationY = IsDesktopIdiom ? 0 : ScreenHeight;
+    }
+
+    private Task AnimatePanelOffscreenAsync() => IsDesktopIdiom
+        ? PanelBorder.TranslateToAsync(ScreenWidth, 0, AnimationDurationMs, Easing.CubicIn)
+        : PanelBorder.TranslateToAsync(0, ScreenHeight, AnimationDurationMs, Easing.CubicIn);
 
     public void ApplySettings(ReadingSettings settings, bool isModelAvailable = false)
     {
@@ -69,9 +123,9 @@ public partial class SettingsOverlay : ContentView
 
     private void UpdateThemeButtonBorders(ThemeType theme)
     {
-        LightThemeButton.BorderColor = theme == ThemeType.Light ? Color.FromArgb("#2563EB") : Colors.Transparent;
-        DarkThemeButton.BorderColor = theme == ThemeType.Dark ? Color.FromArgb("#60A5FA") : Colors.Transparent;
-        SepiaThemeButton.BorderColor = theme == ThemeType.Sepia ? Color.FromArgb("#8B6914") : Colors.Transparent;
+        LightThemeButton.BorderColor = theme == ThemeType.Light ? SelectedIndicatorColor : Colors.Transparent;
+        DarkThemeButton.BorderColor = theme == ThemeType.Dark ? SelectedIndicatorColor : Colors.Transparent;
+        SepiaThemeButton.BorderColor = theme == ThemeType.Sepia ? SelectedIndicatorColor : Colors.Transparent;
     }
 
     private void NotifySettingsChanged()
@@ -146,8 +200,8 @@ public partial class SettingsOverlay : ContentView
 
     private void UpdateReadingModeButtonBorders(ReadingMode mode)
     {
-        ScrollModeButton.BorderColor = mode == ReadingMode.Scroll ? Color.FromArgb("#2563EB") : Colors.Transparent;
-        PaginatedModeButton.BorderColor = mode == ReadingMode.Paginated ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        ScrollModeButton.BorderColor = mode == ReadingMode.Scroll ? SelectedIndicatorColor : Colors.Transparent;
+        PaginatedModeButton.BorderColor = mode == ReadingMode.Paginated ? SelectedIndicatorColor : Colors.Transparent;
     }
 
     private void OnScrollModeClicked(object? sender, EventArgs e)
@@ -166,10 +220,10 @@ public partial class SettingsOverlay : ContentView
 
     private void UpdateModelButtonBorders(string modelName)
     {
-        GemmaModelButton.BorderColor = modelName == "gemma-2-2b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
-        QwenModelButton.BorderColor = modelName == "qwen-2.5-3b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
-        PhiModelButton.BorderColor = modelName == "phi-3.5" ? Color.FromArgb("#2563EB") : Colors.Transparent;
-        HyMtModelButton.BorderColor = modelName == "hy-mt1.5-1.8b" ? Color.FromArgb("#2563EB") : Colors.Transparent;
+        GemmaModelButton.BorderColor = modelName == "gemma-2-2b" ? SelectedIndicatorColor : Colors.Transparent;
+        QwenModelButton.BorderColor = modelName == "qwen-2.5-3b" ? SelectedIndicatorColor : Colors.Transparent;
+        PhiModelButton.BorderColor = modelName == "phi-3.5" ? SelectedIndicatorColor : Colors.Transparent;
+        HyMtModelButton.BorderColor = modelName == "hy-mt1.5-1.8b" ? SelectedIndicatorColor : Colors.Transparent;
     }
 
     private void UpdateModelStatus()

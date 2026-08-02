@@ -7,4 +7,6 @@ public class BookSummary
     public string Author { get; set; } = string.Empty;
     public string CoverImagePath { get; set; } = string.Empty;
     public double ProgressPercentage { get; set; }
+    public DateTime? LastReadAt { get; set; }
+    public int TotalChapters { get; set; }
 }

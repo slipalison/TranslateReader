@@ -407,16 +407,16 @@
     </Style>
 
     <Style TargetType="Shell" ApplyToDerivedTypes="True">
-        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightBackground}, Dark={StaticResource DarkBackground}}" />
-        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.BackgroundColor" Value="{StaticResource ColorBg}" />
+        <Setter Property="Shell.ForegroundColor" Value="{StaticResource ColorText}" />
+        <Setter Property="Shell.TitleColor" Value="{StaticResource ColorText}" />
+        <Setter Property="Shell.DisabledColor" Value="{StaticResource Neutral700}" />
+        <Setter Property="Shell.UnselectedColor" Value="{StaticResource Neutral500}" />
         <Setter Property="Shell.NavBarHasShadow" Value="False" />
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource LightBackground}, Dark={StaticResource DarkBackground}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource DarkOnLightBackground}, Dark={StaticResource LightOnDarkBackground}}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource DarkOnLightBackground}, Dark={StaticResource LightOnDarkBackground}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{StaticResource ColorSurface}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{StaticResource ColorText}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{StaticResource ColorText}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource Neutral500}" />
     </Style>
 
     <Style TargetType="NavigationPage">

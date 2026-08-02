@@ -7,47 +7,125 @@ using TranslateReader.Models;
 
 namespace TranslateReader.PageModels;
 
-public partial class LibraryPageModel(ILibraryManager libraryManager, ITranslationManager translationManager) : ObservableObject
+public partial class LibraryPageModel(
+    ILibraryManager libraryManager,
+    ITranslationManager translationManager,
+    ISettingsManager settingsManager) : ObservableObject
 {
     [ObservableProperty]
-    private IReadOnlyList<BookSummary> _books = [];
+    public partial IReadOnlyList<BookSummary> Books { get; set; } = [];
 
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    private bool _isTranslatingBook;
+    public partial string SearchQuery { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private double _bookTranslationProgress;
+    public partial bool IsRecentFilterActive { get; set; }
 
     [ObservableProperty]
-    private string _translatingBookTitle = string.Empty;
+    [NotifyPropertyChangedFor(nameof(HasContinueReadingBook))]
+    public partial BookSummary? ContinueReadingBook { get; set; }
 
     [ObservableProperty]
-    private bool _isModelDownloading;
+    public partial string TargetLanguage { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private double _modelDownloadProgress;
+    [NotifyPropertyChangedFor(nameof(ModelSizeDisplay))]
+    [NotifyPropertyChangedFor(nameof(ModelStatusText))]
+    public partial TranslationModelStatus? ModelStatus { get; set; }
 
     [ObservableProperty]
-    private bool _isModelLoading;
+    public partial bool IsTranslatingBook { get; set; }
+
+    [ObservableProperty]
+    public partial double BookTranslationProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string TranslatingBookTitle { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsModelDownloading { get; set; }
+
+    [ObservableProperty]
+    public partial double ModelDownloadProgress { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsModelLoading { get; set; }
 
     private CancellationTokenSource? _translationCts;
     private int? _translatingBookId;
+    private int _loadBooksGeneration;
+
+    public bool HasContinueReadingBook => ContinueReadingBook is not null;
+
+    public string ModelSizeDisplay => ModelStatus is null
+        ? string.Empty
+        : $"{ModelStatus.SizeBytes / 1024d / 1024d / 1024d:0.0} GB";
+
+    public string ModelStatusText => ModelStatus is null
+        ? string.Empty
+        : ModelStatus.IsDownloaded ? "Modelo baixado" : "Modelo não baixado";
+
+    partial void OnSearchQueryChanged(string value) => LoadBooksCommand.Execute(null);
 
     [RelayCommand]
     private async Task LoadBooksAsync()
     {
+        var generation = Interlocked.Increment(ref _loadBooksGeneration);
         IsBusy = true;
         try
         {
-            Books = await libraryManager.ListBookSummariesAsync();
+            var recentBooks = await libraryManager.ListRecentBookSummariesAsync();
+            var books = IsRecentFilterActive
+                ? recentBooks
+                : await libraryManager.ListBookSummariesAsync(SearchQuery);
+
+            // A newer call (from a later keystroke) may have started and finished while this
+            // one was awaiting - discard this stale result instead of overwriting Books/
+            // ContinueReadingBook with out-of-order data (no debounce per D-...-7).
+            if (generation != Volatile.Read(ref _loadBooksGeneration))
+                return;
+
+            ContinueReadingBook = recentBooks.Count > 0 ? recentBooks[0] : null;
+            Books = books;
         }
         finally
         {
-            IsBusy = false;
+            // Same generation guard as the Books/ContinueReadingBook write above: a stale call
+            // finishing after a newer one has already started must not hide the busy indicator
+            // while the newer call is still in flight.
+            if (generation == Volatile.Read(ref _loadBooksGeneration))
+                IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private Task ShowLibraryBooksAsync()
+    {
+        IsRecentFilterActive = false;
+        return LoadBooksAsync();
+    }
+
+    [RelayCommand]
+    private Task ShowRecentBooksAsync()
+    {
+        IsRecentFilterActive = true;
+        return LoadBooksAsync();
+    }
+
+    [RelayCommand]
+    private async Task LoadTargetLanguageAsync()
+    {
+        var settings = await settingsManager.LoadSettingsAsync();
+        TargetLanguage = settings.TargetLanguage;
+    }
+
+    [RelayCommand]
+    private async Task LoadModelStatusAsync()
+    {
+        ModelStatus = await translationManager.GetSelectedModelStatusAsync();
     }
 
     [RelayCommand]
@@ -123,7 +201,7 @@ public partial class LibraryPageModel(ILibraryManager libraryManager, ITranslati
             }
             else
             {
-                var popup = new Pages.Controls.TranslateBookPopup(book.Title);
+                var popup = new Pages.Controls.TranslateBookPopup(book);
                 var page = Shell.Current.CurrentPage;
                 var popupResult = await page.ShowPopupAsync<(string, string)?>(popup, new PopupOptions
                 {
@@ -137,7 +215,7 @@ public partial class LibraryPageModel(ILibraryManager libraryManager, ITranslati
         }
         else
         {
-            var popup = new Pages.Controls.TranslateBookPopup(book.Title);
+            var popup = new Pages.Controls.TranslateBookPopup(book);
             var page = Shell.Current.CurrentPage;
             var popupResult = await page.ShowPopupAsync<(string, string)?>(popup, new PopupOptions
             {

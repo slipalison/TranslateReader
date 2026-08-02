@@ -1,4 +1,5 @@
 using CommunityToolkit.Maui.Extensions;
+using TranslateReader.Models;
 
 namespace TranslateReader.Pages.Controls;
 
@@ -18,15 +19,50 @@ public partial class TranslateBookPopup : ContentView
         "Russian"
     ];
 
-    public TranslateBookPopup(string bookTitle)
+    public TranslateBookPopup(BookSummary book)
     {
         InitializeComponent();
-        BookTitleLabel.Text = bookTitle;
+        BookMetaLabel.FormattedText = BuildBookMeta(book);
         SourcePicker.ItemsSource = LanguageOptions;
         TargetPicker.ItemsSource = LanguageOptions;
         SourcePicker.SelectedIndex = 0;
         TargetPicker.SelectedIndex = 1;
     }
+
+    private static FormattedString BuildBookMeta(BookSummary book) =>
+        new()
+        {
+            Spans =
+            {
+                new Span
+                {
+                    Text = book.Title,
+                    FontAttributes = FontAttributes.Bold,
+                    FontSize = 15,
+                    TextColor = ResourceColor("ColorText")
+                },
+                new Span { Text = "\n" },
+                new Span
+                {
+                    Text = BuildSubtitle(book),
+                    FontSize = 12,
+                    TextColor = ResourceColor("Neutral400")
+                }
+            }
+        };
+
+    private static string BuildSubtitle(BookSummary book)
+    {
+        var chapterWord = book.TotalChapters == 1 ? "capítulo" : "capítulos";
+        return string.IsNullOrWhiteSpace(book.Author)
+            ? $"{book.TotalChapters} {chapterWord}"
+            : $"{book.Author} · {book.TotalChapters} {chapterWord}";
+    }
+
+    private static Color ResourceColor(string key) =>
+        Application.Current!.Resources.TryGetValue(key, out var value) && value is Color color
+            ? color
+            : throw new InvalidOperationException($"Design token '{key}' not found.");
 
     private async void OnCancelClicked(object? sender, EventArgs e)
     {

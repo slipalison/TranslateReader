@@ -24,4 +24,9 @@ public interface ITranslationManager
         CancellationToken ct);
     Task<BookTranslationJob?> GetActiveTranslationJobAsync(int bookId);
     Task PauseTranslationAsync(int bookId);
+    /// <summary>
+    /// Returns the model selected in settings and whether its file is already on disk, so the UI
+    /// never hardcodes a model name/size that would go stale the moment the user switches models.
+    /// </summary>
+    Task<TranslationModelStatus> GetSelectedModelStatusAsync();
 }
