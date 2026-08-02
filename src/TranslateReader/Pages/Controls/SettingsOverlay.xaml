@@ -21,6 +21,7 @@
                 <RoundRectangle CornerRadius="16,16,0,0" />
             </Border.StrokeShape>
 
+            <ScrollView>
             <VerticalStackLayout Spacing="16">
 
                 <!-- Header -->
@@ -257,6 +258,7 @@
                         HorizontalOptions="Start" />
 
             </VerticalStackLayout>
+            </ScrollView>
         </Border>
     </Grid>
 </ContentView>
