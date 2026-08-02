@@ -471,7 +471,17 @@ nativo + botao ⋮; D-...-8 execucao sequencial com Verify literal.
 - **Criterio de sucesso (itens F-H):** subjetivo — reviewer julga se a investigacao foi real
   (hipotese testada, nao so repetida) e se o fix (ou o BLOCKED) e honesto.
 - **Dependencies:** T-1..T-9 (todas completed)
-- **Status:** pending
+- **Status:** completed — todos os 8 itens (A-H) resolvidos. A-D: fixes mecanicos aplicados
+  exatamente como especificado, criterio de sucesso (A-D) exit 0. E: registrado
+  `.jdi/todos/2026-08-02-opendyslexic-webfont.md`, criterio de sucesso (E) exit 0, Core/Raw
+  intocados. F: causa raiz confirmada por pesquisa (bug conhecido do dotnet/maui —
+  `FontImageSource.Color` nao e bindable-observavel, mutar `.Color` pos-render nao repinta no
+  WinUI) — fix aplicado trocando o `ImageSource` inteiro em vez de mutar `.Color`. G: reauditoria
+  linha a linha contra PIXEL-SPEC "Settings — painel desktop" encontrou 2 divergencias reais
+  (padding dos cards de tema ausente, header "Modelo" faltando a palavra "local") — corrigidas;
+  resto da secao já batia. H: BoxView do indicador de traducao aumentado 3px->5px + animacao de
+  entrada `FadeToAsync` adicionada no hook `PropertyChanged` ja existente. Ver SUMMARY.md secao
+  "Fix-round (iter 2) — T-10" para detalhe completo por item.
 
 ---
 

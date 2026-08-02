@@ -6,6 +6,7 @@
              x:Class="TranslateReader.Pages.LibraryPage"
              x:DataType="pm:LibraryPageModel"
              BackgroundColor="{StaticResource ColorBg}"
+             Shell.NavBarIsVisible="False"
              Title="Biblioteca">
 
     <Grid ColumnDefinitions="Auto,*">
@@ -18,8 +19,8 @@
                 IsVisible="{OnIdiom Default=False, Desktop=True}"
                 WidthRequest="{OnIdiom Default=0, Desktop=232}"
                 BackgroundColor="{StaticResource ColorSurface}"
-                Stroke="{StaticResource Neutral800}"
-                StrokeThickness="0,0,1,0"
+                Stroke="Transparent"
+                StrokeThickness="0"
                 StrokeShape="Rectangle"
                 Padding="16,20">
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="24">
@@ -187,6 +188,15 @@
             </Grid>
         </Border>
 
+        <!-- SidebarPanel's Border.Stroke cannot express a single-side hairline (StrokeThickness
+             is a double in MAUI, not a Thickness - "0,0,1,0" parsed as 10 via NumberStyles.Any,
+             see D-...-10). Real hairline lives here instead. -->
+        <BoxView Grid.Column="0"
+                 IsVisible="{OnIdiom Default=False, Desktop=True}"
+                 WidthRequest="1"
+                 HorizontalOptions="End"
+                 BackgroundColor="{StaticResource ColorDivider}" />
+
         <!-- Main content -->
         <Grid Grid.Column="1"
               RowDefinitions="Auto,Auto,*"
@@ -263,6 +273,7 @@
                                VerticalOptions="Center" />
                         <Entry Grid.Column="1"
                                x:Name="SearchEntry"
+                               MinimumHeightRequest="0"
                                Text="{Binding SearchQuery}"
                                Placeholder="Buscar título ou autor..."
                                TextColor="{StaticResource ColorText}"

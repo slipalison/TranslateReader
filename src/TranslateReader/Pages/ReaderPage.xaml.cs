@@ -11,6 +11,7 @@ namespace TranslateReader.Pages;
 public partial class ReaderPage : ContentPage
 {
     private const uint TocAnimationDurationMs = 260;
+    private const uint TranslationIndicatorFadeMs = 200;
 
     private readonly ReaderPageModel _pageModel;
     private int _currentPage;
@@ -187,11 +188,18 @@ public partial class ReaderPage : ContentPage
 
     private async void OnTranslationModeChanged()
     {
-        if (!_pageModel.IsTranslationModeActive)
+        if (_pageModel.IsTranslationModeActive)
         {
-            CancelPageTranslation();
-            await ClearTranslationsAsync();
+            // 3px was too subtle to read as "translation mode is on" (user-reported). A visible
+            // fade-in on entry makes the state change perceivable without inventing new business
+            // logic - the indicator itself already existed, only the entrance was silent.
+            TranslationModeIndicator.Opacity = 0;
+            await TranslationModeIndicator.FadeToAsync(1, TranslationIndicatorFadeMs, Easing.CubicOut);
+            return;
         }
+
+        CancelPageTranslation();
+        await ClearTranslationsAsync();
     }
 
     private void SyncNavigationButtons()

@@ -220,3 +220,98 @@ own baseline assumption got wrong by 2; 1 (11) is the hard boundary guarantee an
 - Failing: 0
 - `src/TranslateReader.Core/**` and `src/TranslateReader/Resources/Raw/**`: empty diff against
   BASELINE (`82df8420ab306c3f5a06e07edc72a0469e5af65c`) — verified via DoD 11's literal command.
+
+## Fix-round (iter 2) — T-10
+
+Executed against `D-2026-08-02-pixel-perfect-10` (8 user-reported bugs found in live manual
+testing after iter 1 converged APPROVED_WITH_WARNINGS). Root cause for A-D and E was already
+confirmed by the orchestrator's investigation before dispatch; F-H required directed investigation
+during this task. All 8 items resolved, none ended BLOCKED.
+
+- **A — Sidebar/TOC hairline border.** `Border.StrokeThickness` is a `double` in MAUI, not a
+  `Thickness`; the XAML value `"0,0,1,0"` parsed via `double.TryParse(..., NumberStyles.Any,
+  InvariantCulture)` silently succeeded as `10` (commas read as thousands separators), producing a
+  solid 10px border on all 4 sides instead of a 1px right-side hairline. Fixed by setting
+  `Stroke="Transparent"`/`StrokeThickness="0"` on `SidebarPanel` (`LibraryPage.xaml`) and
+  `ChaptersPanel` (`ReaderPage.xaml`), and adding a real single-side hairline via a sibling
+  `BoxView` (`WidthRequest="1"`, `HorizontalOptions="End"`, `ColorDivider`) — a `BoxView` next to
+  `SidebarPanel` in the root `Grid` (Library), and a `BoxView` inside a new `Grid` wrapping the
+  existing `ScrollView` inside `ChaptersPanel` (Reader), so its content/handlers are unchanged.
+- **B — Search field text/placeholder clipped.** The implicit `Entry` style forces
+  `MinimumHeightRequest="44"`, taller than the containing `Border`'s `HeightRequest` (35
+  desktop/38 mobile). Fixed with an explicit `MinimumHeightRequest="0"` on `SearchEntry`,
+  overriding the inherited floor; visual height stays controlled by the parent `Border`.
+- **C — "Biblioteca" title duplicated.** `LibraryPage` has its own custom header but never
+  suppressed Shell's native nav bar, so both the native `ContentPage.Title` and the custom header
+  `Label` rendered. Fixed with `Shell.NavBarIsVisible="False"` on the `ContentPage` root.
+  `ReaderPage` was unaffected (uses `Shell.TitleView`, which already replaces the native title) and
+  was left untouched for this item.
+- **D — Reader title-bar buttons (TOC/Aa/gear) clipped.** The implicit `Button` style forces
+  `Padding="14,10"`; the 3 buttons were shrunk to 36x36 without overriding padding, leaving ~8x16px
+  of usable glyph area inside a 36x36 box. Fixed with an explicit `Padding="0"` on all 3
+  `Shell.TitleView` buttons.
+- **E — OpenDyslexic font has no effect. Out of scope, registered only.** Confirmed it's a
+  WebView-rendered content font (CSS), not a native MAUI font; no font file or `@font-face` exists
+  under `Resources/Raw/wwwroot`. Fixing it would require touching `Resources/Raw/**`, forbidden by
+  this phase's Client-only boundary (D-2026-08-02-pixel-perfect-1, DoD 11). Registered
+  `.jdi/todos/2026-08-02-opendyslexic-webfont.md` with the concrete steps for a future phase. Did
+  not touch `Resources/Raw/` or `Core`; did not remove "OpenDyslexic" from the picker.
+- **F — Reading-mode segmented control not reflecting state. Fixed.** Investigated the given
+  hypothesis (`FontImageSource.Color` mutated post-construction may not repaint on some platform
+  handlers) via web research rather than guessing: confirmed this is a known, documented
+  `dotnet/maui` limitation — `FontImageSource.Color` is not an observable bindable property, so
+  mutating `.Color` on an already-rendered `ImageSource` does not trigger a repaint on WinUI; the
+  documented workaround is to replace the whole `ImageSource` instance
+  (https://www.telerik.com/forums/how-to-change-color-of-fontimagesource-programmatically,
+  https://github.com/dotnet/maui/issues/8826). Applied: `UpdateReadingModeButtonBorders` in
+  `SettingsOverlay.xaml.cs` now reassigns `ScrollModeButton.ImageSource`/
+  `PaginatedModeButton.ImageSource` to a freshly constructed `FontImageSource` (via a small
+  `CloneSegmentIcon` factory that copies `FontFamily`/`Glyph`/`Size` from the original
+  XAML-declared instance and sets the new `Color`) instead of mutating `.Color` in place.
+  `TextColor` was unaffected (that IS an observable `Button` property) and needed no change.
+- **G — Settings layout re-audited against PIXEL-SPEC "Settings — painel desktop" line by line.**
+  Compared every measurement in that section (header/body padding, theme-card size, segmented
+  control height, slider label colors/track colors, model-list row size, status/delete-button
+  styling) against the current `SettingsOverlay.xaml`. Panel width (380), header padding
+  (`20,18`), body padding (`20,4,20,28`), segmented control (35h, `12,7` cell padding, Paginado
+  before Rolagem), the 4 slider rows (label `TextMuted70` / value `ColorAccent` / track colors),
+  the two language pickers (36h, 50/50, `12` gap), and the model rows (53h, `12,10` padding, `8`
+  gap, `AccentTint08`+`ColorAccent` when selected, `circle`/`check-circle Fill` radio glyphs) all
+  already matched the spec exactly — no action needed there. Found and fixed 2 real divergences:
+  (1) the 3 theme-card buttons (`LightThemeButton`/`DarkThemeButton`/`SepiaThemeButton`) had no
+  explicit `Padding`, inheriting the implicit `Button` style's `"14,10"` instead of the spec's
+  `p:8,12` (desktop) / `p:6,10` (mobile) — confirmed this reading of the spec's unitless `p:X,Y`
+  notation (no `px`, no `->` conversion arrow) means "already in MAUI `Padding="X,Y"` order" by
+  cross-checking against the segmented control's `p:12,7`, which was already correctly applied as
+  literally `Padding="12,7"`; added `Padding="{OnIdiom Default='6,10', Desktop='8,12'}"` to all 3
+  theme buttons. (2) the "Modelo local" section header was rendered as just "Modelo" (missing
+  "local") — corrected the `Label.Text`. The theme-card single-font-size-for-"Aa"+label limitation
+  and the serif "Aa" glyph are pre-existing, explicitly documented deltas (iter-1 SUMMARY "Deltas
+  conscientes" #3, and PIXEL-SPEC's own "Diferencas intencionais mantidas" #4) — not re-litigated.
+- **H — Translation-mode indicator too subtle to notice. Fixed (perception only, no new business
+  logic).** Confirmed the hypothesis: `IsTranslationModeActive` and its binding were already
+  functionally correct (no logic bug), the 3px `BoxView` with a direct `IsVisible` binding and no
+  entrance animation was simply too subtle to read as a state change. Increased
+  `TranslationModeIndicator`'s `HeightRequest` from 3 to 5, and added a `FadeToAsync(0 -> 1, 200ms,
+  Easing.CubicOut)` entrance animation in `ReaderPage.xaml.cs`'s existing
+  `case nameof(ReaderPageModel.IsTranslationModeActive):` `PropertyChanged` hook (inside
+  `OnTranslationModeChanged`, which previously only handled the "turned off" branch) — same
+  `FadeToAsync` pattern already used for the TOC panel (`ShowChaptersPanelAsync`). No exit
+  animation was added per the task's scope (entrance only). Nothing was touched in
+  `ReaderPageModel`/Manager/Engine.
+
+**Build:** `dotnet build src/TranslateReader/TranslateReader.csproj -f net10.0-windows10.0.19041.0
+-c Release` — 0 errors (16 pre-existing warnings, all `CS0618`/`CS0414`, unrelated to this task).
+
+**Tests:** `dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release` —
+375 total, 373 passed, 2 skipped (pre-existing LLamaSharp-dependent skips), 0 failed. Identical
+counts to the iter-1 baseline — no Core code was touched, so no regression and no new tests were
+required (only Client-layer XAML/code-behind changed).
+
+**Files modified this round:** `src/TranslateReader/Pages/LibraryPage.xaml`,
+`src/TranslateReader/Pages/ReaderPage.xaml`, `src/TranslateReader/Pages/ReaderPage.xaml.cs`,
+`src/TranslateReader/Pages/Controls/SettingsOverlay.xaml`,
+`src/TranslateReader/Pages/Controls/SettingsOverlay.xaml.cs`,
+`.jdi/todos/2026-08-02-opendyslexic-webfont.md` (new). `src/TranslateReader.Core/**` and
+`src/TranslateReader/Resources/Raw/**` remain untouched (verified empty diff against
+`.jdi/phases/pixel-perfect/BASELINE`).

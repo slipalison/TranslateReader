@@ -86,6 +86,7 @@
                                 BorderWidth="1"
                                 CornerRadius="10"
                                 HeightRequest="{OnIdiom Default=59, Desktop=67}"
+                                Padding="{OnIdiom Default='6,10', Desktop='8,12'}"
                                 HorizontalOptions="Fill"
                                 FontSize="12" />
                         <Button x:Name="DarkThemeButton"
@@ -98,6 +99,7 @@
                                 BorderWidth="1"
                                 CornerRadius="10"
                                 HeightRequest="{OnIdiom Default=59, Desktop=67}"
+                                Padding="{OnIdiom Default='6,10', Desktop='8,12'}"
                                 HorizontalOptions="Fill"
                                 FontSize="12" />
                         <Button x:Name="SepiaThemeButton"
@@ -110,6 +112,7 @@
                                 BorderWidth="1"
                                 CornerRadius="10"
                                 HeightRequest="{OnIdiom Default=59, Desktop=67}"
+                                Padding="{OnIdiom Default='6,10', Desktop='8,12'}"
                                 HorizontalOptions="Fill"
                                 FontSize="12" />
                     </Grid>
@@ -287,7 +290,7 @@
 
                 <!-- Modelo local: lista vertical (era ScrollView horizontal de pills) -->
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Modelo"
+                    <Label Text="Modelo local"
                            FontSize="13"
                            FontFamily="InterMedium"
                            TextTransform="Uppercase"

@@ -26,6 +26,7 @@
                     FontSize="18"
                     BackgroundColor="Transparent"
                     Clicked="OnTocButtonClicked"
+                    Padding="0"
                     WidthRequest="36"
                     HeightRequest="36"
                     MinimumWidthRequest="36"
@@ -52,6 +53,7 @@
                     FontSize="15"
                     BackgroundColor="Transparent"
                     Clicked="OnTranslateButtonClicked"
+                    Padding="0"
                     WidthRequest="36"
                     HeightRequest="36"
                     MinimumWidthRequest="36"
@@ -62,6 +64,7 @@
                     FontSize="18"
                     BackgroundColor="Transparent"
                     Clicked="OnSettingsButtonClicked"
+                    Padding="0"
                     WidthRequest="36"
                     HeightRequest="36"
                     MinimumWidthRequest="36"
@@ -77,7 +80,8 @@
                            HorizontalOptions="Center" />
 
         <BoxView Grid.Row="0"
-                 HeightRequest="3"
+                 x:Name="TranslationModeIndicator"
+                 HeightRequest="5"
                  Color="{StaticResource ColorAccent}"
                  IsVisible="{Binding IsTranslationModeActive}" />
 
@@ -179,14 +183,18 @@
                 VerticalOptions="Fill"
                 WidthRequest="250"
                 BackgroundColor="{StaticResource ColorBg}"
-                Stroke="{StaticResource Neutral800}"
-                StrokeThickness="0,0,1,0"
+                Stroke="Transparent"
+                StrokeThickness="0"
                 StrokeShape="Rectangle"
                 Padding="0"
                 IsVisible="False"
                 Opacity="0">
-            <ScrollView>
-                <VerticalStackLayout Spacing="2" Padding="12,18">
+            <!-- Border.Stroke cannot express a single-side hairline (StrokeThickness is a
+                 double in MAUI, not a Thickness - "0,0,1,0" parsed as 10 via NumberStyles.Any,
+                 see D-...-10). Real hairline lives in the sibling BoxView below. -->
+            <Grid>
+                <ScrollView>
+                    <VerticalStackLayout Spacing="2" Padding="12,18">
                     <Label Text="Capítulos"
                            FontSize="13"
                            FontFamily="InterMedium"
@@ -243,8 +251,12 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-                </VerticalStackLayout>
-            </ScrollView>
+                    </VerticalStackLayout>
+                </ScrollView>
+                <BoxView WidthRequest="1"
+                         HorizontalOptions="End"
+                         BackgroundColor="{StaticResource ColorDivider}" />
+            </Grid>
         </Border>
 
         <!-- Overlay de download do modelo -->
