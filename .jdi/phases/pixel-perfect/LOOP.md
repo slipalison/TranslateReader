@@ -18,3 +18,4 @@ created_at: 2026-08-02T07:47:26-03:00
 - iter 3: APPROVED_WITH_WARNINGS, hash=8566cef7285b, commit=be351b0, ts=2026-08-02T12:37:09-03:00
 --- REOPENED: user declined ship again on iter 3 warnings; TOC Setter.TargetName real fix + test nit, at 2026-08-02T13:04:39-03:00 ---
 - iter 4: APPROVED_WITH_WARNINGS, hash=2fce57ecd065, commit=3335f59, ts=2026-08-02T13:10:04-03:00
+- iter 5: APPROVED_WITH_WARNINGS, hash=470a35a1b501, commit=26d1a60, ts=2026-08-02T13:31:49-03:00
