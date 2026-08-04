@@ -76,7 +76,7 @@
 
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
-        <PackageReference Include="CommunityToolkit.Maui" Version="14.2.2"/>
+        <PackageReference Include="CommunityToolkit.Maui" Version="15.0.0"/>
     </ItemGroup>
 
     <!-- LLamaSharp.Backend.* must track the same version as LLamaSharp (Core csproj) — the
