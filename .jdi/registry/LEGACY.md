@@ -27,7 +27,7 @@ em branches paralelos nunca colidem.
 - Build: `dotnet build -f net10.0-windows10.0.19041.0` (TFM Windows e o alvo de verificacao — backends LLamaSharp Cpu/Cuda12 so existem para Windows hoje)
 - Test: `dotnet test` (projeto de teste em `net10.0` puro, sem workload mobile)
 - Coverage: `dotnet test --collect:"XPlat Code Coverage"` -> parse do Cobertura, 80% **apenas** em arquivos criados depois de `4285f25`
-- Lint: `dotnet format --verify-no-changes` — WARN-only enquanto nao existir `.editorconfig`/analyzers (phase `baseline-de-estilo`)
+- Lint: `dotnet format whitespace --verify-no-changes` — `.editorconfig` + `Directory.Build.props` (analyzers built-in `latest-recommended` + `EnforceCodeStyleInBuild` + `Meziantou.Analyzer`) estao na raiz desde a phase `baseline-de-estilo`. Gate 4 = BLOCK nos arquivos tocados pela phase em review, WARN fora do diff (legado isento por D-2). `TreatWarningsAsErrors` continua desligado: o inventario medido deu 24 IDs `CS/CA/MA` contra o teto de 12 de D-2026-08-08-baseline-de-estilo-3
 - Gate 7 (UI live): SKIPPED permanente — `has_frontend=false`, app MAUI nativo sem dev server. Skills `frontend-rules`/`frontend-validator` NAO carregadas
 - Modelo LLM: nenhum pinado em nenhum runtime — PROJECT.md declara "usar o default do ambiente"
 

@@ -222,7 +222,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   VAZIO); **DoD 5 literal** exit 0 (so toca `.md`).
 - **Dependencies:** T-6
 - **Test:** n/a (documentacao de processo)
-- **Status:** pending
+- **Status:** completed
 
 ---
 

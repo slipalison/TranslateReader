@@ -370,12 +370,16 @@ manual do usuario. Nunca vira phase automaticamente — precisa ser promovido vi
   `src/TranslateReader.Core/Business/Engines/ThemeEngine.cs:12` e `:14`;
   `src/TranslateReader/Pages/ReaderPage.xaml.cs:122` e `:124`;
   `test/TranslateReader.Tests/ThemeEngineTests.cs:12`;
-  `test/TranslateReader.Tests/TranslationManagerTests.cs:528-529`. O gate fica em `exit 2`
-  permanentemente enquanto isso viver. Destrava na phase `baseline-de-estilo` (ROADMAP posicao 1,
-  `sem .editorconfig, sem .gitattributes, sem analyzers configurados`): sem `.editorconfig` o
-  `dotnet format` roda com regra default e formatar essas linhas agora seria churn de legado sem
-  criterio locked. Nao corrigir avulso — a phase de estilo deve rodar `dotnet format` uma vez, no
-  repo inteiro, num commit proprio.
+  `test/TranslateReader.Tests/TranslationManagerTests.cs:528-529`. O gate ficava em `exit 2`
+  permanentemente enquanto isso vivesse.
+  **RESOLVIDO em baseline-de-estilo** (commit `style(baseline-de-estilo): apply dotnet format
+  whitespace repo-wide`): `.editorconfig` + `.gitattributes` + `Directory.Build.props` estao na
+  raiz e `dotnet format whitespace` rodou uma vez, no repo inteiro, num commit proprio.
+  `dotnet format whitespace --verify-no-changes` sai `exit 0`. O que o format de fato mudou:
+  alinhamento de `switch`/`InlineData` em `ThemeEngine.cs` e `ThemeEngineTests.cs` e newline final
+  em 5 arquivos de `Platforms/`; `ReaderPage.xaml.cs` e `TranslationManagerTests.cs` ja nao
+  acusavam nada. Diff semantico-zero provado por
+  `git diff --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol`.
 
 - **[LEGADO/THE-METHOD, D-2] `LibraryPageModel.TranslateBookAsync` usa 2 Managers no mesmo
   `[RelayCommand]`.** `src/TranslateReader/PageModels/LibraryPageModel.cs:105-106`
