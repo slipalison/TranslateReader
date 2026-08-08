@@ -121,7 +121,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   E **DoD 5 literal** exit 0.
 - **Dependencies:** T-3
 - **Test:** os 2 builds Release do passo 3 completam (com warnings, sem erro)
-- **Status:** pending
+- **Status:** completed
 
 ## T-5: `TreatWarningsAsErrors` + `NoWarn` fechado (a partir do inventario medido)
 - **Specialist:** jdi-doer-translatereader

@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Analyzer baseline for every project in the repo (phase baseline-de-estilo, D-...-2).
+    Single source of truth: never duplicate these in the individual csproj files.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Meziantou.Analyzer mechanises rules already locked in .claude/rules/csharp.md:
+      explicit StringComparison (2.1), sync-over-async and ConfigureAwait (3),
+      CancellationToken propagation (3), allocation/closure in loops (2.2), empty catch (1).
+      StyleCop.Analyzers and SonarAnalyzer.CSharp were rejected in D-...-2.
+    -->
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.141" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+</Project>
