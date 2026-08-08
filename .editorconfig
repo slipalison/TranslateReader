@@ -5,8 +5,10 @@ root = true
 # (D-2 exempts everything before 4285f25). Only `dotnet format whitespace`
 # is applied repo-wide; the preferences here bind new and touched code.
 
+# `charset` is deliberately NOT declared: `dotnet format whitespace` would strip the
+# UTF-8 BOM from 6 pre-existing files, and D-...-1(4) locks this phase to a byte diff
+# that `git diff --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol` sees as empty.
 [*]
-charset = utf-8
 end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
