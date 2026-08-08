@@ -11,6 +11,7 @@ namespace TranslateReader.Pages;
 public partial class ReaderPage : ContentPage
 {
     private const uint TocAnimationDurationMs = 260;
+    private const uint TranslationIndicatorFadeMs = 200;
 
     private readonly ReaderPageModel _pageModel;
     private int _currentPage;
@@ -187,20 +188,33 @@ public partial class ReaderPage : ContentPage
 
     private async void OnTranslationModeChanged()
     {
-        if (!_pageModel.IsTranslationModeActive)
+        if (_pageModel.IsTranslationModeActive)
         {
-            CancelPageTranslation();
-            await ClearTranslationsAsync();
+            // 3px was too subtle to read as "translation mode is on" (user-reported). A visible
+            // fade-in on entry makes the state change perceivable without inventing new business
+            // logic - the indicator itself already existed, only the entrance was silent.
+            // CancelAnimations guards against a rapid on/off/on toggle overlapping two fades.
+            TranslationModeIndicator.CancelAnimations();
+            TranslationModeIndicator.Opacity = 0;
+            await TranslationModeIndicator.FadeToAsync(1, TranslationIndicatorFadeMs, Easing.CubicOut);
+            return;
         }
+
+        CancelPageTranslation();
+        await ClearTranslationsAsync();
     }
 
     private void SyncNavigationButtons()
     {
+        // Footer is only shown in Paginated mode (PIXEL-SPEC "Reader - footer").
+        ReaderFooter.IsVisible = IsPaginatedMode();
+
         if (IsScrollMode())
         {
             PreviousButton.IsVisible = false;
             NextButton.IsVisible = false;
             PageIndicatorLabel.IsVisible = false;
+            PageProgressBar.IsVisible = false;
             return;
         }
         if (IsPaginatedMode())
@@ -213,6 +227,7 @@ public partial class ReaderPage : ContentPage
             PreviousButton.IsVisible = _pageModel.HasPreviousChapter;
             NextButton.IsVisible = _pageModel.HasNextChapter;
             PageIndicatorLabel.IsVisible = false;
+            PageProgressBar.IsVisible = false;
         }
     }
 
@@ -463,12 +478,18 @@ public partial class ReaderPage : ContentPage
         {
             if (IsPaginatedMode() && _totalPages > 0)
             {
-                PageIndicatorLabel.Text = $"{_currentPage + 1} / {_totalPages}";
+                var chapterNumber = _pageModel.CurrentChapterIndex + 1;
+                var chapterTotal = _pageModel.Chapters.Count;
+                PageIndicatorLabel.Text =
+                    $"Página {_currentPage + 1} / {_totalPages} · Capítulo {chapterNumber} de {chapterTotal}";
                 PageIndicatorLabel.IsVisible = true;
+                PageProgressBar.Progress = (double)(_currentPage + 1) / _totalPages;
+                PageProgressBar.IsVisible = true;
             }
             else
             {
                 PageIndicatorLabel.IsVisible = false;
+                PageProgressBar.IsVisible = false;
             }
         });
     }

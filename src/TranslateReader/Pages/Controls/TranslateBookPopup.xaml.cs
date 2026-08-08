@@ -37,16 +37,15 @@ public partial class TranslateBookPopup : ContentView
                 new Span
                 {
                     Text = book.Title,
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 15,
+                    FontSize = 13,
                     TextColor = ResourceColor("ColorText")
                 },
                 new Span { Text = "\n" },
                 new Span
                 {
                     Text = BuildSubtitle(book),
-                    FontSize = 12,
-                    TextColor = ResourceColor("Neutral400")
+                    FontSize = 11,
+                    TextColor = ResourceColor("Neutral500")
                 }
             }
         };

@@ -14,38 +14,65 @@
     </ContentPage.Resources>
 
     <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsEnabled="True" />
+        <BackButtonBehavior IsEnabled="True">
+            <BackButtonBehavior.IconOverride>
+                <FontImageSource FontFamily="Phosphor" Glyph="&#xE058;" Size="18" Color="{StaticResource ColorText}" />
+            </BackButtonBehavior.IconOverride>
+        </BackButtonBehavior>
     </Shell.BackButtonBehavior>
 
     <Shell.TitleView>
         <Grid ColumnDefinitions="Auto,*,Auto,Auto" HorizontalOptions="Fill">
             <Button Grid.Column="0"
                     x:Name="TocButton"
-                    Text="&#9776;"
+                    Text="&#xE2F0;"
+                    FontFamily="Phosphor"
                     FontSize="18"
                     BackgroundColor="Transparent"
                     Clicked="OnTocButtonClicked"
-                    WidthRequest="44"
-                    HeightRequest="44"
+                    Padding="0"
+                    WidthRequest="36"
+                    HeightRequest="36"
+                    MinimumWidthRequest="36"
+                    MinimumHeightRequest="36"
                     IsVisible="{OnIdiom Default=False, Desktop=True}" />
-            <Label Grid.Column="1"
-                   Text="{Binding Book.Title}"
-                   VerticalOptions="Center"
-                   LineBreakMode="TailTruncation" />
+            <VerticalStackLayout Grid.Column="1"
+                                 Spacing="1"
+                                 VerticalOptions="Center">
+                <Label Text="{Binding Book.Title}"
+                       FontFamily="InterRegular"
+                       FontSize="14"
+                       MaxLines="1"
+                       LineBreakMode="TailTruncation" />
+                <Label x:Name="ChapterSubtitleLabel"
+                       Text="{Binding ChapterSubtitle}"
+                       FontSize="11"
+                       TextColor="{StaticResource Neutral600}"
+                       MaxLines="1"
+                       LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
             <Button Grid.Column="2"
                     Text="Aa"
-                    FontSize="16"
+                    FontFamily="InterMedium"
+                    FontSize="15"
                     BackgroundColor="Transparent"
                     Clicked="OnTranslateButtonClicked"
-                    WidthRequest="44"
-                    HeightRequest="44" />
+                    Padding="0"
+                    WidthRequest="36"
+                    HeightRequest="36"
+                    MinimumWidthRequest="36"
+                    MinimumHeightRequest="36" />
             <Button Grid.Column="3"
-                    Text="⚙"
+                    Text="&#xE272;"
+                    FontFamily="Phosphor"
                     FontSize="18"
                     BackgroundColor="Transparent"
                     Clicked="OnSettingsButtonClicked"
-                    WidthRequest="44"
-                    HeightRequest="44" />
+                    Padding="0"
+                    WidthRequest="36"
+                    HeightRequest="36"
+                    MinimumWidthRequest="36"
+                    MinimumHeightRequest="36" />
         </Grid>
     </Shell.TitleView>
 
@@ -57,7 +84,8 @@
                            HorizontalOptions="Center" />
 
         <BoxView Grid.Row="0"
-                 HeightRequest="3"
+                 x:Name="TranslationModeIndicator"
+                 HeightRequest="5"
                  Color="{StaticResource ColorAccent}"
                  IsVisible="{Binding IsTranslationModeActive}" />
 
@@ -73,26 +101,81 @@
                        DefaultFile="index.html"
                        RawMessageReceived="OnHybridMessageReceived" />
 
-        <Grid Grid.Row="3"
-              ColumnDefinitions="Auto,*,Auto"
-              Padding="8">
-            <Button Grid.Column="0"
-                    x:Name="PreviousButton"
-                    Text="&#8592; Anterior"
-                    Clicked="OnPreviousButtonClicked"
-                    IsVisible="False" />
-            <Label Grid.Column="1"
-                   x:Name="PageIndicatorLabel"
-                   HorizontalOptions="Center"
-                   VerticalOptions="Center"
-                   FontSize="12"
-                   IsVisible="False" />
-            <Button Grid.Column="2"
-                    x:Name="NextButton"
-                    Text="Próximo &#8594;"
-                    Clicked="OnNextButtonClicked"
-                    IsVisible="False" />
-        </Grid>
+        <!-- Footer: only shown in Paginated mode (PIXEL-SPEC "Reader - footer"). -->
+        <Border Grid.Row="3"
+                x:Name="ReaderFooter"
+                BackgroundColor="{StaticResource ColorBg}"
+                Stroke="Transparent"
+                StrokeThickness="0"
+                Padding="20,10"
+                HeightRequest="54">
+            <Border.StrokeShape>
+                <Rectangle />
+            </Border.StrokeShape>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <BoxView Grid.ColumnSpan="3"
+                         VerticalOptions="Start"
+                         HeightRequest="1"
+                         Color="{StaticResource ColorDivider}" />
+
+                <Button Grid.Column="0"
+                        x:Name="PreviousButton"
+                        Text="Anterior"
+                        FontFamily="InterMedium"
+                        FontSize="14"
+                        TextColor="{StaticResource ColorText}"
+                        BackgroundColor="Transparent"
+                        BorderColor="{StaticResource ColorDivider}"
+                        BorderWidth="1"
+                        CornerRadius="8"
+                        HeightRequest="34"
+                        MinimumHeightRequest="34"
+                        Padding="10,6"
+                        ContentLayout="Left,6"
+                        Clicked="OnPreviousButtonClicked"
+                        IsVisible="False">
+                    <Button.ImageSource>
+                        <FontImageSource FontFamily="Phosphor" Glyph="&#xE138;" Size="14" Color="{StaticResource ColorText}" />
+                    </Button.ImageSource>
+                </Button>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="6" HorizontalOptions="Center" VerticalOptions="Center">
+                    <Label x:Name="PageIndicatorLabel"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           FontSize="12"
+                           TextColor="{StaticResource Neutral500}"
+                           IsVisible="False" />
+                    <ProgressBar x:Name="PageProgressBar"
+                                 WidthRequest="200"
+                                 HeightRequest="2"
+                                 ProgressColor="{StaticResource ColorAccent}"
+                                 BackgroundColor="{StaticResource Neutral900}"
+                                 IsVisible="False" />
+                </VerticalStackLayout>
+
+                <Button Grid.Column="2"
+                        x:Name="NextButton"
+                        Text="Próximo"
+                        FontFamily="InterMedium"
+                        FontSize="14"
+                        TextColor="{StaticResource ColorText}"
+                        BackgroundColor="Transparent"
+                        BorderColor="{StaticResource ColorDivider}"
+                        BorderWidth="1"
+                        CornerRadius="8"
+                        HeightRequest="34"
+                        MinimumHeightRequest="34"
+                        Padding="10,6"
+                        ContentLayout="Right,6"
+                        Clicked="OnNextButtonClicked"
+                        IsVisible="False">
+                    <Button.ImageSource>
+                        <FontImageSource FontFamily="Phosphor" Glyph="&#xE13A;" Size="14" Color="{StaticResource ColorText}" />
+                    </Button.ImageSource>
+                </Button>
+            </Grid>
+        </Border>
 
         <!-- Painel de capitulos (TOC): drawer fixo de ~250px que desliza a partir da borda
              esquerda sobre o conteudo (D-...-4). Diferente do SettingsOverlay, nao ha backdrop
@@ -104,40 +187,50 @@
                 VerticalOptions="Fill"
                 WidthRequest="250"
                 BackgroundColor="{StaticResource ColorBg}"
-                Stroke="{StaticResource Neutral800}"
-                StrokeThickness="0,0,1,0"
+                Stroke="Transparent"
+                StrokeThickness="0"
                 StrokeShape="Rectangle"
                 Padding="0"
                 IsVisible="False"
                 Opacity="0">
-            <ScrollView>
-                <VerticalStackLayout Spacing="4" Padding="16,20">
+            <!-- Border.Stroke cannot express a single-side hairline (StrokeThickness is a
+                 double in MAUI, not a Thickness - "0,0,1,0" parsed as 10 via NumberStyles.Any,
+                 see D-...-10). Real hairline lives in the sibling BoxView below. -->
+            <Grid>
+                <ScrollView>
+                    <VerticalStackLayout Spacing="2" Padding="12,18">
                     <Label Text="Capítulos"
-                           FontSize="12"
+                           FontSize="13"
+                           FontFamily="InterMedium"
                            TextTransform="Uppercase"
                            CharacterSpacing="1"
-                           TextColor="{StaticResource Neutral400}"
-                           Margin="4,0,0,8" />
+                           TextColor="{StaticResource Neutral600}"
+                           Margin="10,0,0,8" />
                     <CollectionView x:Name="ChaptersCollection"
                                     ItemsSource="{Binding Chapters}"
                                     SelectionMode="Single"
                                     SelectionChanged="OnChapterSelected">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Chapter">
-                                <Border Margin="0,2"
+                                <!-- Item ativo: bg AccentTint10 no Border + titulo ColorAccent no Label
+                                     filho, ambos via Setter.TargetName (MAUI suporta - Setter tem
+                                     TargetName pra mirar um elemento nomeado no mesmo NameScope, doc:
+                                     "Set state on multiple elements" em learn.microsoft.com/dotnet/maui). -->
+                                <Border Margin="0,1"
                                         Padding="10,8"
                                         StrokeThickness="0"
                                         BackgroundColor="Transparent"
                                         StrokeShape="RoundRectangle 8">
-                                    <Grid ColumnDefinitions="24,*" ColumnSpacing="8">
+                                    <Grid ColumnDefinitions="16,*" ColumnSpacing="10">
                                         <Label Grid.Column="0"
                                                Text="{Binding OrderIndex, Converter={StaticResource OneBasedIndexConverter}}"
-                                               FontSize="12"
-                                               TextColor="{StaticResource Neutral500}"
+                                               FontSize="11"
+                                               TextColor="{StaticResource Neutral600}"
                                                VerticalOptions="Center" />
-                                        <Label Grid.Column="1"
+                                        <Label x:Name="ChapterTitleLabel"
+                                               Grid.Column="1"
                                                Text="{Binding Title}"
-                                               FontSize="14"
+                                               FontSize="13"
                                                TextColor="{StaticResource ColorText}"
                                                LineBreakMode="TailTruncation"
                                                VerticalOptions="Center" />
@@ -148,11 +241,17 @@
                                                 <VisualState x:Name="Normal">
                                                     <VisualState.Setters>
                                                         <Setter Property="BackgroundColor" Value="Transparent" />
+                                                        <Setter TargetName="ChapterTitleLabel"
+                                                                Property="Label.TextColor"
+                                                                Value="{StaticResource ColorText}" />
                                                     </VisualState.Setters>
                                                 </VisualState>
                                                 <VisualState x:Name="Selected">
                                                     <VisualState.Setters>
-                                                        <Setter Property="BackgroundColor" Value="{StaticResource Accent800}" />
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource AccentTint10}" />
+                                                        <Setter TargetName="ChapterTitleLabel"
+                                                                Property="Label.TextColor"
+                                                                Value="{StaticResource ColorAccent}" />
                                                     </VisualState.Setters>
                                                 </VisualState>
                                             </VisualStateGroup>
@@ -162,8 +261,12 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-                </VerticalStackLayout>
-            </ScrollView>
+                    </VerticalStackLayout>
+                </ScrollView>
+                <BoxView WidthRequest="1"
+                         HorizontalOptions="End"
+                         BackgroundColor="{StaticResource ColorDivider}" />
+            </Grid>
         </Border>
 
         <!-- Overlay de download do modelo -->
@@ -196,7 +299,7 @@
                            TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
-                            BackgroundColor="#E53E3E"
+                            BackgroundColor="{StaticResource ColorDanger}"
                             TextColor="White"
                             CornerRadius="8"
                             HorizontalOptions="Center"
@@ -234,7 +337,7 @@
                            TextColor="{StaticResource Neutral500}" />
                     <Button Text="Cancelar"
                             Clicked="OnCancelDownloadClicked"
-                            BackgroundColor="#E53E3E"
+                            BackgroundColor="{StaticResource ColorDanger}"
                             TextColor="White"
                             CornerRadius="8"
                             HorizontalOptions="Center"
