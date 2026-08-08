@@ -75,7 +75,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   commit e puro EOL); suite .NET e suite JS verdes (piso de DoD 7).
 - **Dependencies:** T-1
 - **Test:** `dotnet test ... -c Release` + `node --test test/js/`
-- **Status:** pending
+- **Status:** completed
 
 ## T-3: `.editorconfig` na raiz
 - **Specialist:** jdi-doer-translatereader
