@@ -50,7 +50,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   `B=$(tr -d ' \r\n' < .jdi/phases/baseline-de-estilo/BASELINE) && test -n "$B" && git cat-file -e "$B^{commit}" && git ls-files --error-unmatch .jdi/phases/baseline-de-estilo/BASELINE >/dev/null 2>&1 && git merge-base --is-ancestor "$B" HEAD && test -z "$(git status --porcelain)"`
 - **Dependencies:** none
 - **Test:** n/a (nenhum codigo tocado)
-- **Status:** pending
+- **Status:** completed
 
 ## T-2: `.gitattributes` + `git add --renormalize .` (line endings, commit sozinho)
 - **Specialist:** jdi-doer-translatereader
