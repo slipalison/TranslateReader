@@ -155,7 +155,9 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   `NoWarn` so com IDs concretos, <= 12, cada ID em >= 2 linhas); **DoD 5 literal** exit 0.
 - **Dependencies:** T-4
 - **Test:** builds Release do app (Windows) e de Tests, ambos `0 Error(s)`
-- **Status:** pending
+- **Status:** blocked — inventario medido em T-4 tem 24 IDs `CS/CA/MA` (0 `IDE*`) contra o teto de
+  12 de D-...-3(3b); nem CS+CA sozinhos (13) cabem. Regra de parada acionada: humano decide se
+  `latest-recommended` + Meziantou ficam. Lista completa no SUMMARY.md.
 
 ## T-6: `dotnet format whitespace` no repo inteiro (commit proprio)
 - **Specialist:** jdi-doer-translatereader
