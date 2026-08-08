@@ -184,7 +184,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
   risco pro semantico-zero.
 - **Dependencies:** T-5
 - **Test:** `dotnet test ... -c Release` (piso 375/0/2) + `node --test test/js/`
-- **Status:** pending
+- **Status:** completed
 
 ## T-7: Fechar a divida de processo (reviewer, registry, doer, todos) — CI intocado
 - **Specialist:** jdi-doer-translatereader
