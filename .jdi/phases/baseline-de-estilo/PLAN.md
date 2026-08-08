@@ -97,7 +97,7 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
 - **Acceptance:** **DoD 1 literal** exit 0; **DoD 5 literal** exit 0 (nao toca `.cs`/`.xaml`/`.js`).
 - **Dependencies:** T-2
 - **Test:** n/a (config; o efeito e coberto por DoD 4/DoD 7 em T-6)
-- **Status:** pending
+- **Status:** completed
 
 ## T-4: `Directory.Build.props` — analyzers ligados + inventario de warnings MEDIDO
 - **Specialist:** jdi-doer-translatereader

@@ -1,0 +1,58 @@
+root = true
+
+# TranslateReader style baseline (phase baseline-de-estilo).
+# Legacy code is NOT reformatted to match the style preferences below
+# (D-2 exempts everything before 4285f25). Only `dotnet format whitespace`
+# is applied repo-wide; the preferences here bind new and touched code.
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+indent_size = 4
+
+# using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# `var` — explicit types except where the right-hand side already says it
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# `this.` is never used in this codebase
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+# braces — always, even for one-liners (guard clauses are the exception below)
+csharp_prefer_braces = when_multiline:suggestion
+
+# expression-bodied members
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_expression_bodied_lambdas = true:suggestion
+
+# language rules mechanised from .claude/rules/csharp.md
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+csharp_prefer_static_local_function = true:suggestion
+
+# Diagnostic severities.
+# IDE0055 ("fix formatting") stays a suggestion: D-...-1 locks legacy
+# normalisation to `dotnet format whitespace`, so full formatting drift in
+# pre-4285f25 files must never break the build.
+dotnet_diagnostic.IDE0055.severity = suggestion
