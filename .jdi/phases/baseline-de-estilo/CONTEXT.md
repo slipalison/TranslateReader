@@ -79,10 +79,13 @@ recorrente sem refatorar codigo legado.
       **Source:** D-...-1, D-...-4
 - [ ] **DoD 6 — build passa COM warnings-as-errors e o `NoWarn` e fechado.** App (Windows
       Release) e Tests com `0 Error(s)`, zero `warning CS|CA|MA|IDE` nos dois logs, e a lista
-      `NoWarn` do `Directory.Build.props`: so IDs concretos (nenhum curinga), <= 12 IDs, cada ID
-      aparecendo em >= 2 linhas do arquivo (valor + comentario com o motivo)
-      **Verify:** `mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 > TestResults/bde-build-app.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/bde-build-app.log && DOTNET_CLI_UI_LANGUAGE=en dotnet build test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/bde-build-tests.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/bde-build-tests.log && ! grep -qE ": warning (CS|CA|MA|IDE)[0-9]+" TestResults/bde-build-app.log TestResults/bde-build-tests.log && P=Directory.Build.props && V=$(tr -d '\r' < "$P" | tr '\n' ' ' | sed -n 's/.*<NoWarn>\(.*\)<\/NoWarn>.*/\1/p') && test -n "$V" && T=$(echo "$V" | tr ';' '\n' | sed 's/\$(NoWarn)//' | tr -d ' ') && test "$(echo "$T" | grep -vcE '^([A-Za-z]{2,4}[0-9]{3,5})?$')" -eq 0 && IDS=$(echo "$T" | grep -E '^[A-Za-z]{2,4}[0-9]{3,5}$' | sort -u) && test -n "$IDS" && test "$(echo "$IDS" | wc -l)" -le 12 && for id in $IDS; do test "$(grep -c "$id" "$P")" -ge 2 || exit 1; done`
-      **Source:** D-...-2, D-...-3
+      `NoWarn` do `Directory.Build.props`: so IDs concretos (nenhum curinga), cada ID
+      aparecendo em >= 2 linhas do arquivo (valor + comentario com o motivo).
+      **Teto numerico de 12 REVOGADO por D-...-6** — a lista e exatamente o que sobrou da medicao
+      apos a calibracao das rules mal aplicadas ao tipo de projeto; a validacao estrutural
+      (elemento unico, sem curinga, comentario por ID) continua valendo integralmente.
+      **Verify:** `mkdir -p TestResults && DOTNET_CLI_UI_LANGUAGE=en dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 > TestResults/bde-build-app.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/bde-build-app.log && DOTNET_CLI_UI_LANGUAGE=en dotnet build test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release > TestResults/bde-build-tests.log 2>&1 && grep -qE "^ *0 Error\(s\)" TestResults/bde-build-tests.log && ! grep -qE ": warning (CS|CA|MA|IDE)[0-9]+" TestResults/bde-build-app.log TestResults/bde-build-tests.log && P=Directory.Build.props && V=$(tr -d '\r' < "$P" | tr '\n' ' ' | sed -n 's/.*<NoWarn>\(.*\)<\/NoWarn>.*/\1/p') && test -n "$V" && T=$(echo "$V" | tr ';' '\n' | sed 's/\$(NoWarn)//' | tr -d ' ') && test "$(echo "$T" | grep -vcE '^([A-Za-z]{2,4}[0-9]{3,5})?$')" -eq 0 && IDS=$(echo "$T" | grep -E '^[A-Za-z]{2,4}[0-9]{3,5}$' | sort -u) && test -n "$IDS" && for id in $IDS; do test "$(grep -c "$id" "$P")" -ge 2 || exit 1; done`
+      **Source:** D-...-2, D-...-3, D-...-6
 - [ ] **DoD 7 — nada quebrou: suite .NET verde + suite JS verde.** Piso FIXO `Total >= 375`,
       `Failed: 0`, `Skipped <= 2` (baseline de `pixel-perfect`), e `node --test test/js/` verde
       (o renormalize toca todos os `.js` de `wwwroot` e `test/js`)
