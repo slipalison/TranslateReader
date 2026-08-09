@@ -278,9 +278,12 @@ function _removeSelBlob() {
 }
 
 // Every currently-wrapped period gets its selected state reflected as a class so the desktop hover
-// rule (`:not(.tr-on):hover`) can stay pure CSS instead of tracking hover in JS too.
+// rule (`:not(.tr-on):hover`) can stay pure CSS instead of tracking hover in JS too. Loading
+// placeholders also carry `data-si` (so a later applySnippetTranslation can find them by range)
+// but are not selectable, so they are left alone here.
 function _updateSentClasses() {
     for (var span of document.querySelectorAll("[data-si]")) {
+        if (span.className.indexOf('tr-loading') !== -1) continue;
         var isOn = !!(_sel && span.parentNode === _sel.p && _sel.set.has(Number(span.dataset.si)));
         span.className = isOn ? 'tr-sent tr-on' : 'tr-sent';
     }
@@ -388,6 +391,7 @@ function _buildPill() {
     var translateLabel = document.createElement('span');
     translateLabel.textContent = _labels.translateSnip;
     primary.appendChild(translateLabel);
+    primary.addEventListener('click', _onTranslateClick);
     pill.appendChild(primary);
 
     var close = document.createElement('button');
@@ -624,3 +628,281 @@ window.unmountSnippetLayer = function () {
     }
     _mounted = false;
 };
+
+function _hexRgb(hex) {
+    var clean = String(hex).replace('#', '');
+    var r = Number.parseInt(clean.substring(0, 2), 16);
+    var g = Number.parseInt(clean.substring(2, 4), 16);
+    var b = Number.parseInt(clean.substring(4, 6), 16);
+    return r + ',' + g + ',' + b;
+}
+
+function _luma(hex) {
+    var clean = String(hex).replace('#', '');
+    var r = Number.parseInt(clean.substring(0, 2), 16);
+    var g = Number.parseInt(clean.substring(2, 4), 16);
+    var b = Number.parseInt(clean.substring(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+var _sourceLanguage = '';
+var _targetLanguage = '';
+
+// Called once by the C# side after InjectChapterAsync: labels carry the pt-BR UI strings, the
+// active theme's bg/accent (derivation H — Client cannot call an Engine directly, so ReaderPage
+// resolves them via ISettingsManager and hands them over here), and the book's language pair, so
+// the snip chip can show the right side's language without a per-snippet language column.
+window.setSnippetLabels = function (labels) {
+    _labels = labels;
+    _accentRgb = _hexRgb(labels.theme.accent);
+    _darkPage = _luma(labels.theme.bg) < 0.5;
+    _sourceLanguage = labels.sourceLanguage;
+    _targetLanguage = labels.targetLanguage;
+};
+
+// The anchor format the DoD depends on: chapterHRef:paragraphIndex:a:b. A paginated chapterHRef of
+// null stringifies to the literal "null" here and is parsed back to null in _parseSnipKey — the
+// paginated root is the only one _snippetRoots ever reports with a null href, so that round-trip
+// is unambiguous.
+function _snipKey(chapterHRef, paragraphIndex, a, b) {
+    return chapterHRef + ':' + paragraphIndex + ':' + a + ':' + b;
+}
+
+function _parseSnipKey(key) {
+    var parts = String(key).split(':');
+    return {
+        chapterHRef: parts[0] === 'null' ? null : parts[0],
+        paragraphIndex: Number(parts[1]),
+        a: Number(parts[2]),
+        b: Number(parts[3]),
+    };
+}
+
+function _langLabel(name) {
+    if (_labels.langMap && Object.prototype.hasOwnProperty.call(_labels.langMap, name)) {
+        return _labels.langMap[name];
+    }
+    return String(name).slice(0, 2).toUpperCase();
+}
+
+function _onSnipRemoveClick(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    var span = e && e.target && e.target.closest("[data-snip]");
+    if (!span) return;
+    var info = _parseSnipKey(span.dataset.snip);
+    _restoreSnipToPeriods(span, info);
+    window.sendRawMessage('snip-remove|' + JSON.stringify({
+        chapterHRef: info.chapterHRef, paragraphIndex: info.paragraphIndex,
+        sentenceStart: info.a, sentenceEnd: info.b,
+    }));
+}
+
+function _buildChip(showingOriginal) {
+    var chip = document.createElement('span');
+    chip.className = 'tr-snip-chip';
+    chip.style.color = 'rgb(' + _accentRgb + ')';
+    chip.style.background = 'rgba(' + _accentRgb + ',0.13)';
+    chip.style.boxShadow = '0 0 0 1px rgba(' + _accentRgb + ',0.38)';
+    var swap = document.createElement('i');
+    swap.className = 'ph ph-arrows-left-right';
+    swap.style.fontSize = '1.25em';
+    chip.appendChild(swap);
+    var label = document.createElement('span');
+    label.textContent = _langLabel(showingOriginal ? _sourceLanguage : _targetLanguage);
+    chip.appendChild(label);
+    var close = document.createElement('i');
+    close.className = 'ph ph-x';
+    close.style.fontSize = '1.15em';
+    close.style.opacity = '0.65';
+    close.style.cursor = 'pointer';
+    close.addEventListener('click', _onSnipRemoveClick);
+    chip.appendChild(close);
+    return chip;
+}
+
+function _onSnipClick(e) {
+    var span = e && e.target && e.target.closest("[data-snip]");
+    if (!span) return;
+    var info = _parseSnipKey(span.dataset.snip);
+    var showingOriginal = span.dataset.showing !== '1';
+    _renderSnipSpan(span, showingOriginal);
+    window.sendRawMessage('snip-toggle|' + JSON.stringify({
+        chapterHRef: info.chapterHRef, paragraphIndex: info.paragraphIndex,
+        sentenceStart: info.a, sentenceEnd: info.b, showingOriginal: showingOriginal,
+    }));
+}
+
+function _renderSnipSpan(span, showingOriginal) {
+    span.dataset.showing = showingOriginal ? '1' : '0';
+    span.childNodes[0].textContent = showingOriginal ? span.dataset.orig : span.dataset.trans;
+    var oldChip = span.querySelector(".tr-snip-chip");
+    if (oldChip) oldChip.remove();
+    span.appendChild(_buildChip(showingOriginal));
+}
+
+function _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOriginal) {
+    var span = document.createElement('span');
+    span.dataset.snip = _snipKey(chapterHRef, pi, a, b);
+    span.dataset.orig = original;
+    span.dataset.trans = translated;
+    span.dataset.showing = showingOriginal ? '1' : '0';
+    span.appendChild(document.createTextNode(showingOriginal ? original : translated));
+    span.appendChild(_buildChip(showingOriginal));
+    span.addEventListener('click', _onSnipClick);
+    return span;
+}
+
+// The inverse of _buildSnipSpan: turns a snip back into individual, re-selectable periods,
+// discarding the translation. si continues from the range's own start so later selections index
+// consistently with the rest of the paragraph.
+function _restoreSnipToPeriods(span, info) {
+    var parent = span.parentNode;
+    var nodes = Array.from(parent.childNodes);
+    var idx = nodes.indexOf(span);
+    if (idx === -1) return;
+    var sentences = _splitSentences(span.dataset.orig);
+    var replacement = [];
+    sentences.forEach(function (sentence, offset) {
+        if (offset > 0) replacement.push(document.createTextNode(' '));
+        var s = document.createElement('span');
+        s.className = 'tr-sent';
+        s.dataset.si = String(info.a + offset);
+        s.textContent = sentence;
+        s.addEventListener('pointerdown', _onSentPointerDown);
+        replacement.push(s);
+    });
+    var ordered = nodes.slice(0, idx).concat(replacement, nodes.slice(idx + 1));
+    while (parent.firstChild) parent.removeChild(parent.firstChild);
+    for (var item of ordered) parent.appendChild(item);
+}
+
+// A root with a null chapterHRef is the single paginated pager, which always represents whichever
+// chapter is currently loaded, so it matches any requested chapterHRef; a scroll root's real href
+// must match exactly.
+function _findParagraph(chapterHRef, paragraphIndex) {
+    for (var rootInfo of _snippetRoots()) {
+        if (rootInfo.chapterHRef !== null && rootInfo.chapterHRef !== chapterHRef) continue;
+        var candidates = _translatableCandidates(rootInfo.root);
+        if (candidates[paragraphIndex]) return candidates[paragraphIndex];
+    }
+    return null;
+}
+
+function _rangeText(p, a, b) {
+    var spans = Array.from(p.querySelectorAll("[data-si]")).filter(function (el) {
+        var si = Number(el.dataset.si);
+        return si >= a && si <= b;
+    });
+    return spans.map(function (el) { return el.textContent; }).join(' ');
+}
+
+// Splices out every node whose `data-si` falls in [a, b] — periods AND a loading placeholder
+// alike, since both carry the attribute — and puts `replacement` in their place, keeping the
+// separators before and after the range untouched.
+function _spliceRange(p, a, b, replacement) {
+    var nodes = Array.from(p.childNodes);
+    var firstIdx = -1;
+    var lastIdx = -1;
+    nodes.forEach(function (node, idx) {
+        if (node.dataset && node.dataset.si !== undefined) {
+            var si = Number(node.dataset.si);
+            if (si >= a && si <= b) {
+                if (firstIdx === -1) firstIdx = idx;
+                lastIdx = idx;
+            }
+        }
+    });
+    if (firstIdx === -1) return false;
+    var ordered = nodes.slice(0, firstIdx).concat(replacement, nodes.slice(lastIdx + 1));
+    while (p.firstChild) p.removeChild(p.firstChild);
+    for (var item of ordered) p.appendChild(item);
+    return true;
+}
+
+function _replaceRangeWithSnip(p, chapterHRef, pi, a, b, original, translated, showingOriginal) {
+    var span = _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOriginal);
+    _spliceRange(p, a, b, [span]);
+}
+
+// D-2026-08-09-snippet-translation-5: overlap is destructive. Any existing snip in the same
+// paragraph that intersects the new range is dropped back to plain periods first, so the whole
+// [a, b] span is made of `[data-si]` nodes again before the new snip is spliced in.
+function _removeOverlappingSnips(p, a, b) {
+    for (var span of Array.from(p.querySelectorAll("[data-snip]"))) {
+        var info = _parseSnipKey(span.dataset.snip);
+        if (!(info.b < a || info.a > b)) {
+            _restoreSnipToPeriods(span, info);
+        }
+    }
+}
+
+window.restoreSnippets = function (list) {
+    for (var item of list) {
+        var p = _findParagraph(item.chapterHRef, item.paragraphIndex);
+        if (!p) continue;
+        var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
+        if (!original || _snipHash(original) !== item.originalHash) continue;
+        _replaceRangeWithSnip(
+            p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
+            original, item.translatedText, item.showingOriginal);
+    }
+};
+
+window.applySnippetTranslation = function (items) {
+    for (var item of items) {
+        var p = _findParagraph(item.chapterHRef, item.paragraphIndex);
+        if (!p) continue;
+        _removeOverlappingSnips(p, item.sentenceStart, item.sentenceEnd);
+        var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
+        _replaceRangeWithSnip(
+            p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
+            original, item.translatedText, item.showingOriginal);
+    }
+};
+
+window.setSnippetLoading = function (keys) {
+    for (var key of keys) {
+        var info = _parseSnipKey(key);
+        var p = _findParagraph(info.chapterHRef, info.paragraphIndex);
+        if (!p) continue;
+        _removeOverlappingSnips(p, info.a, info.b);
+        var original = _rangeText(p, info.a, info.b);
+        var span = document.createElement('span');
+        span.className = 'tr-loading';
+        span.dataset.si = String(info.a);
+        span.style.position = 'relative';
+        span.textContent = original;
+        if (_spliceRange(p, info.a, info.b, [span])) {
+            var blob = _makeBlob();
+            span.appendChild(blob.mask);
+            span.appendChild(blob.svg);
+            _updateBlob(blob, _blobFromEls([span]));
+        }
+    }
+};
+
+function _chapterHRefFor(p) {
+    for (var rootInfo of _snippetRoots()) {
+        if (_translatableCandidates(rootInfo.root).includes(p)) return rootInfo.chapterHRef;
+    }
+    return null;
+}
+
+function _onTranslateClick() {
+    if (!_sel) return;
+    var chapterHRef = _chapterHRefFor(_sel.p);
+    var pi = Number(_sel.p.dataset.pi);
+    var paragraph = _sel.p.textContent;
+    var keys = [];
+    var payload = _runsOf(_sel.set).map(function (run) {
+        keys.push(_snipKey(chapterHRef, pi, run.a, run.b));
+        return {
+            chapterHRef: chapterHRef, paragraphIndex: pi,
+            sentenceStart: run.a, sentenceEnd: run.b,
+            text: _rangeText(_sel.p, run.a, run.b), paragraph: paragraph,
+        };
+    });
+    _clearSelection();
+    window.setSnippetLoading(keys);
+    window.sendRawMessage('snip|' + JSON.stringify(payload));
+}

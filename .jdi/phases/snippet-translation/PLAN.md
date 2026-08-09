@@ -349,7 +349,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `mkdir -p TestResults && node --test --test-reporter=tap test/js/ > TestResults/snip-t5.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t5.log && grep -qE '^# skipped 0$' TestResults/snip-t5.log && grep -qE '^window\.sendRawMessage = function' src/TranslateReader/Resources/Raw/wwwroot/js/bridge.js && for k in "snip|" "snip-toggle|" "snip-remove|"; do grep -qF "$k" src/TranslateReader/Resources/Raw/wwwroot/js/snippets.js || exit 1; done`
 - **Dependencies:** T-4 · **Test:** `test/js/snippets.test.js`, `test/js/bridge.test.js`
 - **Commit:** `feat(snippet-translation): T-5 snippet persistence, language chip and raw message channel (D-2026-08-09-snippet-translation-1, -2)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-6: Tabela, Model, Access e DI de `SnippetTranslations`
 - **Wave:** 2 · **Specialist:** jdi-doer-translatereader

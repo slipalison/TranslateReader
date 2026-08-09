@@ -423,3 +423,147 @@ test('hint: shows before the first selection and never returns after it', () => 
 
     assert.strictEqual(env.document.querySelectorAll('.tr-hint').length, 0);
 });
+
+const LABELS = {
+    selectHint: '', extendTip: '', sentenceOne: '', sentenceMany: '', translateSnip: '',
+    extendSel: '', shrinkSel: '', onlySentence: '', toggleSnip: '', removeSnip: '',
+    langMap: { English: 'EN', 'Brazilian Portuguese (PT-BR)': 'PT-BR' },
+    theme: { bg: '#1A1A2E', accent: '#60A5FA' },
+    sourceLanguage: 'English', targetLanguage: 'Brazilian Portuguese (PT-BR)',
+};
+
+function loadWithLabels() {
+    const env = loadFull();
+    env.window.setSnippetLabels(LABELS);
+    return env;
+}
+
+test('restore: a snippet whose hash matches renders the translated text', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    const snip = env.document.querySelectorAll('[data-snip]');
+    assert.strictEqual(snip.length, 1);
+    assert.strictEqual(snip[0].childNodes[0].textContent, 'She said yes.');
+});
+
+test('restore: a snippet whose hash diverges is dropped and the paragraph is untouched', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: 'deadbeef', translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 1);
+    assert.strictEqual(paragraphs[0].textContent, 'Ela disse que sim.');
+});
+
+test('restore: a snippet saved showing the original comes back showing the original', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: true,
+    }]);
+
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    assert.strictEqual(snip.childNodes[0].textContent, 'Ela disse que sim.');
+});
+
+test('toggle: switching a snippet swaps the text and flips the chip label', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    const chipLabel = snip.querySelector('.tr-snip-chip').querySelectorAll('span')[0];
+    assert.strictEqual(chipLabel.textContent, 'PT-BR');
+
+    fire(snip, 'click', { target: snip });
+
+    assert.strictEqual(snip.childNodes[0].textContent, 'Ela disse que sim.');
+    assert.strictEqual(
+        snip.querySelector('.tr-snip-chip').querySelectorAll('span')[0].textContent, 'EN');
+});
+
+test('the remove icon on the chip restores the periods and does not toggle the snip', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    const closeIcon = env.document.querySelectorAll('[data-snip]')[0]
+        .querySelector('.tr-snip-chip').querySelectorAll('.ph-x')[0];
+
+    fire(closeIcon, 'click', { target: closeIcon });
+
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 1);
+    assert.strictEqual(paragraphs[0].textContent, 'Ela disse que sim.');
+});
+
+test('applySnippetTranslation replaces a loading placeholder with the finished snip', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:0']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 1);
+});
+
+test('applySnippetTranslation destructively replaces an overlapping existing snip', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 1,
+        originalHash: env.window._snipHash('Um. Dois.'), translatedText: 'One. Two.',
+        showingOriginal: false,
+    }]);
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 1);
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 1, sentenceEnd: 2,
+        translatedText: 'Two. Three.', showingOriginal: false,
+    }]);
+
+    const snips = env.document.querySelectorAll('[data-snip]');
+    assert.strictEqual(snips.length, 1);
+    assert.strictEqual(snips[0].dataset.snip, 'ch1.xhtml:0:1:2');
+});
+
+test('translate: clicking the primary button sends a snip| message with the selected run', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, env.document.querySelectorAll('[data-si]')[0]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    assert.strictEqual(sent.length, 1);
+    assert.ok(sent[0].startsWith('snip|'));
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.deepStrictEqual(runs, [{
+        chapterHRef: null, paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        text: 'Ela chegou.', paragraph: 'Ela chegou. Ele saiu.',
+    }]);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+});
