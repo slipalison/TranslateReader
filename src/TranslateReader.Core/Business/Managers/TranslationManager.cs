@@ -44,6 +44,12 @@ public class TranslationManager(
     private const float TranslationTemperature = 0.1f;
     private const int MaxTokenMultiplier = 3;
 
+    // WHY: folded into the snippet-path cache key only (never the paragraph-path one), so hardening
+    // BuildSnippetTranslationMessages's prompt invalidates every previously-cached snippet
+    // translation at once — including entries that captured the paragraph-context-pollution bug —
+    // without touching the unrelated, still-valid per-paragraph cache entries.
+    private const string SnippetCacheKeySalt = "snippet-prompt-v2|";
+
     // Qwen/Phi are offered in the UI but have no real download URL yet (D-...-4); an unknown or
     // legacy settings value must resolve to a model that is actually downloadable, not throw.
     private static ModelInfo ResolveModel(string modelName) =>
@@ -395,7 +401,7 @@ public class TranslationManager(
     {
         ct.ThrowIfCancellationRequested();
 
-        var hash = ComputeHash(request.Text, sourceLanguage, targetLanguage);
+        var hash = ComputeHash(SnippetCacheKeySalt + request.Text, sourceLanguage, targetLanguage);
         var cached = await translationCacheAccess.FetchTranslationAsync(bookId, request.ChapterHRef, hash);
         if (cached is null)
         {

@@ -25,7 +25,7 @@ public class PromptUtility : IPromptUtility
         string? chapterTitle)
     {
         var systemMessage = BuildSnippetSystemMessage(
-            paragraph, sourceLanguage, targetLanguage, bookTitle, chapterTitle);
+            snippet, paragraph, sourceLanguage, targetLanguage, bookTitle, chapterTitle);
         return (systemMessage, snippet);
     }
 
@@ -56,7 +56,13 @@ public class PromptUtility : IPromptUtility
         return string.Join(" ", parts);
     }
 
+    // Hardened for small local models (D-2026-08-09-snippet-translation-5): the excerpt and the
+    // paragraph are BOTH delimited by triple quotes, and the excerpt is restated here in addition
+    // to arriving as the user message, because a weak model was observed translating the whole
+    // paragraph — including other snippets' chip labels baked into a polluted context — instead of
+    // only the newly selected excerpt.
     private static string BuildSnippetSystemMessage(
+        string snippet,
         string paragraph,
         string sourceLanguage,
         string targetLanguage,
@@ -66,8 +72,8 @@ public class PromptUtility : IPromptUtility
         var parts = new List<string>
         {
             $"Translate the following {sourceLanguage} sentence excerpt to {targetLanguage}.",
-            "The excerpt is only part of a larger paragraph, given below for context only.",
-            "Provide only the translation of the excerpt, no explanations, and do not translate or repeat the rest of the paragraph.",
+            $"The excerpt to translate is delimited below by triple quotes, and it is the ONLY text you must translate: \"\"\"{snippet}\"\"\"",
+            "Respond with EXCLUSIVELY the direct translation of that delimited excerpt: no delimiters, no labels, no comments, nothing added.",
             "Keep proper nouns unchanged.",
             "Translate naturally, not literally."
         };
@@ -78,7 +84,10 @@ public class PromptUtility : IPromptUtility
         if (!string.IsNullOrWhiteSpace(chapterTitle))
             parts.Add($"Chapter: {chapterTitle}");
 
-        parts.Add($"Paragraph for context: {paragraph}");
+        parts.Add(
+            "A paragraph is given below, delimited by triple quotes, for disambiguation context only: " +
+            "do not translate it, do not repeat any part of it, and do not include any of it in your answer.");
+        parts.Add($"Paragraph for context: \"\"\"{paragraph}\"\"\"");
 
         return string.Join(" ", parts);
     }

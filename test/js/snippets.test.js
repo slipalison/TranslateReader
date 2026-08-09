@@ -850,6 +850,56 @@ test('translate: clicking the primary button sends a snip| message with the sele
     assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
 });
 
+// Iteration 5 parte 2: a paragraph that already has translated snips leaked their chip labels and
+// currently-shown text into the "paragraph" context field, which made a small model translate the
+// whole paragraph (labels and all) instead of just the newly selected excerpt.
+
+test('_originalParagraphText: reconstructs the untouched original text through a snip showing its translation, a snip showing its original, and a plain period', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu. Maria ficou.']);
+    env.window.restoreSnippets([
+        {
+            chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+            originalHash: env.window._snipHash('Ela chegou.'), translatedText: 'She arrived.',
+            showingOriginal: false,
+        },
+        {
+            chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 1, sentenceEnd: 1,
+            originalHash: env.window._snipHash('Ele saiu.'), translatedText: 'He left.',
+            showingOriginal: true,
+        },
+    ]);
+
+    const text = env.window._originalParagraphText(paragraphs[0]);
+
+    assert.strictEqual(text, 'Ela chegou. Ele saiu. Maria ficou.');
+    assert.ok(!text.includes('She arrived'));
+    assert.ok(!text.includes('He left'));
+    assert.ok(!text.includes('PT-BR'));
+    assert.ok(!text.includes('EN'));
+});
+
+test('translate: the snip| payload carries the clean original paragraph even with a translated snip already showing (context pollution regression)', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu. Maria ficou.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: env.window._snipHash('Ela chegou.'), translatedText: 'She arrived.',
+        showingOriginal: false,
+    }]);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Ele saiu.');
+    assert.strictEqual(runs[0].paragraph, 'Ela chegou. Ele saiu. Maria ficou.');
+    assert.ok(!runs[0].paragraph.includes('She arrived'));
+    assert.ok(!runs[0].paragraph.includes('PT-BR'));
+});
+
 // Iteration 5 fix: a real app window is not the mockup's 1280px capture frame — `data-idiom` names
 // a device class, not a window width, so a resized Windows desktop can be narrower than the pill's
 // full desktop content. These pin the measure-then-degrade behavior _fitPill/_renderHint add.

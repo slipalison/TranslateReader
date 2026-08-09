@@ -128,7 +128,17 @@ public class PromptUtilityTests
             "Ela chegou.", "Ela chegou. Ele saiu.", "Brazilian Portuguese (PT-BR)", "English", null, null);
 
         Assert.Contains("Ela chegou. Ele saiu.", systemMessage);
-        Assert.Contains("only the translation of the excerpt", systemMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_SystemMessageDemandsOnlyTheExcerptAndDelimitsItFromTheParagraph()
+    {
+        var (systemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Ela chegou. Ele saiu.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.Contains("EXCLUSIVELY", systemMessage);
+        Assert.Contains("\"\"\"Ela chegou.\"\"\"", systemMessage);
+        Assert.Contains("\"\"\"Ela chegou. Ele saiu.\"\"\"", systemMessage);
     }
 
     [Fact]

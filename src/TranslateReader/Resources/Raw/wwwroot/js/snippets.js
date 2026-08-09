@@ -1061,6 +1061,31 @@ function _chapterHRefFor(p) {
     return null;
 }
 
+// Reconstructs the paragraph's ORIGINAL text straight from the DOM, in document order, regardless
+// of what is currently on screen: a snip contributes the original text it stored (dataset.orig),
+// never its current display text or its language chip's label — both live inside that same span; a
+// period/loading span contributes its own sentence text; a glass blob is decoration, not text, and
+// is skipped; a plain text node (the space between spans) is used as-is. This is the only safe
+// source for the "paragraph" context field sent to the translator: `p.textContent` leaks whichever
+// side of the toggle every existing snip in the paragraph happens to be showing, plus its chip's
+// "EN"/"PT-BR" label, straight into the prompt — which is what made a small model translate the
+// entire paragraph (labels and all) instead of just the newly selected excerpt.
+function _originalParagraphText(p) {
+    var parts = [];
+    for (var node of Array.from(p.childNodes)) {
+        if (!node.tagName) {
+            parts.push(node.textContent);
+        } else if (_hasClass(node, 'tr-blob')) {
+            continue;
+        } else if (node.dataset && node.dataset.snip !== undefined) {
+            parts.push(node.dataset.orig);
+        } else if (node.dataset && node.dataset.si !== undefined) {
+            parts.push(node.childNodes[0] ? node.childNodes[0].textContent : '');
+        }
+    }
+    return parts.join('');
+}
+
 // The C# side drives the loading placeholder (ReaderPage calls setSnippetLoading as soon as the
 // message arrives, before starting inference) rather than this handler doing it eagerly, so there
 // is exactly one place that decides a run is "in flight".
@@ -1068,7 +1093,7 @@ function _onTranslateClick() {
     if (!_sel) return;
     var chapterHRef = _chapterHRefFor(_sel.p);
     var pi = Number(_sel.p.dataset.pi);
-    var paragraph = _sel.p.textContent;
+    var paragraph = _originalParagraphText(_sel.p);
     var payload = _runsOf(_sel.set).map(function (run) {
         return {
             chapterHRef: chapterHRef, paragraphIndex: pi,

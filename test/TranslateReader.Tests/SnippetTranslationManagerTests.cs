@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using NSubstitute;
 using TranslateReader.Business.Managers;
 using TranslateReader.Contracts.Access;
@@ -119,6 +121,37 @@ public class SnippetTranslationManagerTests
             1, MakeRequest(text: "Ela disse que sim."), "English", "Portuguese", CancellationToken.None);
 
         Assert.Equal(SnipHashGolden, result.OriginalHash);
+    }
+
+    // Context-pollution fix: the snippet path salts its TranslationCache lookup key away from the
+    // paragraph path's, so hardening the prompt invalidates every previously-cached (possibly
+    // polluted) snippet translation without touching per-paragraph cache entries.
+    [Fact]
+    public async Task TranslateSnippetAsync_CacheKeyIsSaltedAwayFromTheLegacyParagraphHash()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("She said yes.");
+
+        await _sut.TranslateSnippetAsync(
+            1, MakeRequest(text: "Ela disse que sim."), "English", "Portuguese", CancellationToken.None);
+
+        var legacyHash = LegacyParagraphHash("Ela disse que sim.", "English", "Portuguese");
+        await _cacheAccess.Received(1).FetchTranslationAsync(1, "ch1.html", Arg.Is<string>(h => h != legacyHash));
+        await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Is<string>(h => h != legacyHash), "She said yes.");
+    }
+
+    // Reproduces TranslationManager's own (unsalted) paragraph-path ComputeHash independently, so the
+    // test above proves the snippet path really diverged instead of assuming it.
+    private static string LegacyParagraphHash(string text, string sourceLanguage, string targetLanguage)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{sourceLanguage}|{targetLanguage}|{text}"));
+        return Convert.ToHexString(bytes)[..16];
     }
 
     [Fact]
