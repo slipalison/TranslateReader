@@ -347,3 +347,85 @@ Commit: `a4aa004` — `fix(snippet-translation): unmount never hands a blob node
 and the class check is SVG-safe (B-2)` (1 commit atomico — producao + harness + testes juntos,
 porque o fix de producao sozinho quebraria a suite existente sem o `createElementNS` do harness no
 MESMO commit: seriam commits intermediarios com suite vermelha se divididos).
+
+## Iter 5 (round 3 — fix de UX pos-screenshot do app real, Windows)
+
+Loop reaberto (`total_resets: 2`) apos o usuario testar o app real pos-convergencia (round 2,
+APPROVED_WITH_WARNINGS) e enviar screenshot: com 1 periodo selecionado, a pill virava um balao
+disforme de ~6 linhas (a dica "· toque em outro período para estender" quebrava palavra por
+palavra, "Traduzir trecho" quebrava em 2 linhas) e a pill/hint renderizavam com a fonte do livro
+(monospace no screenshot), nao Inter. Causas-raiz ja diagnosticadas pelo orquestrador antes desta
+iteracao (confirmadas na fonte, nao re-descobertas). Escopo 100% JS + doc — nenhum `.cs` tocado.
+
+### Causa -> Fix
+
+1. **Falta `white-space: nowrap`.** No `_SNIPPET_CSS` so `.tr-pill-count` tinha; `.tr-pill-tip`,
+   `.tr-pill-only`, `.tr-pill-primary` e `.tr-hint` nao. Fix: nowrap adicionado nos 4 seletores.
+2. **Shrink-to-fit de 50vw.** `.tr-pill`/`.tr-hint` usam `position: fixed; left: 50%;
+   transform: translateX(-50%)` sem `width` — a largura disponivel para o calculo shrink-to-fit e
+   `100vw − left` = 50vw do viewport REAL do WebView, nao da moldura de 1280px do mockup;
+   `data-idiom="desktop"` no Windows nao implica janela larga. Fix: `max-width:
+   calc(100vw - 24px)` como cinto de seguranca nos dois, MAIS degradacao por medicao (item novo,
+   pedido pelo usuario — "mostrando ou nao de acordo com o tamanho da tela"): `_fitPill(pill)` mede
+   `pill.scrollWidth` contra `document.documentElement.clientWidth - 24` depois da pill entrar no
+   DOM e degrada NESTA ORDEM ate caber, re-medindo a cada passo: (1) remove a dica/`onlySentence`
+   — o layout phone ja vive sem os dois por design; (2) remove o SPAN de texto do botao primario,
+   deixando so o icone `ph-translate` (com `title`/`aria-label` = `_labels.translateSnip` para
+   acessibilidade). Nunca permite quebra interna de linha. `_renderHint` usa a MESMA medicao mas
+   sem fallback parcial — o hint e dispensavel, entao some por inteiro se nao couber.
+   `_onResize` passou a reconstruir a selecao inteira (`_renderSelection` -> `_showPill` ->
+   `_fitPill`) quando ha `_sel` ativo, em vez de so re-medir blobs, para que uma pill ja degradada
+   se re-ajuste a um novo tamanho de janela.
+3. **Fonte da pill/hint/chip.** `font-family: 'Inter', var(--font-body)` (pill/hint) e
+   `font-family: var(--font-body)` (chip) eram INVALIDOS em silencio: `--font-body` e um token do
+   design system do MOCKUP que nunca foi copiado para o `wwwroot` do app, entao a propriedade
+   inteira falha no computed-value time (uma `var()` nao resolvida sem fallback invalida a
+   declaracao TODA, nao so o token que falta) e o valor USADO vira o HERDADO — a regra
+   `body { font-family: ...!important }` que `ThemeEngine.cs` gera para a fonte do livro
+   (confirmado lendo o arquivo; `ThemeEngine.cs` ficou INTOCADO, conforme instrucao). Fix: todo
+   `var(--font-body)` trocado por `'Inter', sans-serif !important` nos tres componentes (pill,
+   hint, chip — chip manteve `font-size: 0.6em` herdado do paragrafo). O `!important` responde ao
+   `!important` do proprio `ThemeEngine` no `body` (documentado em 1 linha WHY no codigo).
+
+### Testes novos (8)
+
+`test/js/snippets.test.js` (+7): 2 testes de CSS (nowrap presente nos 4 seletores; `_SNIPPET_CSS`
+sem `var(--font-body)` e com `'Inter', sans-serif`); 3 de degradacao da pill via harness com
+`document.documentElement.clientWidth` e `pill.scrollWidth` (getter) simulados — nada removido com
+espaco sobrando, so a dica remove quando isso ja basta, dica E texto do botao removem quando ainda
+nao basta (com `aria-label`/`title` verificados); 1 do hint (some por inteiro com viewport
+zero-largura); 1 de resize com selecao ativa reconstruindo o elemento da pill (nao so remedindo).
+`test/js/harness.test.js` (+1): default de `document.documentElement.clientWidth` em `createEnv`
+(mesmo valor de `window.innerWidth`), necessario para que os testes de pill/hint PRE-EXISTENTES
+continuem no-op para a nova medicao (scrollWidth default 0 sempre cabe em 800-24).
+
+### Invariantes do DoD re-conferidos (nao regrediram)
+
+`translation.js`/`paginated.js`/`scroll.js`: diff VAZIO vs `BASELINE` (`02a4c6c`). Aspas duplas em
+todo `querySelectorAll`/`querySelector` novo. `_blobPath(bands, 10)` literal, `OFF=8`/`padX=5`/
+`padY=1.5` intactos. `_splitSentences`/`_snippetRoots` como fonte unica (1x cada). Zero string
+pt-BR nova em `snippets.js`. Os 14 literais visuais do DoD 10 (blur/border-radius/rgba/keyframes/
+icones) permanecem no arquivo E na PIXEL-SPEC. Os 14 literais do DoD 1 permanecem na PIXEL-SPEC.
+
+### Verificacao pos-fix
+
+- JS: **156/156 passando** (era 148 antes desta iter — a suite completa `test/js/` inclui tambem
+  `bridge`/`paginated`/`scroll`/`translation`, nao so `snippets`), 0 fail, 0 skipped. `comm -23`
+  contra a suite anterior a esta iter (nome a nome, 6 arquivos): **vazio** — zero teste perdido, so
+  as 8 adicoes listadas acima.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1397 valid=1407 pct=99.29 files=5`
+  (piso 85, subiu de 99.27). `COVERAGE_SCOPE covered=1313 valid=1385 pct=94.80 files=26` (piso 90,
+  **identico** ao iter 4 — confirma que nenhum `.cs` foi tocado). `COVERAGE_GUARD new_app_cs=0
+  waived=0`.
+- `dotnet test` (Release, prova de nao-regressao — iteracao 100% JS+doc): **404 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 406 total** — identico ao iter 4.
+- `dotnet format whitespace --verify-no-changes`: exit 2, pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  desta iteracao (nenhum `.cs` tocado).
+- `git status`/`git diff --name-only` confirmam escopo: so `snippets.js`, `harness.js`,
+  `harness.test.js`, `snippets.test.js`, `design/v0.2.0/PIXEL-SPEC.md` (mais os arquivos de estado
+  do `.jdi/` do orquestrador do loop, nao tocados por este specialist).
+
+Commit: `b3005e1` — `fix(snippet-translation): pill/hint fit the real viewport and no longer
+render in the book's font` (1 commit atomico — CSS + JS de medicao/degradacao + harness + testes +
+sub-nota da PIXEL-SPEC juntos, coeso com o proprio fix).
