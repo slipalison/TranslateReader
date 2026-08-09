@@ -30,6 +30,22 @@ function makeSpan(env, parent, rect) {
     return span;
 }
 
+// A minimal stand-in for _buildPill()'s output, carrying only the parts _fitPill inspects: an
+// optional tip note and the primary button with its label span.
+function makeFakePill(env) {
+    const pill = env.document.createElement('div');
+    const tip = env.document.createElement('span');
+    tip.className = 'tr-pill-tip';
+    pill.appendChild(tip);
+    const primary = env.document.createElement('button');
+    primary.className = 'tr-pill-primary';
+    const label = env.document.createElement('span');
+    label.textContent = 'x';
+    primary.appendChild(label);
+    pill.appendChild(primary);
+    return pill;
+}
+
 // env.window functions run inside the vm context, so their arrays and objects carry that realm's
 // prototypes and deepStrictEqual would reject them against a plain literal here. Array.from called
 // on the OUTER Array (and object literals built in this file's arrow functions) rebuild the result
@@ -461,6 +477,25 @@ test('click outside the paragraph text clears the selection', () => {
     assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
 });
 
+test('css: the pill tip, onlySentence note, primary button and hint never wrap onto a new line', () => {
+    const env = loadSnippets();
+    const css = env.window._SNIPPET_CSS;
+    const ruleFor = (selector) => css.split('\n').find((line) => line.startsWith(selector + ' '));
+
+    for (const selector of ['.tr-pill-tip', '.tr-pill-only', '.tr-pill-primary', '.tr-hint']) {
+        const rule = ruleFor(selector);
+        assert.ok(rule, selector + ' rule not found in _SNIPPET_CSS');
+        assert.ok(rule.includes('white-space: nowrap'), selector + ' must never wrap internally');
+    }
+});
+
+test('css: the pill, hint and chip font stack no longer falls back to the undefined --font-body variable', () => {
+    const env = loadSnippets();
+
+    assert.ok(!env.window._SNIPPET_CSS.includes('var(--font-body)'));
+    assert.ok(env.window._SNIPPET_CSS.includes("'Inter', sans-serif"));
+});
+
 test('pillBottom: paginated desktop sits 24px above the footer', () => {
     const env = loadFull();
 
@@ -813,4 +848,78 @@ test('translate: clicking the primary button sends a snip| message with the sele
         text: 'Ela chegou.', paragraph: 'Ela chegou. Ele saiu.',
     }]);
     assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
+});
+
+// Iteration 5 fix: a real app window is not the mockup's 1280px capture frame — `data-idiom` names
+// a device class, not a window width, so a resized Windows desktop can be narrower than the pill's
+// full desktop content. These pin the measure-then-degrade behavior _fitPill/_renderHint add.
+
+test('pill: nothing is removed when the built pill already fits the viewport', () => {
+    const env = loadSnippets();
+    env.document.documentElement.clientWidth = 800;
+    const pill = makeFakePill(env);
+    pill.scrollWidth = 300;
+
+    env.window._fitPill(pill);
+
+    assert.strictEqual(pill.querySelectorAll('.tr-pill-tip').length, 1);
+    assert.strictEqual(pill.querySelector('.tr-pill-primary').querySelectorAll('span').length, 1);
+});
+
+test('pill: dropping the tip is enough to fit, so the button keeps its label', () => {
+    const env = loadSnippets();
+    env.document.documentElement.clientWidth = 320;
+    const pill = makeFakePill(env);
+    Object.defineProperty(pill, 'scrollWidth', {
+        get: () => (pill.querySelector('.tr-pill-tip') ? 400 : 200),
+    });
+
+    env.window._fitPill(pill);
+
+    assert.strictEqual(pill.querySelectorAll('.tr-pill-tip').length, 0);
+    assert.strictEqual(pill.querySelector('.tr-pill-primary').querySelectorAll('span').length, 1);
+});
+
+test('pill: still overflowing once the tip is gone also drops the button label, keeping it reachable via aria-label', () => {
+    const env = loadSnippets();
+    env.window.setSnippetLabels(Object.assign({}, LABELS, { translateSnip: 'Traduzir trecho' }));
+    env.document.documentElement.clientWidth = 260;
+    const pill = makeFakePill(env);
+    const primary = pill.querySelector('.tr-pill-primary');
+    Object.defineProperty(pill, 'scrollWidth', {
+        get: () => {
+            if (pill.querySelector('.tr-pill-tip')) return 500;
+            if (primary.querySelector('span')) return 400;
+            return 200;
+        },
+    });
+
+    env.window._fitPill(pill);
+
+    assert.strictEqual(pill.querySelectorAll('.tr-pill-tip').length, 0);
+    assert.strictEqual(primary.querySelectorAll('span').length, 0);
+    assert.strictEqual(primary.getAttribute('aria-label'), 'Traduzir trecho');
+    assert.strictEqual(primary.getAttribute('title'), 'Traduzir trecho');
+});
+
+test('hint: never renders when it cannot fit the viewport, since it is disposable', () => {
+    const env = loadSnippets();
+    env.document.documentElement.clientWidth = 0;
+
+    env.window._renderHint();
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-hint').length, 0);
+});
+
+test('resize: rebuilds the pill when a selection is active, so it can re-fit a new viewport width', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    const before = env.document.querySelectorAll('.tr-pill')[0];
+
+    env.fireWindow('resize');
+
+    const after = env.document.querySelectorAll('.tr-pill');
+    assert.strictEqual(after.length, 1);
+    assert.notStrictEqual(after[0], before, 'resize must rebuild the pill element, not reuse the old one');
 });

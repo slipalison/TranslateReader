@@ -186,6 +186,7 @@ var _hintDismissed = false;
 // re-measures what remains, and removes what fell off the desired list.
 var _blobs = new Map();
 
+// WHY: ThemeEngine's body rule sets font-family with !important, so pill/hint/chip must too.
 var _SNIPPET_CSS = [
     "@font-face { font-family: 'Phosphor'; src: url('fonts/Phosphor.ttf') format('truetype'); }",
     "@font-face { font-family: 'Inter'; src: url('fonts/Inter-Regular.ttf') format('truetype'); font-weight: 400; }",
@@ -208,25 +209,25 @@ var _SNIPPET_CSS = [
     '@keyframes trGlassIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }',
     '@keyframes trPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }',
     '@keyframes trFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }',
-    ".tr-pill { position: fixed; left: 50%; transform: translateX(-50%); z-index: 35; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 16px; border-radius: 999px; background: rgba(28,30,48,0.58); backdrop-filter: blur(26px) saturate(190%); -webkit-backdrop-filter: blur(26px) saturate(190%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.35), 0 16px 40px -12px rgba(0,0,0,0.75); color: #e9e9ed; font-family: 'Inter', var(--font-body); animation: trFadeUp 0.22s ease; }",
+    ".tr-pill { position: fixed; left: 50%; transform: translateX(-50%); z-index: 35; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 16px; border-radius: 999px; background: rgba(28,30,48,0.58); backdrop-filter: blur(26px) saturate(190%); -webkit-backdrop-filter: blur(26px) saturate(190%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.35), 0 16px 40px -12px rgba(0,0,0,0.75); color: #e9e9ed; font-family: 'Inter', sans-serif !important; max-width: calc(100vw - 24px); animation: trFadeUp 0.22s ease; }",
     'html[data-idiom="phone"] .tr-pill { left: 10px; right: 10px; transform: none; z-index: 30; gap: 6px; padding: 6px 6px 6px 12px; background: rgba(28,30,48,0.6); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.35), 0 16px 40px -14px rgba(0,0,0,0.8); }',
     '.tr-pill-count { font-size: 12px; white-space: nowrap; }',
     'html[data-idiom="phone"] .tr-pill-count { font-size: 11px; }',
-    '.tr-pill-tip { font-size: 11px; color: rgba(233,233,237,0.55); }',
-    '.tr-pill-only { font-size: 11px; color: rgba(233,233,237,0.5); }',
+    '.tr-pill-tip { font-size: 11px; color: rgba(233,233,237,0.55); white-space: nowrap; }',
+    '.tr-pill-only { font-size: 11px; color: rgba(233,233,237,0.5); white-space: nowrap; }',
     '.tr-pill-spacer { flex: 1; }',
     '.tr-pill-group { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: rgba(255,255,255,0.07); }',
     '.tr-pill-group button { width: 26px; height: 26px; font-size: 13px; border: none; background: transparent; color: inherit; cursor: pointer; opacity: 1; }',
     'html[data-idiom="phone"] .tr-pill-group button { width: 28px; height: 28px; }',
     '.tr-pill-group button[disabled] { opacity: 0.35; cursor: default; }',
     '.tr-pill-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.16); }',
-    ".tr-pill-primary { min-height: 32px; border-radius: 999px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; background: " + _APP_ACCENT + "; color: #fff; font-family: 'Inter', var(--font-body); font-size: 14px; font-weight: 500; }",
+    ".tr-pill-primary { min-height: 32px; border-radius: 999px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; background: " + _APP_ACCENT + "; color: #fff; font-family: 'Inter', sans-serif !important; font-size: 14px; font-weight: 500; white-space: nowrap; }",
     'html[data-idiom="phone"] .tr-pill-primary { height: 32px; font-size: 12px; }',
     '.tr-pill-close { width: 28px; height: 28px; border: none; background: transparent; color: inherit; cursor: pointer; }',
     'html[data-idiom="phone"] .tr-pill-close { width: 30px; height: 30px; }',
-    ".tr-hint { position: fixed; left: 50%; transform: translateX(-50%); z-index: 34; display: flex; align-items: center; gap: 9px; padding: 8px 16px; border-radius: 999px; background: rgba(28,30,48,0.5); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px -14px rgba(0,0,0,0.8); color: rgba(233,233,237,0.82); font-size: 12px; font-family: 'Inter', var(--font-body); animation: trFadeUp 0.4s ease; }",
+    ".tr-hint { position: fixed; left: 50%; transform: translateX(-50%); z-index: 34; display: flex; align-items: center; gap: 9px; padding: 8px 16px; border-radius: 999px; background: rgba(28,30,48,0.5); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px -14px rgba(0,0,0,0.8); color: rgba(233,233,237,0.82); font-size: 12px; font-family: 'Inter', sans-serif !important; white-space: nowrap; max-width: calc(100vw - 24px); animation: trFadeUp 0.4s ease; }",
     'html[data-idiom="phone"] .tr-hint { gap: 8px; padding: 7px 14px; background: rgba(28,30,48,0.55); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px -16px rgba(0,0,0,0.85); font-size: 11px; }',
-    ".tr-snip-chip { display: inline-flex; align-items: center; gap: 5px; vertical-align: 0.08em; margin-left: 7px; padding: 2px 8px; border-radius: 999px; font-family: var(--font-body); font-size: 0.6em; font-weight: 500; letter-spacing: 0.07em; white-space: nowrap; }",
+    ".tr-snip-chip { display: inline-flex; align-items: center; gap: 5px; vertical-align: 0.08em; margin-left: 7px; padding: 2px 8px; border-radius: 999px; font-family: 'Inter', sans-serif !important; font-size: 0.6em; font-weight: 500; letter-spacing: 0.07em; white-space: nowrap; }",
     'html[data-idiom="phone"] .tr-snip-chip { gap: 4px; margin-left: 6px; padding: 2px 7px; }',
 ].join('\n');
 
@@ -243,6 +244,36 @@ function _pillBottom() {
 
 function _hintBottom() {
     return _idiom() === 'phone' ? _pillBottom() + 2 : _pillBottom();
+}
+
+// The pill/hint sit at `left: 50%; transform: translateX(-50%)` with no explicit width, so a real
+// WebView's shrink-to-fit math constrains their content to 50vw of the ACTUAL viewport, not the
+// mockup's 1280px desktop frame — a narrow window can overflow even with nowrap everywhere. 24
+// mirrors the CSS `max-width: calc(100vw - 24px)` belt above.
+function _availableWidth() {
+    return document.documentElement.clientWidth - 24;
+}
+
+function _fits(el) {
+    return el.scrollWidth <= _availableWidth();
+}
+
+// Degrades the pill in the same order the phone layout already omits by design — tip/onlySentence,
+// then the primary button's label — re-measuring after each step since removing one may already be
+// enough. This is the last resort once CSS nowrap alone cannot make everything fit; it never lets a
+// period wrap internally.
+function _fitPill(pill) {
+    if (_fits(pill)) return;
+    var extra = pill.querySelector(".tr-pill-tip") || pill.querySelector(".tr-pill-only");
+    if (extra) extra.remove();
+    if (_fits(pill)) return;
+    var primary = pill.querySelector(".tr-pill-primary");
+    var label = primary && primary.querySelector("span");
+    if (label) {
+        primary.setAttribute('title', _labels.translateSnip);
+        primary.setAttribute('aria-label', _labels.translateSnip);
+        label.remove();
+    }
 }
 
 function _ensureStyle() {
@@ -498,6 +529,7 @@ function _showPill() {
     _hidePill();
     _pillEl = _buildPill();
     (document.body).appendChild(_pillEl);
+    _fitPill(_pillEl);
 }
 
 function _buildHint() {
@@ -527,8 +559,15 @@ function _renderHint() {
         return;
     }
     if (_hintEl) return;
-    _hintEl = _buildHint();
-    document.body.appendChild(_hintEl);
+    var hint = _buildHint();
+    document.body.appendChild(hint);
+    // The hint is disposable, unlike the pill (which always has an icon-only fallback): a viewport
+    // too narrow for even its shortest form just goes without one instead of ever wrapping.
+    if (!_fits(hint)) {
+        hint.remove();
+        return;
+    }
+    _hintEl = hint;
 }
 
 function _renderSelection() {
@@ -621,8 +660,14 @@ function _onKeyDown(e) {
 
 // Loading/snip blobs need re-measuring on resize just as much as a selection does, so this always
 // sweeps — not only when there is an active `_sel` like the previous, selection-only implementation.
+// An active selection goes through `_renderSelection` instead, which rebuilds the pill from scratch
+// (`_showPill` -> `_fitPill`) rather than leaving a stale, already-degraded pill at the old width.
 function _onResize() {
-    _renderAllBlobs();
+    if (_sel) {
+        _renderSelection();
+    } else {
+        _renderAllBlobs();
+    }
 }
 
 // A paragraph with element children (an inline `<em>`/`<a>`/`<img>` from the book, untrusted HTML

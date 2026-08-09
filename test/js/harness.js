@@ -490,6 +490,10 @@ function createEnv(options = {}) {
 
     window.document = document;
     window.innerWidth = options.innerWidth ?? 800;
+    // Real DOM: document.documentElement.clientWidth approximates the viewport width regardless of
+    // window.innerWidth's scrollbar quirks. A test simulating a narrow WebView overrides this
+    // directly (`env.document.documentElement.clientWidth = ...`) after createEnv returns.
+    document.documentElement.clientWidth = options.innerWidth ?? 800;
     window.innerHeight = options.innerHeight ?? 600;
     window.scrollY = 0;
     window.pageYOffset = 0;

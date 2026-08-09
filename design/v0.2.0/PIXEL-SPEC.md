@@ -133,6 +133,21 @@ botao primario `min-height: 32px; height: 32px; font-size: 12px` com `ph-transla
 "Traduzir"; botao X `30x30` com `ph-x` 14px. Sem icone inicial, sem dica, sem `onlySentence`,
 sem divisor.
 
+**Degradacao em viewport estreito (app real):** o mockup desktop nunca foi renderizado numa janela
+estreita (moldura de captura fixa em 1280px) — `data-idiom="desktop"` no app NAO implica janela
+larga (ex.: Windows redimensionada), e sem isso a pill vira um balao de varias linhas. Dica,
+contador, `onlySentence` e o botao primario levam `white-space: nowrap` (o mockup ja tinha isso
+so no contador); `max-width: calc(100vw - 24px)` no `.tr-pill`/`.tr-hint` e cinto de seguranca. A
+pill mede `scrollWidth` contra o espaco real (`document.documentElement.clientWidth - 24px`) depois
+de inserida no DOM e degrada NESTA ORDEM ate caber, sem nunca deixar um periodo quebrar linha
+internamente: 1) remove a dica/`onlySentence` — o layout phone ja vive sem os dois por design;
+2) remove o texto do botao primario, deixando so o icone `ph-translate` (com `title`/`aria-label`
+para acessibilidade). O hint usa a MESMA medicao mas nao degrada por partes — some por inteiro se
+nao couber, ja que e dispensavel. Fonte: `var(--font-body)` (citado acima) e um token do design
+system do MOCKUP que nao existe no `wwwroot` do app — pill, hint e chip usam
+`'Inter', sans-serif !important` (o `!important` responde ao `body { font-family: ...!important }`
+que o `ThemeEngine` aplica para a fonte do livro).
+
 ## Hint de primeira vez (some apos a primeira selecao; nunca mais volta na sessao)
 
 | Propriedade | desktop | phone |

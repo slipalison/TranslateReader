@@ -110,6 +110,15 @@ test('querySelector with a selector group returns the first element in document 
     assert.strictEqual(env.document.body.querySelector('div, p').tagName, 'P');
 });
 
+// snippets.js measures document.documentElement.clientWidth to fit the pill/hint to the real
+// viewport (iteration 5 fix) — the harness needs a real number here by default, same as
+// window.innerWidth, so every test that never touches this stays a no-op for that measurement.
+test('createEnv defaults document.documentElement.clientWidth to the same width as window.innerWidth', () => {
+    const env = createEnv({ innerWidth: 320 });
+
+    assert.strictEqual(env.document.documentElement.clientWidth, 320);
+});
+
 // The snippet blob geometry (D-2026-08-09-snippet-translation-4) needs multi-line rects, ancestor
 // lookup and hit-testing that querySelectorAll alone cannot provide — these three capabilities are
 // what snippets.js relies on to group periods into lines and to resolve drag targets.
