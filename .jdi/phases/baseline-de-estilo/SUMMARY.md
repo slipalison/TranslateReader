@@ -1,9 +1,13 @@
 # Phase 1: Baseline de estilo — Summary  (slug: baseline-de-estilo)
 
-**Status:** partial
-**Tasks:** 6/7 completas, 1 blocked (T-5)
+**Status:** complete (atualizado na iteracao 2 — ver `# Iteracao 2` no fim do arquivo)
+**Tasks:** 7/7 completas, 0 blocked
 **Ancora (BASELINE):** `cbf92481d996dab1dd22ffaac7d9f01972712f0d`
 **Branch:** `feat/baseline-de-estilo` (nao pushada)
+
+> As secoes abaixo sao o registro da **iteracao 1**, preservado como estava. O bloco T-5 continua
+> descrevendo o BLOCKED que era verdade naquele momento; ele foi destravado por
+> D-2026-08-08-baseline-de-estilo-6 e o resultado esta em `# Iteracao 2`, no fim do arquivo.
 
 ---
 
@@ -254,3 +258,128 @@ Processo: `.jdi/agents/jdi-reviewer-translatereader.md`, `.jdi/agents/jdi-doer-t
 - Cobertura: **zero arquivo `.cs` novo nesta phase** -> Gate 3 reporta SKIPPED por D-2. Nao e falha e
   nao ha exigencia nova de cobertura.
 - Build app Windows Release: `0 Error(s)`. Build Tests Release: `0 Error(s)`.
+
+---
+
+# Iteracao 2 (ralph) — T-5 destravado por D-...-6
+
+**Escopo desta iteracao:** somente T-5. T-1..T-4, T-6 e T-7 ja estavam `completed` e nao foram
+refeitos. Commit: `2e857a0 chore(baseline-de-estilo): treat warnings as errors with a closed NoWarn list`.
+
+## O que mudou na regra do jogo
+
+D-2026-08-08-baseline-de-estilo-6 emendou D-...-3: **o teto numerico de 12 esta revogado**. No lugar
+dele, a lista `NoWarn` passa a ser exatamente o que a medicao deixou **apos calibrar** as rules cujo
+pressuposto nao vale naquela pasta. Toda a validacao estrutural de D-...-3 continua valendo (elemento
+`<NoWarn>` unico, so IDs concretos, nunca curinga, comentario por ID em linha propria), e o CONTEXT.md
+ja saiu com DoD 6 sem a assercao `<= 12`.
+
+O criterio de D-...-6(2) foi aplicado **item a item** aos 24 IDs, na forma literal em que esta escrito:
+*se a rule fosse corrigida em vez de suprimida, o codigo ficaria pior?* Se sim -> calibracao, no escopo
+mais estreito possivel, com o motivo tecnico em comentario acima da chave no `.editorconfig`. Se o
+codigo ficaria melhor e so da trabalho -> divida -> `NoWarn`. **Empate conta como divida** — nao houve
+nenhuma calibracao feita para encurtar a lista, que D-...-6(2) mantem proibida.
+
+## Medicao usada como base
+
+Os logs de T-4 (`TestResults/bde-inv-app.log`, `bde-inv-tests.log`) foram reprocessados por ID **e por
+pasta**, que era o dado que faltava para decidir escopo. Nota metodologica: o MSBuild reporta cada
+warning duas vezes (inline + sumario), entao as contagens abaixo sao **ocorrencias unicas por
+`file:line:col`**, nao as brutas. Onde D-...-6 cita 688 (`CA1707`) e ~544 (`MA0004`), sao as brutas;
+os unicos correspondentes sao 344 e 282.
+
+## Decisao ID a ID (os 24)
+
+| # | ID | Unicos | Onde | Decisao | Motivo (criterio de D-...-6(2)) |
+|---|---|---|---|---|---|
+| 1 | `CA1707` | 344 | so `test/` | **CALIBRAR** `[test/**.cs]` | Nome de teste xUnit e `Metodo_Cenario_Esperado`; o underscore e o que torna a falha legivel no runner. Renomear 344 testes para satisfazer uma guideline de API publica piora. Rule segue ligada em `src/`. |
+| 2 | `CA1711` | 1 | so `test/` | **CALIBRAR** `[test/**.cs]` | `NonParallelCollection` e marcador `[CollectionDefinition]`; `<Nome>Collection` e o idioma do proprio xUnit. A rule protege consumidor de API publica contra tipo que parece `ICollection` — marcador de assembly de teste nao tem consumidor. Rule segue ligada em `src/`. |
+| 3 | `MA0004` | 282 (107 app / 165 Core / 10 test) | os 3 | **CALIBRAR** `[src/TranslateReader/**.cs]` **+ `NoWarn`** | Na camada Client, `ConfigureAwait(false)` nao e estilo, e defeito: csharp.md secao 3 exige continuacao na main thread e todas essas continuacoes tocam page/PageModel/WebView. **Medido o Core como o orquestrador pediu: 165 ocorrencias, e la a rule esta CERTA** (biblioteca) -> essas 165 + as 10 de teste sao divida e vao para o `NoWarn`. Ver "Delta consciente 1". |
+| 4 | `CA1805` | 2 | `Core/Models` | **CALIBRAR** `[src/TranslateReader.Core/Models/**.cs]` | As 11 propriedades de `ReadingSettings` declaram o default inline; a classe **e** a spec legivel dos defaults de leitura. Tirar `= 0` das duas que calham de ser zero deixa a tabela meio documentada, para poupar uma inicializacao de campo num objeto criado meia duzia de vezes. Rule segue ligada fora de `Models/`. |
+| 5 | `CA1001` | 3 | app | **`NoWarn` RISCO** | Tipo dono de `CancellationTokenSource` sem `IDisposable`. Corrigir MELHORA (csharp.md secao 2.4). Bug potencial, nao estilo. |
+| 6 | `CA1305` | 10 | Core | **`NoWarn` RISCO** | Conversao sensivel a cultura. `SettingsAccess` grava `double` como string: em pt-BR vira `"1,6"` e o seed invariante deixa de fazer round-trip. Corrigir MELHORA. |
+| 7 | `MA0011` | 15 | Core | **`NoWarn` RISCO** | Mesmo defeito de `CA1305` visto pelo Meziantou (`ToString`/`TryParse`/`Append` sem `IFormatProvider`). |
+| 8 | `MA0009` | 18 | `ParsingEngine` + test | **`NoWarn` RISCO** | Regex sem timeout sobre HTML de EPUB, que csharp.md secao 4 declara **entrada nao confiavel**. ReDoS. Seguranca e prioridade 1 do projeto. |
+| 9 | `CS8602` | 7 | test | **`NoWarn` RISCO** | Deref possivelmente nulo; quando dispara, o teste morre com `NullReferenceException` em vez de reportar assercao. Nomeado por D-...-6(4). |
+| 10 | `CS0414` | 1 | `ReaderPage.xaml.cs:21` | **`NoWarn` RISCO** | `_needsInjection` e escrito em 114 e 125 e **nunca lido**: guard de reinjecao do WebView que parou de guardar. Logica morta, nao estilo. |
+| 11 | `CS0618` | 7 | app | `NoWarn` | `Page.DisplayAlert` obsoleto; `DisplayAlertAsync` e a troca. Corrigir MELHORA, e so trabalho. |
+| 12 | `CA1822` | 1 | app | `NoWarn` | Membro nao toca estado de instancia e poderia ser `static`. Corrigir MELHORA. |
+| 13 | `CA1826` | 1 | app | `NoWarn` | Metodo LINQ sobre colecao indexavel. Corrigir MELHORA (perf). |
+| 14 | `CA1852` | 1 | app | `NoWarn` | Tipo interno selavel. Corrigir MELHORA. |
+| 15 | `CA1859` | 2 | Core + app | `NoWarn` | Tentei o argumento "corrigir piora" (trocar `IReadOnlyDictionary` por `Dictionary` exporia static mutavel, contra csharp.md secao 2.4) e ele **nao se sustenta**: csharp.md secao 2.1 ja manda `FrozenDictionary`, que tambem e concreto e fecha a rule sem piorar nada. Logo, divida. |
+| 16 | `CA1869` | 1 | app | `NoWarn` | `JsonSerializerOptions` novo por serializacao na ponte do WebView. csharp.md secao 2.2 manda cachear. Corrigir MELHORA. |
+| 17 | `MA0002` | 11 | Core + test | `NoWarn` | Lookup de string sem `StringComparer`. csharp.md secao 2.1 quer `Ordinal`. Corrigir MELHORA. |
+| 18 | `MA0006` | 15 | Core + app | `NoWarn` | Comparacao de string com operador em vez de `string.Equals` com `StringComparison` explicito. Corrigir MELHORA. |
+| 19 | `MA0016` | 1 | `HtmlUtility` | `NoWarn` | Retorna `List<string>` em vez de abstracao. Argumento de hot path existe, mas o ganho e imperceptivel e devolver abstracao e melhor design: **empate tecnico conta como divida**, nao calibracao. Registrada a contradicao com `CA1859` (#15) — as duas rules mandam o oposto. |
+| 20 | `MA0023` | 12 | `ParsingEngine` + test | `NoWarn` | Regex sem `ExplicitCapture`. Mesmos regexes de `MA0009`; corrigir junto. Corrigir MELHORA. |
+| 21 | `MA0046` | 1 | app | `NoWarn` | Payload de `EventHandler<ReadingSettings>` nao deriva de `EventArgs`. Envolver num `EventArgs` e cerimonia, mas e a guideline do .NET: empate -> divida. |
+| 22 | `MA0048` | 2 | app + test | `NoWarn` | Nome de arquivo != nome do tipo. Separar arquivos MELHORA a organizacao. So trabalho. |
+| 23 | `MA0051` | 2 | app | `NoWarn` | Metodo com 91 e 76 linhas contra o limite de 60 do Meziantou e o de 20 de csharp.md secao 7. Corrigir MELHORA — e exatamente o que a regra do projeto ja pede. |
+| 24 | `MA0074` | 138 | so test | `NoWarn` | Tentacao de calibrar ("assercao de teste otimiza legibilidade", csharp.md preambulo). **Recusada pela medicao**: entre as 138 ha `StartsWith` (9) e `EndsWith` (3), cujo default e **culture-sensitive**. Nao e cerimonia, e correcao. Divida. |
+
+**Placar: 4 calibradas, 21 no `NoWarn`** (`MA0004` esta nos dois, por medicao — ver Delta 1).
+24 - 3 que sairam inteiras da lista (`CA1707`, `CA1711`, `CA1805`) = 21.
+
+## `NoWarn` final (21 IDs, elemento unico, sem curinga)
+
+```
+$(NoWarn);CA1001;CA1305;CA1822;CA1826;CA1852;CA1859;CA1869;CS0414;CS0618;CS8602;
+MA0002;MA0004;MA0006;MA0009;MA0011;MA0016;MA0023;MA0046;MA0048;MA0051;MA0074
+```
+
+(no arquivo o valor esta numa linha unica — DoD 6 parseia entre `<NoWarn>` e `</NoWarn>`.)
+
+**6 marcados `RISCO:`** por D-...-6(4): `CA1001`, `CA1305`, `CS0414`, `CS8602`, `MA0009`, `MA0011`.
+D-...-6(4) exigia no minimo `CS8602` e `CA1001`; os outros quatro entraram com evidencia propria
+(ReDoS sobre entrada nao confiavel, defeito de locale no round-trip de settings, guard morto).
+Todos roteados para phase futura de correcao em
+`.jdi/todos/2026-08-08-baseline-de-estilo.md`, secao "Warnings congelados no `NoWarn`", com
+prioridade 1 (RISCO) e prioridade 2 (divida de qualidade) separadas.
+
+## Deltas conscientes da iteracao 2
+
+1. **`MA0004` aparece nos dois lugares, de proposito.** A medicao mandou: 107 ocorrencias na camada
+   Client (calibracao — `ConfigureAwait(false)` la e defeito) e 175 fora dela (165 no Core + 10 em
+   teste), que sao divida legitima porque **no Core a rule esta certa** (D-...-6(1)). Como DoD 6 exige
+   um `<NoWarn>` **unico** no `Directory.Build.props`, a supressao da divida so existe repo-wide —
+   entao hoje a chave do `.editorconfig` fica subsumida por ela. Ela foi escrita mesmo assim porque e
+   o que sobra valendo **no dia em que a divida do Core for paga e `MA0004` sair do `NoWarn`**: sem
+   ela, a rule voltaria a exigir `ConfigureAwait(false)` na UI, que csharp.md secao 3 proibe. O motivo
+   esta escrito nos dois comentarios, e o item esta no todo. Nao e config morta: e a metade da
+   decisao que sobrevive a outra.
+2. **Nada de codigo foi tocado.** T-5 mexeu em `.editorconfig`, `Directory.Build.props`, no todo e no
+   PLAN. Zero `.cs`/`.xaml`/`.js` — DoD 5 continua exit 0 pelo mesmo ancora `cbf9248`.
+3. **`.github/` intocado**, como D-...-5(3) manda e DoD 8 confere.
+4. **`PLAN.md` recebeu uma linha de EMENDA** em T-5 registrando que o teto de 12 do passo 4/acceptance
+   foi revogado por D-...-6. O texto original do plano nao foi reescrito.
+5. **Passo 5 de T-5 (risco do `build-android`) continua nao verificavel nesta maquina** — sem Android
+   SDK, o csproj nem inclui `net10.0-android` nas `TargetFrameworks` (`NETSDK1005`). Diferenca em
+   relacao a iteracao 1: agora `TreatWarningsAsErrors=true` **esta** ligado, entao o risco voltou a
+   existir de verdade. O job `build-android` do `ci.yml` pode acender IDs que o TFM Windows nao
+   acende, e eles viram erro. **Fica como risco a confirmar no PR**, nao como falha de task (fallback
+   do specialist). `TestResults/bde-android-ids.txt` esta vazio por esse motivo.
+6. **`LOOP.md` nao foi commitado nesta iteracao** — e artefato do orquestrador ralph, escrito por ele
+   durante a execucao; entrar num commit de task quebraria a atomicidade.
+
+## DoD 1-8 (rodados literais do CONTEXT.md, nesta iteracao, todos os 8)
+
+| DoD | Resultado | Evidencia |
+|---|---|---|
+| 1 — `.editorconfig` na raiz com severidade explicita | **PASS** (exit 0) | `head -1` segue `root = true` (as 4 secoes calibradas entraram no fim do arquivo); `[*.cs]`, `end_of_line = lf`, `dotnet_diagnostic.` presentes |
+| 2 — `Directory.Build.props` flui pros 3 projetos | **PASS** (exit 0) | avaliacao MSBuild nos 3: `"TreatWarningsAsErrors": "true"` em Core, Tests e app (era o unico item que faltava na iteracao 1) |
+| 3 — `.gitattributes` + repo 100% LF | **PASS** (exit 0) | zero `i/crlf`/`i/mixed`; 9 extensoes binarias declaradas |
+| 4 — `dotnet format whitespace` limpo | **PASS** (exit 0) | `TestResults/bde-format.log` vazio — as secoes novas do `.editorconfig` nao geraram churn |
+| 5 — phase semantico-zero em codigo | **PASS** (exit 0) | diff vs `cbf9248` em `*.cs`/`*.xaml`/`*.js` vazio; T-5 nao tocou codigo |
+| 6 — build com warnings-as-errors + `NoWarn` fechado | **PASS** (exit 0) | app Windows Release e Tests Release: **`0 Error(s)` e `0 Warning(s)`**; zero `: warning CS/CA/MA/IDE` nos 2 logs; `<NoWarn>` unico, 21 IDs concretos, nenhum curinga, cada ID em >= 2 linhas |
+| 7 — suite .NET verde + suite JS verde | **PASS** (exit 0) | `Failed: 0, Passed: 373, Skipped: 2, Total: 375`; `node --test test/js/` 79/79 |
+| 8 — divida de processo fechada e CI intocado | **PASS** (exit 0) | 0 `WARN.only`, 0 `Tighten to BLOCK`, `RESOLVIDO em baseline-de-estilo` presente, `git diff --name-only cbf9248 -- .github/` vazio |
+
+**8/8 PASS.** As duas falhas da iteracao 1 (DoD 2 e DoD 6) tinham causa unica — T-5 travado — e
+fecharam juntas.
+
+## Testes (iteracao 2)
+
+- .NET: `Total 375`, `Passed 373`, `Failed 0`, `Skipped 2` — identico a iteracao 1, sem regressao.
+- JS: `node --test test/js/` — 79 tests, 79 pass, 0 fail.
+- Build app Windows Release: `0 Error(s)`, `0 Warning(s)`. Build Tests Release: idem.
+- Cobertura: zero `.cs` novo na phase -> Gate 3 SKIPPED por D-2, sem exigencia nova.
