@@ -2,7 +2,7 @@
 phase_slug: snippet-translation
 phase_position: 23
 iter: 2
-total_resets: 0
+total_resets: 1
 status: converged
 max_iter_per_round: 5
 max_resets: 3
@@ -13,3 +13,6 @@ created_at: 2026-08-09T14:00:00-03:00
 
 - iter 1: BLOCKED, hash=e41ad3c3c445, commit=b7df369, ts=2026-08-09T15:30:00-03:00
 - iter 2: APPROVED_WITH_WARNINGS, hash=2cf9f669c2ff, commit=deb5864, ts=2026-08-09T16:15:00-03:00
+--- RESUMED from converged at 2026-08-09T17:00:00-03:00 (reset 1/3, user feedback pre-ship: blob some pos-traducao, selecao opaca sobre o texto, blob segmentado por linha vs contorno continuo do mockup) ---
+- iter 1: BLOCKED, hash=945c33b2b869, commit=48cae53, ts=2026-08-09T18:05:00-03:00
+- iter 2: APPROVED_WITH_WARNINGS, hash=7e45c21685b2, commit=942800a, ts=2026-08-09T18:50:00-03:00
