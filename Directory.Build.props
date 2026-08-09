@@ -1,0 +1,68 @@
+<Project>
+
+  <!--
+    Analyzer baseline for every project in the repo (phase baseline-de-estilo, D-...-2).
+    Single source of truth: never duplicate these in the individual csproj files.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Safe only because the NoWarn below already covers the measured legacy inventory. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Meziantou.Analyzer mechanises rules already locked in .claude/rules/csharp.md:
+      explicit StringComparison (2.1), sync-over-async and ConfigureAwait (3),
+      CancellationToken propagation (3), allocation/closure in loops (2.2), empty catch (1).
+      StyleCop.Analyzers and SonarAnalyzer.CSharp were rejected in D-...-2.
+    -->
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.141" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <!--
+    Frozen legacy warnings (D-...-3(3), amended by D-...-6(3)).
+
+    Every ID below was MEASURED on the app (Windows Release) and Tests builds, not guessed.
+    The list is exactly what the measurement left after the rule calibration in .editorconfig
+    (CA1707, CA1711, CA1805, MA0004 in the Client layer): rules whose premise does not hold in
+    a folder are calibrated there and stay enforced elsewhere; everything below is real debt,
+    frozen only because D-1 restricts this phase to whitespace on pre-4285f25 code. Suppressed,
+    never fixed. Adding an ID here needs a decision of its own, and a NEW warning in NEW code is
+    a review blocker, not a candidate for this list. No wildcards, ever.
+
+    "RISCO" marks a warning that is a POTENTIAL BUG rather than style (D-...-6(4)). Those are
+    routed to a future fix phase in .jdi/todos/2026-08-08-baseline-de-estilo.md; they are frozen
+    here because this phase may not touch legacy code, NOT because they are acceptable.
+
+    Counts are unique file:line:col occurrences across both builds.
+
+    RISCO: CA1001 (3x, src/TranslateReader/PageModels + Pages) type owns an IDisposable field (_translationCts) and is not IDisposable; csharp.md 2.4 says dispose what you own.
+    RISCO: CA1305 (10x, Core/Access + Managers + Utilities) culture-sensitive conversion; double.ToString() in SettingsAccess writes "1,6" on a pt-BR box and the invariant seed stops round-tripping.
+    RISCO: CS0414 (1x, ReaderPage.xaml.cs:21) _needsInjection is written at lines 114 and 125 and never read: a re-injection guard that stopped guarding.
+    RISCO: CS8602 (7x, test/TranslateReader.Tests) dereference of a possibly null reference; when it fires the suite throws NullReferenceException instead of reporting an assertion.
+    RISCO: MA0009 (18x, ParsingEngine + test/) regex with no timeout over untrusted EPUB HTML; ReDoS, and csharp.md 4 classes EPUB files as untrusted input.
+    RISCO: MA0011 (15x, Core/Access + Managers + Utilities) the same locale defect as CA1305 as Meziantou sees it: ToString/TryParse/Append with no IFormatProvider.
+    CA1822 (1x, LibraryPageModel.OpenBookAsync) member never touches instance data and could be static.
+    CA1826 (1x, ReaderPage.xaml.cs:243) Enumerable method used on an indexable collection instead of the indexer.
+    CA1852 (1x, Serialization/ReaderJsonContext) internal type has no subtype and could be sealed.
+    CA1859 (2x, TranslationManager + SettingsOverlay) a concrete type would devirtualize the call; note this rule contradicts MA0016 below, and both stay frozen.
+    CA1869 (1x, ReaderPage.xaml.cs:370) a new JsonSerializerOptions per serialization on the WebView bridge path; csharp.md 2.2 wants it cached.
+    CS0618 (7x, PageModels + Pages) Page.DisplayAlert is obsolete in MAUI 10; DisplayAlertAsync is the replacement.
+    MA0002 (11x, Core + test) string dictionary/lookup built with no explicit StringComparer; csharp.md 2.1 wants Ordinal.
+    MA0004 (175x outside the Client layer: 165x in Core, 10x in test) missing ConfigureAwait(false) where it IS correct; the Client layer is calibrated in .editorconfig instead, and that calibration outlives this entry.
+    MA0006 (15x, Core + app) string compared with the equality operator instead of string.Equals with an explicit StringComparison.
+    MA0016 (1x, HtmlUtility.ExtractTextBlocks) returns List of string instead of a collection abstraction; contradicts CA1859 above.
+    MA0023 (12x, ParsingEngine + test/) regex with no RegexOptions.ExplicitCapture, so unused groups are captured.
+    MA0046 (1x, SettingsOverlay.SettingsChanged) EventHandler payload ReadingSettings does not derive from EventArgs.
+    MA0048 (2x, ReaderPage.xaml.cs/OneBasedIndexConverter and ParsingEngineMemoryTests/NonParallelCollection) file name does not match the type name.
+    MA0051 (2x, LibraryPageModel.cs:193 at 91 lines, ReaderPage.xaml.cs:110 at 76 lines) method longer than 60 lines; csharp.md 7 prefers 20.
+    MA0074 (138x, test/TranslateReader.Tests) Contains/StartsWith/EndsWith with no explicit StringComparison; StartsWith and EndsWith default to culture-sensitive, so this is not pure ceremony.
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1001;CA1305;CA1822;CA1826;CA1852;CA1859;CA1869;CS0414;CS0618;CS8602;MA0002;MA0004;MA0006;MA0009;MA0011;MA0016;MA0023;MA0046;MA0048;MA0051;MA0074</NoWarn>
+  </PropertyGroup>
+
+</Project>

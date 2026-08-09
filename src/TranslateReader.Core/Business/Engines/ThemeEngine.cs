@@ -9,9 +9,9 @@ public class ThemeEngine : IThemeEngine
     public ThemeColors ResolveThemeColors(ThemeType theme) => theme switch
     {
         ThemeType.Light => new ThemeColors("#FFFFFF", "#1A1A1A", "#2563EB"),
-        ThemeType.Dark  => new ThemeColors("#1A1A2E", "#E4E4E7", "#60A5FA"),
+        ThemeType.Dark => new ThemeColors("#1A1A2E", "#E4E4E7", "#60A5FA"),
         ThemeType.Sepia => new ThemeColors("#F4ECD8", "#5B4636", "#8B6914"),
-        _               => new ThemeColors("#FFFFFF", "#1A1A1A", "#2563EB")
+        _ => new ThemeColors("#FFFFFF", "#1A1A1A", "#2563EB")
     };
 
     public string GenerateReaderCss(ReadingSettings settings)

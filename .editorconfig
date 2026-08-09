@@ -1,0 +1,107 @@
+root = true
+
+# TranslateReader style baseline (phase baseline-de-estilo).
+# Legacy code is NOT reformatted to match the style preferences below
+# (D-2 exempts everything before 4285f25). Only `dotnet format whitespace`
+# is applied repo-wide; the preferences here bind new and touched code.
+
+# `charset` is deliberately NOT declared: `dotnet format whitespace` would strip the
+# UTF-8 BOM from 6 pre-existing files, and D-...-1(4) locks this phase to a byte diff
+# that `git diff --ignore-all-space --ignore-blank-lines --ignore-cr-at-eol` sees as empty.
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+indent_size = 4
+
+# using directives
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# `var` — explicit types except where the right-hand side already says it
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# `this.` is never used in this codebase
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+# braces — always, even for one-liners (guard clauses are the exception below)
+csharp_prefer_braces = when_multiline:suggestion
+
+# expression-bodied members
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_expression_bodied_lambdas = true:suggestion
+
+# language rules mechanised from .claude/rules/csharp.md
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+csharp_prefer_static_local_function = true:suggestion
+
+# Diagnostic severities.
+# IDE0055 ("fix formatting") stays a suggestion: D-...-1 locks legacy
+# normalisation to `dotnet format whitespace`, so full formatting drift in
+# pre-4285f25 files must never break the build.
+dotnet_diagnostic.IDE0055.severity = suggestion
+
+# ---------------------------------------------------------------------------
+# Rule calibration (D-...-6(2)).
+#
+# Below are the analyzer rules whose PREMISE does not hold in a given folder.
+# This is not a way around the NoWarn list of Directory.Build.props: D-...-6(2)
+# still forbids silencing a rule merely because fixing it would be work. Each
+# rule here passes the objective test "would the code get WORSE if this were
+# fixed instead of suppressed?", and each stays fully enforced in every folder
+# where its premise does hold.
+# ---------------------------------------------------------------------------
+
+[test/**.cs]
+# CA1707 (identifiers must not contain underscores) - 688 hits, every single one in
+# this project and none in src/. xUnit test names are `Method_Scenario_Expected`;
+# the underscore is what makes a failing test name readable in the runner output.
+# Renaming the suite to satisfy a public-API naming guideline would make it worse.
+# Still enforced in src/, where the guideline does apply.
+dotnet_diagnostic.CA1707.severity = none
+
+# CA1711 (type name must not end in a reserved suffix) - 1 hit,
+# `NonParallelCollection` in ParsingEngineMemoryTests.cs. That type is an xUnit
+# [CollectionDefinition] marker, and `<Name>Collection` is xUnit's own idiom for it.
+# The rule protects API consumers from a type that looks like an ICollection and is
+# not one; a marker in a non-shipped test assembly has no consumers.
+# Still enforced in src/.
+dotnet_diagnostic.CA1711.severity = none
+
+[src/TranslateReader/**.cs]
+# MA0004 (use Task.ConfigureAwait) - 214 hits in the MAUI Client layer. Here
+# `ConfigureAwait(false)` is not a style preference, it is a defect:
+# .claude/rules/csharp.md section 3 requires UI state to change on the main thread,
+# and these continuations touch pages, [ObservableProperty] setters and the WebView.
+# Deliberately NOT applied to src/TranslateReader.Core/: that project is a library,
+# ConfigureAwait(false) is correct there, and its 330 hits are debt (see MA0004 in
+# the NoWarn list), not calibration. This key is what keeps the Client layer correct
+# on the day that debt is paid and MA0004 leaves NoWarn.
+dotnet_diagnostic.MA0004.severity = none
+
+[src/TranslateReader.Core/Models/**.cs]
+# CA1805 (do not initialise to the default value) - 2 hits,
+# `ReadingSettings.LetterSpacing` and `.WordSpacing`. All 11 properties of that POCO
+# state their default inline; the class IS the readable spec of the reading defaults.
+# Dropping `= 0` from the two that happen to default to zero would leave the table
+# half-documented, to save a field initialisation on an object built a handful of
+# times. Still enforced outside Models/.
+dotnet_diagnostic.CA1805.severity = none

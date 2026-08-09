@@ -9,7 +9,7 @@ public class ThemeEngineTests
 
     [Theory]
     [InlineData(ThemeType.Light, "#FFFFFF", "#1A1A1A", "#2563EB")]
-    [InlineData(ThemeType.Dark,  "#1A1A2E", "#E4E4E7", "#60A5FA")]
+    [InlineData(ThemeType.Dark, "#1A1A2E", "#E4E4E7", "#60A5FA")]
     [InlineData(ThemeType.Sepia, "#F4ECD8", "#5B4636", "#8B6914")]
     public void ResolveThemeColors_ReturnsCorrectPalette(ThemeType theme, string bg, string text, string accent)
     {

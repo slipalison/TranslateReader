@@ -172,7 +172,7 @@ if ($LASTEXITCODE -eq 0) { dotnet build src/TranslateReader/TranslateReader.cspr
 Failure = block.
 
 **Secondary (only if the phase touched `src/TranslateReader/Platforms/` or a mobile-specific
-dependency), WARN-only if the workload is missing rather than BLOCK:**
+dependency); a missing workload is reported as WARN, never as BLOCK:**
 ```bash
 dotnet build -f net10.0-android
 ```
@@ -281,21 +281,40 @@ this gate legitimately reports SKIPPED until a phase adds code. SKIPPED is not a
 
 **bash:**
 ```bash
-dotnet format --verify-no-changes
+dotnet format whitespace --verify-no-changes
 ```
 
 **PowerShell:**
 ```powershell
-dotnet format --verify-no-changes
+dotnet format whitespace --verify-no-changes
 ```
 
-Failure = **WARN only** for now. No `.editorconfig` or custom analyzers exist yet, so this runs
-against .NET's built-in default rules and will flag legacy formatting drift that D-2 exempts.
-Tighten to BLOCK-on-new-files once the `baseline-de-estilo` phase ships an `.editorconfig` +
-analyzer set.
+The subcommand is `whitespace`, never the full `dotnet format`: D-2026-08-08-baseline-de-estilo-1
+locks legacy normalisation to whitespace, and this gate must not demand more of an executor than
+the decision told it to do.
 
-Scope the report: legacy diffs = WARN; diffs inside files touched by this phase = report
-prominently (still WARN until `baseline-de-estilo` lands).
+Scope the verdict by the phase's own diff — the gate already computes that file list:
+
+- Violation in a file **touched by the phase under review** = **BLOCK**. The repo ships a root
+  `.editorconfig` and a root `Directory.Build.props` (`EnableNETAnalyzers`,
+  `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, `Meziantou.Analyzer`), so
+  formatting drift in code a phase authored or edited has no excuse left.
+- Violation in a file **outside that diff** = WARN, never a blocker. Pre-`4285f25` code is exempt
+  by D-2 and must not be reformatted for style.
+
+**Analyzer warnings:** `TreatWarningsAsErrors` IS enabled (root `Directory.Build.props`), so any
+NEW `CS`/`CA`/`MA` warning is already a hard build error — the build gate catches it before this
+gate does. `baseline-de-estilo` measured 24 distinct IDs on legacy code; 4 were rules whose premise
+does not hold for the project shape and were calibrated at folder scope in `.editorconfig`
+(D-2026-08-08-baseline-de-estilo-6), and the remaining 21 are frozen in a closed, per-ID, commented
+`<NoWarn>` list. The 12-ID cap of D-2026-08-08-baseline-de-estilo-3 was REVOKED by D-6 and replaced
+by "exactly what the measurement left after calibration".
+
+Consequence for this gate: adding an ID to `NoWarn` requires its own decision — a phase that
+silences a new warning that way instead of fixing it is a BLOCK finding here. Entries marked
+`RISCO:` in that list are frozen potential bugs (not accepted behaviour) and are routed to a future
+fix phase via `.jdi/todos/`; a phase that touches one of those files without addressing the marked
+risk is a WARN, never BLOCK.
 
 ### Gate 5: Security / Layer / Concurrency / Memory rules (project-specific)
 
@@ -485,7 +504,8 @@ itself after navigation.
   Write-Host "subscribe=$sub unsubscribe=$uns"
   ```
 
-Baseline at bootstrap: `subscribe=5, unsubscribe=4` (pre-existing imbalance — legacy, WARN only).
+Baseline at bootstrap: `subscribe=5, unsubscribe=4` (pre-existing imbalance — legacy: WARN, never
+BLOCK).
 Any NEW `+=` introduced by the phase without a matching `-=` in the same class = BLOCK.
 
 #### 5.12 Memory — mutable static state (BLOCK on new code)
@@ -508,7 +528,7 @@ and static types.
 
 Baseline at bootstrap: exactly 1 hit —
 `src/TranslateReader.Core/Business/Engines/TranslationEngine.cs:16: private static bool _nativeLibraryConfigured;`
-(legacy, WARN only — it is a one-shot native-init guard). Any NEW mutable static = BLOCK.
+(legacy: WARN, never BLOCK — it is a one-shot native-init guard). Any NEW mutable static = BLOCK.
 
 #### 5.13 Memory — unbounded in-memory cache (WARN; manual judgment)
 

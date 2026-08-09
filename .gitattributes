@@ -1,0 +1,19 @@
+# Line endings — LF everywhere, index and working tree, on every platform.
+# Takes precedence over the machine's core.autocrlf, which is what kept
+# producing "LF will be replaced by CRLF" on almost every commit in this repo.
+* text=auto eol=lf
+
+# Binary assets — never diffed, never EOL-converted.
+*.ttf binary
+*.epub binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.gguf binary
+*.pfx binary
+
+# SVG stays text on purpose: the assets under src/TranslateReader/Resources
+# are hand-editable and their diffs are worth reading.
+*.svg text

@@ -30,8 +30,9 @@ o catch-all `**/*`.
   do ambiente. Vale para todo `/jdi-verify`, inclusive `mode=dod-critic`.
 - `orchestration.mode=enhanced` em `config.json` (D-5): o `/jdi-verify` tambem dispara este
   reviewer em `mode=dod-critic` (re-check read-only das linhas Auto/PASS do gate 8).
-- Gate 4 sobe para BLOCK-on-new-files quando a phase `baseline-de-estilo` entregar
-  `.editorconfig` + analyzers.
+- Gate 4 ja e BLOCK sobre os arquivos tocados pela phase em review (WARN fora do diff): a phase
+  `baseline-de-estilo` entregou `.editorconfig` + `Directory.Build.props` com analyzers, e o
+  comando do gate passou a ser `dotnet format whitespace --verify-no-changes`.
 - Gate 3 reporta SKIPPED enquanto nao houver arquivo `.cs` novo depois de `4285f25`
   (no bootstrap havia 0). SKIPPED nao e falha.
 - Prioridade em conflito: seguranca > performance > boas praticas.
