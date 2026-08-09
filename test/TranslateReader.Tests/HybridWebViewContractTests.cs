@@ -301,4 +301,14 @@ public class HybridWebViewContractTests
         Assert.Contains("window.applySnippetTranslation", js);
         Assert.Contains("window.setSnippetLoading", js);
     }
+
+    // B-1 fix (snippet-translation review, iter 2): a failed or superseded snip request must be
+    // able to undo setSnippetLoading's pulsing placeholder, or it pulses forever with no feedback.
+    [Fact]
+    public void SnippetsJs_ExposesClearSnippetLoading()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.clearSnippetLoading", js);
+    }
 }

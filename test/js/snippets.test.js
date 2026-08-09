@@ -529,6 +529,41 @@ test('applySnippetTranslation replaces a loading placeholder with the finished s
     assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 1);
 });
 
+test('clearSnippetLoading: restores a pulsing placeholder back to individual periods', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:1']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    env.window.clearSnippetLoading(['ch1.xhtml:0:0:1']);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 0);
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 3);
+    assert.strictEqual(paragraphs[0].textContent, 'Um. Dois. Tres.');
+});
+
+test('clearSnippetLoading: never touches a snip whose translation already arrived', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    env.window.clearSnippetLoading(['ch1.xhtml:0:0:0']);
+
+    const snip = env.document.querySelectorAll('[data-snip]');
+    assert.strictEqual(snip.length, 1);
+    assert.strictEqual(snip[0].childNodes[0].textContent, 'She said yes.');
+});
+
+test('clearSnippetLoading: does nothing when the paragraph no longer exists', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+
+    assert.doesNotThrow(() => env.window.clearSnippetLoading(['ch1.xhtml:9:0:0']));
+});
+
 test('applySnippetTranslation destructively replaces an overlapping existing snip', () => {
     const env = loadWithLabels();
     mountWithParagraphs(env, ['Um. Dois. Tres.']);

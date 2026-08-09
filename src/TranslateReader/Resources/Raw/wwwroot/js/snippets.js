@@ -752,21 +752,22 @@ function _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOrig
     return span;
 }
 
-// The inverse of _buildSnipSpan: turns a snip back into individual, re-selectable periods,
-// discarding the translation. si continues from the range's own start so later selections index
-// consistently with the rest of the paragraph.
-function _restoreSnipToPeriods(span, info) {
+// Shared by _restoreSnipToPeriods (undo a translated snip) and clearSnippetLoading (undo a loading
+// placeholder that failed or was superseded): splits originalText back into periods and splices
+// them into span's own position, indexed from startIndex so later selections stay consistent with
+// the rest of the paragraph.
+function _spliceSpanBackToPeriods(span, originalText, startIndex) {
     var parent = span.parentNode;
     var nodes = Array.from(parent.childNodes);
     var idx = nodes.indexOf(span);
     if (idx === -1) return;
-    var sentences = _splitSentences(span.dataset.orig);
+    var sentences = _splitSentences(originalText);
     var replacement = [];
     sentences.forEach(function (sentence, offset) {
         if (offset > 0) replacement.push(document.createTextNode(' '));
         var s = document.createElement('span');
         s.className = 'tr-sent';
-        s.dataset.si = String(info.a + offset);
+        s.dataset.si = String(startIndex + offset);
         s.textContent = sentence;
         s.addEventListener('pointerdown', _onSentPointerDown);
         replacement.push(s);
@@ -774,6 +775,12 @@ function _restoreSnipToPeriods(span, info) {
     var ordered = nodes.slice(0, idx).concat(replacement, nodes.slice(idx + 1));
     while (parent.firstChild) parent.removeChild(parent.firstChild);
     for (var item of ordered) parent.appendChild(item);
+}
+
+// The inverse of _buildSnipSpan: turns a snip back into individual, re-selectable periods,
+// discarding the translation.
+function _restoreSnipToPeriods(span, info) {
+    _spliceSpanBackToPeriods(span, span.dataset.orig, info.a);
 }
 
 // A root with a null chapterHRef is the single paginated pager, which always represents whichever
@@ -878,6 +885,31 @@ window.setSnippetLoading = function (keys) {
             span.appendChild(blob.svg);
             _updateBlob(blob, _blobFromEls([span]));
         }
+    }
+};
+
+function _loadingSpanAt(p, a) {
+    for (var span of p.querySelectorAll("[data-si]")) {
+        if (span.className.indexOf('tr-loading') !== -1 && Number(span.dataset.si) === a) {
+            return span;
+        }
+    }
+    return null;
+}
+
+// Undoes setSnippetLoading for a run that failed or was superseded by a newer selection. The
+// placeholder's first child is the untranslated text captured before the pulse started (the blob
+// mask/svg were appended after it), so splicing it back into periods needs no server round trip
+// and this is only ever called for a range whose translation never arrived.
+window.clearSnippetLoading = function (keys) {
+    for (var key of keys) {
+        var info = _parseSnipKey(key);
+        var p = _findParagraph(info.chapterHRef, info.paragraphIndex);
+        if (!p) continue;
+        var span = _loadingSpanAt(p, info.a);
+        if (!span) continue;
+        var original = span.childNodes[0] ? span.childNodes[0].textContent : '';
+        _spliceSpanBackToPeriods(span, original, info.a);
     }
 };
 

@@ -483,7 +483,30 @@ public partial class ReaderPage : ContentPage
         _snippetCts = new CancellationTokenSource();
         var ct = _snippetCts.Token;
 
-        var results = await _pageModel.TranslateSnippetsAsync(filled, ct);
+        IReadOnlyList<SnippetTranslation> results;
+        try
+        {
+            results = await _pageModel.TranslateSnippetsAsync(filled, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // This run was superseded by a newer selection (or the model download overlay's
+            // Cancel button); its own placeholders must stop pulsing even though the app keeps
+            // going for whatever replaced it. The exception still flows to the caller (csharp.md
+            // §1: cancellation is never swallowed here, only cleaned up after).
+            await ContentWebView.EvaluateJavaScriptAsync($"clearSnippetLoading({keysJson})");
+            throw;
+        }
+
+        if (results.Count == 0)
+        {
+            // The PageModel already converted the failure into a friendly DisplayAlert at its
+            // single exception boundary (csharp.md §1); this only undoes the loading placeholder
+            // so it does not pulse forever with no feedback.
+            await ContentWebView.EvaluateJavaScriptAsync($"clearSnippetLoading({keysJson})");
+            return;
+        }
+
         var resultsJson = JsonSerializer.Serialize(results.ToList(), ReaderJsonContext.Default.ListSnippetTranslation);
         await ContentWebView.EvaluateJavaScriptAsync($"applySnippetTranslation({resultsJson})");
     }
@@ -559,8 +582,14 @@ public partial class ReaderPage : ContentPage
         await ContentWebView.EvaluateJavaScriptAsync($"restoreSnippets({snippetsJson})");
     }
 
-    private void OnCancelDownloadClicked(object? sender, EventArgs e) =>
+    private void OnCancelDownloadClicked(object? sender, EventArgs e)
+    {
+        // The download/load overlay is shared by paragraph translation and snippet translation
+        // (ReaderPageModel.TranslateSnippetsAsync reuses IsModelDownloading/IsModelLoading), so
+        // cancelling it must also cancel an in-flight snippet run, not just the paragraph one.
+        _snippetCts?.Cancel();
         _pageModel.CancelTranslationCommand.Execute(null);
+    }
 
     private void OnSettingsButtonClicked(object? sender, EventArgs e)
     {
