@@ -88,6 +88,7 @@ public static class MauiProgram
             sp.GetRequiredService<IBooksAccess>(),
             sp.GetRequiredService<IReadingStateAccess>(),
             sp.GetRequiredService<ITranslationCacheAccess>(),
+            sp.GetRequiredService<ISnippetTranslationAccess>(),
             sp.GetRequiredService<IParsingEngine>(),
             sp.GetRequiredService<IFileUtility>(),
             booksDirectory));
