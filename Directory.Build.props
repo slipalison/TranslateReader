@@ -60,9 +60,19 @@
     MA0048 (2x, ReaderPage.xaml.cs/OneBasedIndexConverter and ParsingEngineMemoryTests/NonParallelCollection) file name does not match the type name.
     MA0051 (2x, LibraryPageModel.cs:193 at 91 lines, ReaderPage.xaml.cs:110 at 76 lines) method longer than 60 lines; csharp.md 7 prefers 20.
     MA0074 (138x, test/TranslateReader.Tests) Contains/StartsWith/EndsWith with no explicit StringComparison; StartsWith and EndsWith default to culture-sensitive, so this is not pure ceremony.
+
+    W-2 (phase cobertura-e-ci, D-2026-08-08-cobertura-e-ci-5): the FIRST real `Build (Android)`
+    CI run measured one Android-toolchain warning, not covered by `TreatWarningsAsErrors` (it is
+    emitted by the APK packaging step, not the C# compiler). Not RISCO — both copies of the
+    native library come from the same SQLitePCLRaw bundle, the linker keeps one and ignores the
+    duplicate on purpose. See `.jdi/phases/cobertura-e-ci/android-warnings.md` for the run.
+
+    XA4301 (2x, net10.0-android only) "APK already contains the item lib/<abi>/libe_sqlite3.so;
+    ignoring" — Microsoft.Data.Sqlite.Core and the explicit SQLitePCLRaw.bundle_green reference
+    both ship the same native e_sqlite3 binary; the Android linker de-dupes it at pack time.
   -->
   <PropertyGroup>
-    <NoWarn>$(NoWarn);CA1001;CA1305;CA1822;CA1826;CA1852;CA1859;CA1869;CS0414;CS0618;CS8602;MA0002;MA0004;MA0006;MA0009;MA0011;MA0016;MA0023;MA0046;MA0048;MA0051;MA0074</NoWarn>
+    <NoWarn>$(NoWarn);CA1001;CA1305;CA1822;CA1826;CA1852;CA1859;CA1869;CS0414;CS0618;CS8602;MA0002;MA0004;MA0006;MA0009;MA0011;MA0016;MA0023;MA0046;MA0048;MA0051;MA0074;XA4301</NoWarn>
   </PropertyGroup>
 
 </Project>
