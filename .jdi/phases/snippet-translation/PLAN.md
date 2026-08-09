@@ -395,7 +395,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `test "$(grep -cE '^\s*\[Fact' test/TranslateReader.Tests/SnippetTranslationAccessTests.cs)" -ge 10`
 - **Dependencies:** T-1 · **Test:** `test/TranslateReader.Tests/SnippetTranslationAccessTests.cs`
 - **Commit:** `feat(snippet-translation): T-6 snippet translations table, model and access (D-2026-08-09-snippet-translation-1)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-7: Contrato do Manager, prompt de trecho, cache e cores do tema
 - **Wave:** 4 · **Specialist:** jdi-doer-translatereader

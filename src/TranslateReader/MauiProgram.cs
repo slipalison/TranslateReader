@@ -74,6 +74,7 @@ public static class MauiProgram
         services.AddSingleton<IReadingStateAccess>(_ => new ReadingStateAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<ISettingsAccess>(_ => new SettingsAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<ITranslationCacheAccess>(_ => new TranslationCacheAccess(connectionString, initializeOnStartup: true));
+        services.AddSingleton<ISnippetTranslationAccess>(_ => new SnippetTranslationAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<IBookTranslationJobAccess>(_ => new BookTranslationJobAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<IModelAccess>(_ => new ModelAccess(
             new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, modelsDirectory));
