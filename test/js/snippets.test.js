@@ -565,5 +565,5 @@ test('translate: clicking the primary button sends a snip| message with the sele
         chapterHRef: null, paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
         text: 'Ela chegou.', paragraph: 'Ela chegou. Ele saiu.',
     }]);
-    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
 });

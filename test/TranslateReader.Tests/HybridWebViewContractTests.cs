@@ -232,4 +232,73 @@ public class HybridWebViewContractTests
 
         Assert.Contains("id=\"reader-theme\"", html);
     }
+
+    [Fact]
+    public void SnippetRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":2,"sentenceStart":0,"sentenceEnd":1,"text":"Ela chegou.","paragraph":"Ela chegou. Ele saiu."}""";
+
+        var request = JsonSerializer.Deserialize<SnippetRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.Equal("ch1.html", request.ChapterHRef);
+        Assert.Equal(2, request.ParagraphIndex);
+        Assert.Equal(0, request.SentenceStart);
+        Assert.Equal(1, request.SentenceEnd);
+        Assert.Equal("Ela chegou.", request.Text);
+        Assert.Equal("Ela chegou. Ele saiu.", request.Paragraph);
+    }
+
+    [Fact]
+    public void SnippetToggleRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":0,"sentenceStart":0,"sentenceEnd":0,"showingOriginal":true}""";
+
+        var request = JsonSerializer.Deserialize<SnippetToggleRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.True(request.ShowingOriginal);
+    }
+
+    [Fact]
+    public void SnippetRemoveRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":1,"sentenceStart":2,"sentenceEnd":3}""";
+
+        var request = JsonSerializer.Deserialize<SnippetRemoveRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.Equal(1, request.ParagraphIndex);
+        Assert.Equal(2, request.SentenceStart);
+        Assert.Equal(3, request.SentenceEnd);
+    }
+
+    [Fact]
+    public void SnippetTranslation_SerializesToCamelCaseJson()
+    {
+        var snippet = new SnippetTranslation(
+            1, 1, "ch1.html", 0, 0, 1, "abcd1234", "Texto traduzido", false, DateTime.UtcNow);
+
+        var json = JsonSerializer.Serialize(snippet, CamelCaseOptions);
+
+        Assert.Contains("\"translatedText\":\"Texto traduzido\"", json);
+        Assert.Contains("\"showingOriginal\":false", json);
+        Assert.Contains("\"originalHash\":\"abcd1234\"", json);
+        Assert.DoesNotContain("TranslatedText", json);
+        Assert.DoesNotContain("ShowingOriginal", json);
+        Assert.DoesNotContain("OriginalHash", json);
+    }
+
+    [Fact]
+    public void SnippetsJs_ExposesTheSixPrescribedWindowFunctions()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.mountSnippetLayer", js);
+        Assert.Contains("window.unmountSnippetLayer", js);
+        Assert.Contains("window.setSnippetLabels", js);
+        Assert.Contains("window.restoreSnippets", js);
+        Assert.Contains("window.applySnippetTranslation", js);
+        Assert.Contains("window.setSnippetLoading", js);
+    }
 }

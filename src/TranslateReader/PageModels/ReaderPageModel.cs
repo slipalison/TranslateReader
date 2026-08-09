@@ -10,7 +10,8 @@ namespace TranslateReader.PageModels;
 public partial class ReaderPageModel(
     IReadingManager readingManager,
     ISettingsManager settingsManager,
-    ITranslationManager translationManager) : ObservableObject
+    ITranslationManager translationManager,
+    ISnippetTranslationManager snippetTranslationManager) : ObservableObject
 {
     [ObservableProperty]
     public partial int BookId { get; set; }
@@ -69,6 +70,8 @@ public partial class ReaderPageModel(
     private CancellationTokenSource? _translationCts;
 
     public ReadingSettings CurrentSettings { get; private set; } = new();
+
+    public ThemeColors CurrentThemeColors => settingsManager.ResolveThemeColors(CurrentSettings);
 
     public bool IsModelAvailable { get; private set; }
 
@@ -332,4 +335,30 @@ public partial class ReaderPageModel(
         IsModelAvailable = false;
         DeactivateTranslationMode();
     }
+
+    public async Task<IReadOnlyList<SnippetTranslation>> TranslateSnippetsAsync(
+        IReadOnlyList<SnippetRequest> requests, CancellationToken ct)
+    {
+        var results = new List<SnippetTranslation>(requests.Count);
+        await Task.Run(async () =>
+        {
+            foreach (var request in requests)
+            {
+                ct.ThrowIfCancellationRequested();
+                var snippet = await snippetTranslationManager.TranslateSnippetAsync(
+                    BookId, request, CurrentSettings.SourceLanguage, CurrentSettings.TargetLanguage, ct);
+                results.Add(snippet);
+            }
+        }, ct);
+        return results;
+    }
+
+    public Task<IReadOnlyList<SnippetTranslation>> LoadSnippetsAsync(string chapterHRef) =>
+        snippetTranslationManager.FetchSnippetsAsync(BookId, chapterHRef);
+
+    public Task SetSnippetShowingOriginalAsync(SnippetToggleRequest request) =>
+        snippetTranslationManager.SetShowingOriginalAsync(BookId, request);
+
+    public Task RemoveSnippetAsync(SnippetRemoveRequest request) =>
+        snippetTranslationManager.RemoveSnippetAsync(BookId, request);
 }

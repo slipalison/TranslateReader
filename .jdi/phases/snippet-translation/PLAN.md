@@ -521,7 +521,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
 - **Dependencies:** T-5, T-7
 - **Test:** `test/TranslateReader.Tests/HybridWebViewContractTests.cs` + as duas suites completas
 - **Commit:** `feat(snippet-translation): T-8 raw message bridge, snippet layer lifecycle and gates (D-2026-08-09-snippet-translation-2, -3)`
-- **Status:** pending
+- **Status:** completed
 
 ---
 

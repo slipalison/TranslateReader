@@ -888,14 +888,15 @@ function _chapterHRefFor(p) {
     return null;
 }
 
+// The C# side drives the loading placeholder (ReaderPage calls setSnippetLoading as soon as the
+// message arrives, before starting inference) rather than this handler doing it eagerly, so there
+// is exactly one place that decides a run is "in flight".
 function _onTranslateClick() {
     if (!_sel) return;
     var chapterHRef = _chapterHRefFor(_sel.p);
     var pi = Number(_sel.p.dataset.pi);
     var paragraph = _sel.p.textContent;
-    var keys = [];
     var payload = _runsOf(_sel.set).map(function (run) {
-        keys.push(_snipKey(chapterHRef, pi, run.a, run.b));
         return {
             chapterHRef: chapterHRef, paragraphIndex: pi,
             sentenceStart: run.a, sentenceEnd: run.b,
@@ -903,6 +904,5 @@ function _onTranslateClick() {
         };
     });
     _clearSelection();
-    window.setSnippetLoading(keys);
     window.sendRawMessage('snip|' + JSON.stringify(payload));
 }
