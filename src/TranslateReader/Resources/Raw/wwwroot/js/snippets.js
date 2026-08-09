@@ -267,10 +267,22 @@ function _blobGlow() {
     return 'rgba(' + _accentRgb + ',0.3)';
 }
 
-// SVG elements need the SVG namespace to render in a real WebView; the test harness has no
-// createElementNS, so it falls back to a plain (still testable) element.
+// SVG elements need the SVG namespace to render in a real WebView, where className is a read-only
+// SVGAnimatedString (no .indexOf) instead of a plain string like every other element this file
+// creates. The test harness's createElementNS mimics that exact shape (see harness.js) so this
+// hazard is exercised in tests too, instead of hiding behind a fallback plain element (B-2).
 function _svgEl(tag) {
-    return document.createElementNS ? document.createElementNS('http://www.w3.org/2000/svg', tag) : document.createElement(tag);
+    return document.createElementNS('http://www.w3.org/2000/svg', tag);
+}
+
+// className is a string on the mask <span> and every other element this file builds, but never on
+// an svg/path built by _svgEl above — reading the reflected "class" attribute instead is safe on
+// both, in every WebView engine, and keeps the exact substring semantics this file already relies
+// on (e.g. 'tr-blob-svg'.indexOf('tr-blob') === 0 covers the mask, the pulse variant and the svg
+// outline with the one check). Never call `.indexOf` on a node's `className` directly (B-2).
+function _hasClass(node, cls) {
+    var value = typeof node.className === 'string' ? node.className : (node.getAttribute && node.getAttribute('class'));
+    return typeof value === 'string' && value.indexOf(cls) !== -1;
 }
 
 function _makeBlob() {
@@ -362,7 +374,7 @@ function _renderAllBlobs() {
 // but are not selectable, so they are left alone here.
 function _updateSentClasses() {
     for (var span of document.querySelectorAll("[data-si]")) {
-        if (span.className.indexOf('tr-loading') !== -1) continue;
+        if (_hasClass(span, 'tr-loading')) continue;
         var isOn = !!(_sel && span.parentNode === _sel.p && _sel.set.has(Number(span.dataset.si)));
         span.className = isOn ? 'tr-sent tr-on' : 'tr-sent';
     }
@@ -654,7 +666,7 @@ function _unwrapParagraph(el) {
     for (var node of Array.from(el.childNodes)) {
         if (!node.tagName) {
             ordered.push(node);
-        } else if (node.className && node.className.indexOf('tr-blob') !== -1) {
+        } else if (_hasClass(node, 'tr-blob')) {
             continue;
         } else if (node.dataset && node.dataset.snip !== undefined) {
             ordered.push(document.createTextNode(node.dataset.orig));
@@ -698,14 +710,18 @@ window.unmountSnippetLayer = function () {
     _dragStart = null;
     _hidePill();
     _removeHint();
-    for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
-        _unwrapParagraph(el);
-    }
+    // Blobs are torn down BEFORE the unwrap loop below, not after: every blob's mask+svg is a
+    // direct child of the paragraph it decorates (_renderAllBlobs prepends them there), so
+    // unwrapping first would hand _unwrapParagraph a node it has to specifically recognize and
+    // skip. Removing the registry first means it never meets one at all (B-2).
     for (var blob of _blobs.values()) {
         blob.mask.remove();
         blob.svg.remove();
     }
     _blobs.clear();
+    for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
+        _unwrapParagraph(el);
+    }
     _mounted = false;
 };
 
@@ -970,7 +986,7 @@ window.setSnippetLoading = function (keys) {
 
 function _loadingSpanAt(p, a) {
     for (var span of p.querySelectorAll("[data-si]")) {
-        if (span.className.indexOf('tr-loading') !== -1 && Number(span.dataset.si) === a) {
+        if (_hasClass(span, 'tr-loading') && Number(span.dataset.si) === a) {
             return span;
         }
     }

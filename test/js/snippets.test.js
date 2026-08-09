@@ -318,7 +318,10 @@ test('z-order: the blob mask and svg become the first children of the paragraph,
 
     const children = paragraphs[0].childNodes;
     const maskIndex = children.findIndex((node) => node.className === 'tr-blob');
-    const svgIndex = children.findIndex((node) => node.className === 'tr-blob-svg');
+    // The blob outline is a real SVG element: its className is not a plain string (see
+    // FakeSvgElement in harness.js), so this reads the reflected class attribute instead — the
+    // same string-safe pattern production code uses via _hasClass (B-2).
+    const svgIndex = children.findIndex((node) => node.getAttribute && node.getAttribute('class') === 'tr-blob-svg');
     const firstSentIndex = children.findIndex((node) => node.dataset && node.dataset.si !== undefined);
 
     assert.notStrictEqual(maskIndex, -1);
@@ -326,6 +329,23 @@ test('z-order: the blob mask and svg become the first children of the paragraph,
     assert.notStrictEqual(firstSentIndex, -1);
     assert.ok(maskIndex < firstSentIndex, 'the blob mask must paint under the text, not over it');
     assert.ok(svgIndex < firstSentIndex, 'the blob outline must paint under the text, not over it');
+});
+
+test('unmount: a stray glass blob is skipped without throwing even though its outline is an SVG element (B-2 belt and suspenders)', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob-svg').length, 1);
+
+    // Calls the paragraph-restore step directly, with its blob mask+svg still attached, instead of
+    // going through unmountSnippetLayer (which now removes blobs first): this is what proves the
+    // class check itself is string-safe, independent of the call-order fix around it.
+    assert.doesNotThrow(() => env.window._unwrapParagraph(paragraphs[0]));
+
+    assert.strictEqual(paragraphs[0].textContent, 'Ela chegou. Ele saiu.');
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob-svg').length, 0);
+    assert.strictEqual(paragraphs[0].dataset.pi, undefined);
 });
 
 test('sweep: clearing the selection removes its blob from the registry and the DOM', () => {
@@ -624,6 +644,31 @@ test('sweep: removing a snip via the chip clears its blob from the registry and 
 
     assert.strictEqual(env.window._blobs.size, 0);
     assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+});
+
+test('unmount: completes without throwing and remains re-mountable with a snip blob and an active selection present (B-2 regression)', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela disse que sim. Ele saiu.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    assert.strictEqual(env.window._blobs.size, 2);
+
+    assert.doesNotThrow(() => env.window.unmountSnippetLayer());
+
+    assert.strictEqual(env.document.querySelectorAll('[data-pi]').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('[data-si]').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob-svg').length, 0);
+    assert.strictEqual(env.window._blobs.size, 0);
+    assert.strictEqual(paragraphs[0].textContent, 'Ela disse que sim. Ele saiu.');
+
+    env.window.mountSnippetLayer();
+
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 2);
 });
 
 test('applySnippetTranslation replaces a loading placeholder with the finished snip', () => {

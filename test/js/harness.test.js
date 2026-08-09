@@ -154,3 +154,49 @@ test('elementFromPoint returns the topmost element containing the point, or null
     assert.strictEqual(env.document.elementFromPoint(70, 70), back);
     assert.strictEqual(env.document.elementFromPoint(200, 200), null);
 });
+
+// snippets.js builds a glass blob's outline through createElementNS (B-2): a real SVGElement's
+// className is a read-only SVGAnimatedString, not a string, and code that forgot that threw a
+// TypeError invisible to every test here — because this harness used to have no createElementNS at
+// all, so the fallback path always produced a harmless plain-string element instead.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+test('createElementNS on the SVG namespace returns an element whose className is not a plain string', () => {
+    const env = createEnv();
+
+    const svg = env.document.createElementNS(SVG_NS, 'svg');
+
+    assert.strictEqual(svg.tagName, 'SVG');
+    assert.notStrictEqual(typeof svg.className, 'string');
+});
+
+test('createElementNS keeps getAttribute("class") working on an SVG element after setAttribute', () => {
+    const env = createEnv();
+    const svg = env.document.createElementNS(SVG_NS, 'svg');
+
+    svg.setAttribute('class', 'tr-blob-svg');
+
+    assert.strictEqual(svg.getAttribute('class'), 'tr-blob-svg');
+    assert.notStrictEqual(typeof svg.className, 'string');
+});
+
+test('createElementNS outside the SVG namespace behaves like createElement', () => {
+    const env = createEnv();
+
+    const element = env.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+
+    assert.strictEqual(element.tagName, 'DIV');
+    assert.strictEqual(typeof element.className, 'string');
+});
+
+test('querySelectorAll matches an SVG element by class even though its className is not a string', () => {
+    const env = createEnv();
+    const svg = env.document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'tr-blob-svg');
+    env.document.body.appendChild(svg);
+
+    const found = env.document.querySelectorAll('.tr-blob-svg');
+
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0], svg);
+});

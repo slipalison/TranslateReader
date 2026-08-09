@@ -19,6 +19,7 @@ const ATTR_RE = /([a-zA-Z-][a-zA-Z0-9-]*)(?:="([^"]*)")?/g;
 const SELECTOR_PART_RE = /\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/g;
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function toCamelCase(name) {
     return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -114,8 +115,13 @@ class FakeElement extends FakeNode {
         if (name === 'id') {
             this.id = value;
         } else if (name === 'class') {
-            this.className = value;
+            this._setClassName(value);
         }
+    }
+
+    // Overridden by FakeSvgElement, whose className is not a plain string even in a real DOM.
+    _setClassName(value) {
+        this.className = value;
     }
 
     getAttribute(name) {
@@ -176,6 +182,23 @@ class FakeElement extends FakeNode {
     }
 }
 
+// Mimics the one SVG hazard that matters to snippets.js (B-2): a real SVGElement's className is a
+// read-only SVGAnimatedString object, never a plain string, so code that calls `.indexOf` on it
+// throws where the same call on an HTML element's className would work fine. getAttribute('class')
+// stays a normal string on both, exactly like a real DOM, which is what lets production code read
+// classes safely regardless of which kind of element it is holding.
+class FakeSvgElement extends FakeElement {
+    constructor(ownerDocument, tagName) {
+        super(ownerDocument, tagName);
+        this.className = { baseVal: '', animVal: '' };
+    }
+
+    _setClassName(value) {
+        this.className.baseVal = value;
+        this.className.animVal = value;
+    }
+}
+
 class FakeDocument {
     constructor(readyState) {
         this.readyState = readyState;
@@ -187,6 +210,13 @@ class FakeDocument {
 
     createElement(tagName) {
         return new FakeElement(this, tagName);
+    }
+
+    // Deliberately hands back a FakeSvgElement for the SVG namespace instead of a plain FakeElement,
+    // so a node built this way exercises the same className shape a real WebView produces (B-2)
+    // rather than silently degrading to a harmless plain-string element.
+    createElementNS(namespaceUri, tagName) {
+        return namespaceUri === SVG_NS ? new FakeSvgElement(this, tagName) : new FakeElement(this, tagName);
     }
 
     createTextNode(text) {
@@ -386,11 +416,21 @@ function readAttribute(element, name) {
     return element.attributes.has(name) ? element.attributes.get(name) : undefined;
 }
 
+// className is a plain string on every element createElement builds, but createElementNS can hand
+// back a FakeSvgElement whose className is deliberately not a string (see above). Every selector
+// match still needs a class list, so this reads the reflected "class" attribute in that case
+// instead of assuming a string — the harness would otherwise throw on ANY selector check once a
+// blob's svg node exists anywhere in the tree, not just one asking for an SVG-specific class.
+function classTokensOf(element) {
+    const raw = typeof element.className === 'string' ? element.className : element.getAttribute('class');
+    return typeof raw === 'string' ? raw.split(' ') : [];
+}
+
 function matches(element, parsed) {
     if (parsed.tag !== null && element.tagName !== parsed.tag) {
         return false;
     }
-    const classes = element.className.split(' ');
+    const classes = classTokensOf(element);
     for (const name of parsed.classes) {
         if (!classes.includes(name)) {
             return false;
