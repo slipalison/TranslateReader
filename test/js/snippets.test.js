@@ -167,6 +167,23 @@ test('blob geometry: rects thinner than one pixel are ignored', () => {
     assert.strictEqual(withThin.d, withoutThin.d);
 });
 
+test('blob geometry: a multi-band path is a single continuous contour, not stacked sub-paths', () => {
+    const env = loadSnippets();
+
+    const result = env.window._blobPath(
+        [{ x1: 0, y1: 0, x2: 100, y2: 30 }, { x1: 0, y1: 34, x2: 80, y2: 64 }], 10);
+
+    const tokens = result.split(' ');
+    assert.strictEqual(tokens.filter((token) => token === 'M').length, 1);
+    assert.strictEqual(tokens.filter((token) => token === 'Z').length, 1);
+});
+
+test('blob geometry: no bands yields an empty path instead of throwing', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(env.window._blobPath([], 10), '');
+});
+
 test('root: paginated mode resolves the pager as the single root', () => {
     const env = loadSnippets();
     const pager = env.document.createElement('div');
@@ -291,6 +308,49 @@ test('tap: tapping a period shows the selection blob and pill', () => {
     assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 1);
     assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 1);
     assert.strictEqual(spans[0].className, 'tr-sent tr-on');
+});
+
+test('z-order: the blob mask and svg become the first children of the paragraph, before any sentence span', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    const children = paragraphs[0].childNodes;
+    const maskIndex = children.findIndex((node) => node.className === 'tr-blob');
+    const svgIndex = children.findIndex((node) => node.className === 'tr-blob-svg');
+    const firstSentIndex = children.findIndex((node) => node.dataset && node.dataset.si !== undefined);
+
+    assert.notStrictEqual(maskIndex, -1);
+    assert.notStrictEqual(svgIndex, -1);
+    assert.notStrictEqual(firstSentIndex, -1);
+    assert.ok(maskIndex < firstSentIndex, 'the blob mask must paint under the text, not over it');
+    assert.ok(svgIndex < firstSentIndex, 'the blob outline must paint under the text, not over it');
+});
+
+test('sweep: clearing the selection removes its blob from the registry and the DOM', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    assert.strictEqual(env.window._blobs.size, 1);
+
+    env.window.clearSnippetSelection();
+
+    assert.strictEqual(env.window._blobs.size, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+});
+
+test('selection: a non-contiguous selection gets one blob per contiguous run, never spanning the gap', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+
+    tap(env, spans[0]);
+    tap(env, spans[2]);
+
+    assert.strictEqual(env.window._blobs.size, 2);
+    assert.ok(env.window._blobs.has('sel:0:0'));
+    assert.ok(env.window._blobs.has('sel:0:2'));
 });
 
 test('tap: tapping a selected period again clears the selection', () => {
@@ -452,6 +512,22 @@ test('restore: a snippet whose hash matches renders the translated text', () => 
     assert.strictEqual(snip[0].childNodes[0].textContent, 'She said yes.');
 });
 
+test('restore: a restored snippet keeps a permanent glass blob around it, not just while selected', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    snip.rect = { top: 0, left: 0, right: 80, bottom: 20, width: 80, height: 20 };
+    env.window._renderAllBlobs();
+
+    const blob = env.window._blobs.get('snip:' + snip.dataset.snip);
+    assert.ok(blob, 'a finished snip must register a blob keyed by its own snip key');
+    assert.notStrictEqual(blob.mask.style.clipPath, "path('')");
+});
+
 test('restore: a snippet whose hash diverges is dropped and the paragraph is untouched', () => {
     const env = loadWithLabels();
     const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
@@ -497,6 +573,25 @@ test('toggle: switching a snippet swaps the text and flips the chip label', () =
         snip.querySelector('.tr-snip-chip').querySelectorAll('span')[0].textContent, 'EN');
 });
 
+test('toggle: switching a snippet re-measures its blob when the geometry changed', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    snip.rect = { top: 0, left: 0, right: 60, bottom: 20, width: 60, height: 20 };
+    env.window._renderAllBlobs();
+    const before = env.window._blobs.get('snip:' + snip.dataset.snip).mask.style.clipPath;
+
+    snip.rect = { top: 0, left: 0, right: 140, bottom: 20, width: 140, height: 20 };
+    fire(snip, 'click', { target: snip });
+
+    const after = env.window._blobs.get('snip:' + snip.dataset.snip).mask.style.clipPath;
+    assert.notStrictEqual(after, before);
+});
+
 test('the remove icon on the chip restores the periods and does not toggle the snip', () => {
     const env = loadWithLabels();
     const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
@@ -514,6 +609,23 @@ test('the remove icon on the chip restores the periods and does not toggle the s
     assert.strictEqual(paragraphs[0].textContent, 'Ela disse que sim.');
 });
 
+test('sweep: removing a snip via the chip clears its blob from the registry and the DOM', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+    assert.strictEqual(env.window._blobs.size, 1);
+    const closeIcon = env.document.querySelectorAll('[data-snip]')[0]
+        .querySelector('.tr-snip-chip').querySelectorAll('.ph-x')[0];
+
+    fire(closeIcon, 'click', { target: closeIcon });
+
+    assert.strictEqual(env.window._blobs.size, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+});
+
 test('applySnippetTranslation replaces a loading placeholder with the finished snip', () => {
     const env = loadWithLabels();
     mountWithParagraphs(env, ['Ela disse que sim.']);
@@ -529,6 +641,33 @@ test('applySnippetTranslation replaces a loading placeholder with the finished s
     assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 1);
 });
 
+test('applySnippetTranslation gives the finished snip a permanent glass blob, replacing the loading one', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:0']);
+    assert.strictEqual(env.window._blobs.has('load:ch1.xhtml:0:0:0'), true);
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.window._blobs.has('load:ch1.xhtml:0:0:0'), false);
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    assert.ok(env.window._blobs.has('snip:' + snip.dataset.snip));
+});
+
+test('loading: the placeholder blob pulses while its translation is in flight', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Um. Dois. Tres.']);
+
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:1']);
+
+    const blob = env.window._blobs.get('load:ch1.xhtml:0:0:1');
+    assert.ok(blob, 'a loading placeholder must register a blob keyed by load:<snipKey>');
+    assert.ok(blob.mask.className.includes('tr-blob-pulse'));
+});
+
 test('clearSnippetLoading: restores a pulsing placeholder back to individual periods', () => {
     const env = loadWithLabels();
     const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres.']);
@@ -540,6 +679,34 @@ test('clearSnippetLoading: restores a pulsing placeholder back to individual per
     assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 0);
     assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 3);
     assert.strictEqual(paragraphs[0].textContent, 'Um. Dois. Tres.');
+});
+
+test('clearSnippetLoading: removes the pulsing blob from the registry and the DOM', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:1']);
+    assert.strictEqual(env.window._blobs.size, 1);
+
+    env.window.clearSnippetLoading(['ch1.xhtml:0:0:1']);
+
+    assert.strictEqual(env.window._blobs.size, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+});
+
+test('resize: re-measures blobs even when there is no active selection', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    env.window.setSnippetLoading(['ch1.xhtml:0:0:1']);
+    const loadingSpan = env.document.querySelectorAll('.tr-loading')[0];
+    loadingSpan.rect = { top: 0, left: 0, right: 60, bottom: 20, width: 60, height: 20 };
+    env.window._renderAllBlobs();
+    const before = env.window._blobs.get('load:ch1.xhtml:0:0:1').mask.style.clipPath;
+
+    loadingSpan.rect = { top: 0, left: 0, right: 140, bottom: 20, width: 140, height: 20 };
+    env.fireWindow('resize');
+
+    const after = env.window._blobs.get('load:ch1.xhtml:0:0:1').mask.style.clipPath;
+    assert.notStrictEqual(after, before);
 });
 
 test('clearSnippetLoading: never touches a snip whose translation already arrived', () => {

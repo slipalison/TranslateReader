@@ -21,6 +21,14 @@ function _runsOf(set) {
     return runs;
 }
 
+// The inverse-ish helper: expands an inclusive [a, b] range of sentence indices into a Set, shared
+// by drag-selection and the blob sweep so both agree on what "sentences a..b" means.
+function _rangeSet(a, b) {
+    var set = new Set();
+    for (var i = a; i <= b; i++) set.add(i);
+    return set;
+}
+
 // FNV-1a 32-bit over UTF-16 code units. The C# side (TranslationManager.ComputeSnippetHash)
 // reimplements the same offset basis and prime so restoreSnippets can compare a hash computed here
 // against one persisted there without an async digest API in the WebView.
@@ -37,35 +45,57 @@ function _n(v) {
     return v.toFixed(1);
 }
 
-// Emits one rounded-rect sub-path for a band, corner radius already clamped by the caller.
-function _blobBand(x1, y1, x2, y2, rr) {
-    return [
-        'M', _n(x1 + rr), _n(y1),
-        'L', _n(x2 - rr), _n(y1),
-        'Q', _n(x2), _n(y1), _n(x2), _n(y1 + rr),
-        'L', _n(x2), _n(y2 - rr),
-        'Q', _n(x2), _n(y2), _n(x2 - rr), _n(y2),
-        'L', _n(x1 + rr), _n(y2),
-        'Q', _n(x1), _n(y2), _n(x1), _n(y2 - rr),
-        'L', _n(x1), _n(y1 + rr),
-        'Q', _n(x1), _n(y1), _n(x1 + rr), _n(y1),
-        'Z',
-    ].join(' ');
-}
-
 // Pure rects-to-SVG-path geometry: no DOM reads here, so it is testable without the WebView.
-// Adjacent bands meet at the midpoint between them so a selection spanning a line break reads as
-// one continuous glass shape instead of two rounded rects touching edge to edge.
+// Adjacent bands meet at the midpoint between them, then a SINGLE contour is traced: across the top
+// of the first band, down the right edge of every band (an S-curve where two bands' right edges
+// don't line up), across the bottom of the last band, and back up the left edge the same way. That
+// is one continuous glass shape with no internal seam, instead of one independent rounded rect
+// stacked per line (which drew a visible edge at every line join). A caller with no bands — a range
+// whose elements have not been laid out yet — gets an empty path instead of a crash, since
+// `_renderAllBlobs` calls this on every DOM change, not just once per selection.
 function _blobPath(bands, r) {
+    if (bands.length === 0) return '';
     for (var i = 0; i < bands.length - 1; i++) {
         var mid = (bands[i].y2 + bands[i + 1].y1) / 2;
         bands[i].y2 = mid;
         bands[i + 1].y1 = mid;
     }
-    return bands.map(function (band) {
-        var rr = Math.min(r, (band.x2 - band.x1) / 2, (band.y2 - band.y1) / 2);
-        return _blobBand(band.x1, band.y1, band.x2, band.y2, rr);
-    }).join(' ');
+    var rOf = function (band) { return Math.min(r, (band.x2 - band.x1) / 2, (band.y2 - band.y1) / 2); };
+    var q = function (x, y) { return _n(x) + ' ' + _n(y); };
+    var n = bands.length;
+    var first = bands[0];
+    var last = bands[n - 1];
+    var d = 'M ' + q(first.x1 + rOf(first), first.y1) +
+        ' L ' + q(first.x2 - rOf(first), first.y1) +
+        ' Q ' + q(first.x2, first.y1) + ' ' + q(first.x2, first.y1 + rOf(first));
+    for (var right = 0; right < n; right++) {
+        var band = bands[right];
+        if (right === n - 1) {
+            d += ' L ' + q(band.x2, band.y2 - rOf(band)) + ' Q ' + q(band.x2, band.y2) + ' ' + q(band.x2 - rOf(band), band.y2);
+            continue;
+        }
+        var below = bands[right + 1];
+        var dx = below.x2 - band.x2;
+        var sign = Math.sign(dx);
+        var rr = Math.min(Math.abs(dx) / 2, rOf(band), rOf(below));
+        d += ' L ' + q(band.x2, band.y2 - rr) + ' Q ' + q(band.x2, band.y2) + ' ' + q(band.x2 + sign * rr, band.y2);
+        d += ' L ' + q(below.x2 - sign * rr, below.y1) + ' Q ' + q(below.x2, below.y1) + ' ' + q(below.x2, below.y1 + rr);
+    }
+    d += ' L ' + q(last.x1 + rOf(last), last.y2) + ' Q ' + q(last.x1, last.y2) + ' ' + q(last.x1, last.y2 - rOf(last));
+    for (var left = n - 1; left >= 0; left--) {
+        var band2 = bands[left];
+        if (left === 0) {
+            d += ' L ' + q(band2.x1, band2.y1 + rOf(band2)) + ' Q ' + q(band2.x1, band2.y1) + ' ' + q(band2.x1 + rOf(band2), band2.y1);
+            continue;
+        }
+        var above = bands[left - 1];
+        var dx2 = above.x1 - band2.x1;
+        var sign2 = Math.sign(dx2);
+        var rr2 = Math.min(Math.abs(dx2) / 2, rOf(band2), rOf(above));
+        d += ' L ' + q(band2.x1, band2.y1 + rr2) + ' Q ' + q(band2.x1, band2.y1) + ' ' + q(band2.x1 + sign2 * rr2, band2.y1);
+        d += ' L ' + q(above.x1 - sign2 * rr2, above.y2) + ' Q ' + q(above.x1, above.y2) + ' ' + q(above.x1, above.y2 - rr2);
+    }
+    return d + ' Z';
 }
 
 // Measures the selected period elements and turns their client rects into the band list
@@ -146,10 +176,15 @@ var _dragging = false;
 var _dragStart = null;
 var _dragMoved = false;
 var _mounted = false;
-var _selBlob = null;
 var _pillEl = null;
 var _hintEl = null;
 var _hintDismissed = false;
+
+// Single registry of every live glass blob (selection runs, loading placeholders, finished snips),
+// keyed by 'sel:<pi>:<runStart>' / 'load:<snipKey>' / 'snip:<snipKey>'. `_renderAllBlobs` is a
+// declarative sweep: it decides from DOM state alone what should exist, creates what is missing,
+// re-measures what remains, and removes what fell off the desired list.
+var _blobs = new Map();
 
 var _SNIPPET_CSS = [
     "@font-face { font-family: 'Phosphor'; src: url('fonts/Phosphor.ttf') format('truetype'); }",
@@ -169,7 +204,7 @@ var _SNIPPET_CSS = [
     '[data-snip] { position: relative; padding: 0.1em 0.24em; margin: 0 -0.24em; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; user-select: none; -webkit-user-select: none; }',
     '.tr-blob { position: absolute; left: -8px; top: -8px; display: block; pointer-events: none; backdrop-filter: blur(9px) saturate(180%); -webkit-backdrop-filter: blur(9px) saturate(180%); animation: trGlassIn 0.25s ease; }',
     '.tr-blob-svg { position: absolute; left: -8px; top: -8px; overflow: visible; pointer-events: none; }',
-    '.tr-loading .tr-blob { animation: trPulse 1.1s ease-in-out infinite; }',
+    '.tr-blob-pulse { animation: trPulse 1.1s ease-in-out infinite; }',
     '@keyframes trGlassIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }',
     '@keyframes trPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }',
     '@keyframes trFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }',
@@ -262,19 +297,63 @@ function _updateBlob(blob, geometry) {
     blob.path.style.filter = 'drop-shadow(0 6px 16px ' + _blobGlow() + ')';
 }
 
-function _ensureSelBlob(p) {
-    if (_selBlob && _selBlob.mask.parentNode === p) return;
-    _removeSelBlob();
-    _selBlob = _makeBlob();
-    p.appendChild(_selBlob.mask);
-    p.appendChild(_selBlob.svg);
+// Builds the list of blobs the current DOM/selection state wants: one per contiguous selection run
+// (never one for the whole, possibly non-contiguous, set — that would draw glass across an
+// unselected period), one per in-flight loading placeholder, one per finished snip.
+function _blobDescriptors() {
+    var list = [];
+    if (_sel) {
+        var pi = _sel.p.dataset.pi;
+        for (var run of _runsOf(_sel.set)) {
+            var els = _sentEls(_sel.p, _rangeSet(run.a, run.b));
+            if (els.length > 0) {
+                list.push({ key: 'sel:' + pi + ':' + run.a, kind: 'sel', owner: _sel.p, els: els });
+            }
+        }
+    }
+    for (var loadSpan of document.querySelectorAll(".tr-loading")) {
+        list.push({
+            key: 'load:' + loadSpan.dataset.loadKey, kind: 'load',
+            owner: loadSpan.closest("[data-pi]"), els: [loadSpan],
+        });
+    }
+    for (var snipSpan of document.querySelectorAll("[data-snip]")) {
+        list.push({
+            key: 'snip:' + snipSpan.dataset.snip, kind: 'snip',
+            owner: snipSpan.closest("[data-pi]"), els: [snipSpan],
+        });
+    }
+    return list;
 }
 
-function _removeSelBlob() {
-    if (!_selBlob) return;
-    _selBlob.mask.remove();
-    _selBlob.svg.remove();
-    _selBlob = null;
+// The one place that creates, measures and retires glass blobs. Every caller that changes what
+// should be selected/loading/translated calls this once when it is done, instead of poking at a
+// single blob reference — that is what let a snip ship with no blob at all before. A brand new
+// blob's mask+svg are PREPENDED (mask first, then svg, so final order is mask, svg, ...text) to the
+// owning paragraph so the glass paints under the text, never over it.
+function _renderAllBlobs() {
+    var desired = _blobDescriptors();
+    var seen = new Set();
+    for (var entry of desired) {
+        if (!entry.owner) continue;
+        seen.add(entry.key);
+        var blob = _blobs.get(entry.key);
+        if (!blob) {
+            blob = _makeBlob();
+            if (entry.kind === 'load') blob.mask.className += ' tr-blob-pulse';
+            entry.owner.prepend(blob.svg);
+            entry.owner.prepend(blob.mask);
+            _blobs.set(entry.key, blob);
+        }
+        _updateBlob(blob, _blobFromEls(entry.els));
+    }
+    for (var key of Array.from(_blobs.keys())) {
+        if (seen.has(key)) continue;
+        var stale = _blobs.get(key);
+        stale.mask.remove();
+        stale.svg.remove();
+        _blobs.delete(key);
+    }
 }
 
 // Every currently-wrapped period gets its selected state reflected as a class so the desktop hover
@@ -443,24 +522,22 @@ function _renderHint() {
 function _renderSelection() {
     _updateSentClasses();
     if (!_sel) {
-        _removeSelBlob();
         _hidePill();
         _renderHint();
+        _renderAllBlobs();
         return;
     }
     _hintDismissed = true;
     _removeHint();
-    var els = _sentEls(_sel.p, _sel.set);
-    if (els.length === 0) {
+    if (_sentEls(_sel.p, _sel.set).length === 0) {
         _sel = null;
-        _removeSelBlob();
         _hidePill();
         _renderHint();
+        _renderAllBlobs();
         return;
     }
-    _ensureSelBlob(_sel.p);
-    _updateBlob(_selBlob, _blobFromEls(els));
     _showPill();
+    _renderAllBlobs();
 }
 
 function _clearSelection() {
@@ -504,11 +581,7 @@ function _onPointerMove(e) {
     var si = Number(span.dataset.si);
     if (si === _dragStart.si) return;
     _dragMoved = true;
-    var lo = Math.min(_dragStart.si, si);
-    var hi = Math.max(_dragStart.si, si);
-    var set = new Set();
-    for (var i = lo; i <= hi; i++) set.add(i);
-    _sel = { p: p, anchor: _dragStart.si, set: set };
+    _sel = { p: p, anchor: _dragStart.si, set: _rangeSet(Math.min(_dragStart.si, si), Math.max(_dragStart.si, si)) };
     _renderSelection();
 }
 
@@ -534,8 +607,10 @@ function _onKeyDown(e) {
     }
 }
 
+// Loading/snip blobs need re-measuring on resize just as much as a selection does, so this always
+// sweeps — not only when there is an active `_sel` like the previous, selection-only implementation.
 function _onResize() {
-    if (_sel) _renderSelection();
+    _renderAllBlobs();
 }
 
 // A paragraph with element children (an inline `<em>`/`<a>`/`<img>` from the book, untrusted HTML
@@ -614,18 +689,23 @@ window.mountSnippetLayer = function () {
         window.addEventListener('resize', _onResize);
     }
     _renderHint();
+    _renderAllBlobs();
 };
 
 window.unmountSnippetLayer = function () {
     _sel = null;
     _dragging = false;
     _dragStart = null;
-    _removeSelBlob();
     _hidePill();
     _removeHint();
     for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
         _unwrapParagraph(el);
     }
+    for (var blob of _blobs.values()) {
+        blob.mask.remove();
+        blob.svg.remove();
+    }
+    _blobs.clear();
     _mounted = false;
 };
 
@@ -691,6 +771,7 @@ function _onSnipRemoveClick(e) {
     if (!span) return;
     var info = _parseSnipKey(span.dataset.snip);
     _restoreSnipToPeriods(span, info);
+    _renderAllBlobs();
     window.sendRawMessage('snip-remove|' + JSON.stringify({
         chapterHRef: info.chapterHRef, paragraphIndex: info.paragraphIndex,
         sentenceStart: info.a, sentenceEnd: info.b,
@@ -738,6 +819,7 @@ function _renderSnipSpan(span, showingOriginal) {
     var oldChip = span.querySelector(".tr-snip-chip");
     if (oldChip) oldChip.remove();
     span.appendChild(_buildChip(showingOriginal));
+    _renderAllBlobs();
 }
 
 function _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOriginal) {
@@ -853,6 +935,7 @@ window.restoreSnippets = function (list) {
             p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
             original, item.translatedText, item.showingOriginal);
     }
+    _renderAllBlobs();
 };
 
 window.applySnippetTranslation = function (items) {
@@ -865,6 +948,7 @@ window.applySnippetTranslation = function (items) {
             p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
             original, item.translatedText, item.showingOriginal);
     }
+    _renderAllBlobs();
 };
 
 window.setSnippetLoading = function (keys) {
@@ -877,15 +961,11 @@ window.setSnippetLoading = function (keys) {
         var span = document.createElement('span');
         span.className = 'tr-loading';
         span.dataset.si = String(info.a);
-        span.style.position = 'relative';
+        span.dataset.loadKey = key;
         span.textContent = original;
-        if (_spliceRange(p, info.a, info.b, [span])) {
-            var blob = _makeBlob();
-            span.appendChild(blob.mask);
-            span.appendChild(blob.svg);
-            _updateBlob(blob, _blobFromEls([span]));
-        }
+        _spliceRange(p, info.a, info.b, [span]);
     }
+    _renderAllBlobs();
 };
 
 function _loadingSpanAt(p, a) {
@@ -898,9 +978,9 @@ function _loadingSpanAt(p, a) {
 }
 
 // Undoes setSnippetLoading for a run that failed or was superseded by a newer selection. The
-// placeholder's first child is the untranslated text captured before the pulse started (the blob
-// mask/svg were appended after it), so splicing it back into periods needs no server round trip
-// and this is only ever called for a range whose translation never arrived.
+// placeholder's own text IS its textContent now (the blob lives beside it, under the paragraph, not
+// nested inside it), so splicing it back into periods needs no server round trip and this is only
+// ever called for a range whose translation never arrived.
 window.clearSnippetLoading = function (keys) {
     for (var key of keys) {
         var info = _parseSnipKey(key);
@@ -908,9 +988,9 @@ window.clearSnippetLoading = function (keys) {
         if (!p) continue;
         var span = _loadingSpanAt(p, info.a);
         if (!span) continue;
-        var original = span.childNodes[0] ? span.childNodes[0].textContent : '';
-        _spliceSpanBackToPeriods(span, original, info.a);
+        _spliceSpanBackToPeriods(span, span.textContent, info.a);
     }
+    _renderAllBlobs();
 };
 
 function _chapterHRefFor(p) {
