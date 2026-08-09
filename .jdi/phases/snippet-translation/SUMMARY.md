@@ -429,3 +429,108 @@ icones) permanecem no arquivo E na PIXEL-SPEC. Os 14 literais do DoD 1 permanece
 Commit: `b3005e1` — `fix(snippet-translation): pill/hint fit the real viewport and no longer
 render in the book's font` (1 commit atomico — CSS + JS de medicao/degradacao + harness + testes +
 sub-nota da PIXEL-SPEC juntos, coeso com o proprio fix).
+
+## Iter 5 parte 2 (round 3 — fix de poluicao de contexto na traducao de trechos, pos-screenshot do app real)
+
+Mesmo iter/round 3 do fix da pill (`b3005e1`); o reviewer roda depois cobrindo as duas partes.
+Usuario reportou, com screenshot do app real: paragrafo com 3 periodos, traduziu o 1o e o 3o
+corretamente (viraram snips), mas ao traduzir o 2o a traducao devolvida foi o PARAGRAFO INTEIRO —
+repetindo o conteudo dos periodos 1 e 3 e com os literais "PT-BR" aparecendo DENTRO do texto
+traduzido. Causa-raiz ja diagnosticada pelo orquestrador antes desta iteracao (confirmada na fonte,
+nao re-descoberta).
+
+### Causa -> Fix
+
+`_onTranslateClick` (final de `snippets.js`) montava `paragraph = _sel.p.textContent`. Quando o
+paragrafo ja continha snips, `textContent` nao e o paragrafo original: e a mistura do que esta
+EXIBIDO — traducao PT dos snips (ou original, conforme o toggle de cada um) + os ROTULOS DOS CHIPS
+("EN"/"PT-BR", spans de texto dentro do snip). Esse contexto poluido ia no campo `paragraph` do
+payload `snip|`, `PromptUtility.BuildSnippetTranslationMessages` injetava no prompt como contexto, e
+o modelo pequeno respondia traduzindo o "paragrafo" inteiro. O campo `text` (via `_rangeText`, so
+periodos `[data-si]` do range) nunca foi afetado — o problema era exclusivamente o `paragraph`.
+
+Fix em duas camadas, ambas obrigatorias por instrucao:
+
+**A) JS.** Nova funcao pura `_originalParagraphText(p)`: percorre `p.childNodes` na ordem do
+documento e reconstroi o texto ORIGINAL independente do que esta na tela — um snip contribui com
+`dataset.orig` (nunca o texto exibido nem o chip, ambos dentro do mesmo span); um periodo ou
+placeholder de loading contribui com o proprio texto (`childNodes[0].textContent`, ja que ambos so
+tem um filho de texto); um blob de vidro (agora filho direto do paragrafo) e decoracao e e pulado
+via `_hasClass(node, 'tr-blob')`; um text node (o espaco separador entre spans) e usado como esta —
+a travessia em ordem preserva o espacamento correto mesmo quando um snip substitui varios periodos.
+`_onTranslateClick` passou a chamar `_originalParagraphText(_sel.p)` em vez de ler `textContent`.
+
+**B) C#.** `PromptUtility.BuildSnippetTranslationMessages` endurecido para modelo pequeno: o trecho
+e o paragrafo agora sao delimitados por aspas triplas (`"""..."""`), o trecho e repetido dentro da
+propria mensagem de sistema (alem de continuar chegando, inalterado, como mensagem de usuario), e a
+instrucao passou a exigir EXCLUSIVAMENTE a traducao direta do trecho delimitado — sem delimitadores,
+rotulos, comentarios, nem nada do resto do paragrafo (D-2026-08-09-snippet-translation-5).
+
+**C) Entradas poluidas ja persistidas — escolha: SALT (nao heuristica).** A traducao poluida do
+usuario ficou gravada no `TranslationCache` sob a chave `hash(trecho, src, dst)` (SHA-256, sem
+mudanca de prompt na chave); re-traduzir o mesmo trecho devolveria o lixo do cache mesmo apos o fix
+do prompt. Optamos pelo salt (mais limpo e deterministico que a heuristica de comprimento, e barato
+de aplicar): `TranslationManager` ganhou `private const string SnippetCacheKeySalt =
+"snippet-prompt-v2|"`, prefixado ao `text` SO na chamada de `ComputeHash` dentro de
+`TranslateSnippetAsync` — a chave de cache do caminho de PARAGRAFO (`TranslateChapterAsync` /
+`TranslateParagraphsAsync` / `TranslateSingleChapterAsync` / `FetchTranslationsFromCacheAsync`)
+continua sem salt, entao nenhuma entrada de traducao por paragrafo e invalidada. Isso torna toda
+entrada de cache de SNIPPET pre-existente inalcancavel (nova chave, nunca bate com a antiga) — a
+proxima traducao do mesmo trecho gera uma chamada real ao engine com o prompt ja endurecido, sem
+exigir wipe manual de banco. `ComputeSnippetHash` (o hash FNV-1a salvo em
+`SnippetTranslation.OriginalHash`, reproduzido pelo `_snipHash` do JS para validar restore) foi
+DELIBERADAMENTE deixado intacto: e um mecanismo diferente, para um proposito diferente (checar se a
+ancora ainda bate com o texto na posicao, nao decidir se o cache de inferencia e reaproveitavel);
+salga-lo nao invalidaria a entrada poluida do `TranslationCache` e quebraria a paridade de hash
+JS/C# de que o restore depende.
+
+### Testes novos (4)
+
+JS (`test/js/snippets.test.js`, +2): `_originalParagraphText` testado diretamente contra um
+paragrafo com um snip mostrando traducao + um snip mostrando original + um periodo comum — devolve
+o texto original exato, sem rotulo de chip, sem texto traduzido; payload de `_onTranslateClick`
+testado fim a fim com um snip ja traduzido presente no paragrafo (o cenario exato reportado) —
+`paragraph` no JSON enviado por `sendRawMessage` bate com o original limpo, `text` continua correto.
+O caso sem snips (teste pre-existente `translate: clicking the primary button sends a snip| message
+with the selected run`) serve de regressao — passou inalterado, provando que o fix nao muda o
+comportamento quando nao ha poluicao possivel.
+
+C# (`test/TranslateReader.Tests`, +2): `PromptUtilityTests` ganhou
+`BuildSnippetTranslationMessages_SystemMessageDemandsOnlyTheExcerptAndDelimitsItFromTheParagraph`
+(prova "EXCLUSIVELY" na instrucao e os dois blocos delimitados por aspas triplas); o teste antigo
+`BuildSnippetTranslationMessages_SystemMessageContainsTheParagraphAsContext` perdeu a asserção de
+substring redundante ("only the translation of the excerpt", texto que nao existe mais) e manteve
+seu escopo original (paragrafo aparece como contexto) — nome preservado, sem perda de teste.
+`SnippetTranslationManagerTests` ganhou
+`TranslateSnippetAsync_CacheKeyIsSaltedAwayFromTheLegacyParagraphHash`, que reproduz a formula
+antiga (sem salt) localmente no teste e prova, via `Arg.Is<string>`, que a chave usada tanto no
+`FetchTranslationAsync` quanto no `SaveTranslationAsync` do caminho de snippet diverge dela.
+
+### Verificacao pos-fix
+
+- JS: **158/158 passando** (era 156 antes desta parte — os 2 testes novos), 0 fail, 0 skipped.
+  `comm -23` nome a nome contra a suite anterior a esta iteracao: vazio.
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **406 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 408 total** — +2 vs antes desta parte (os 2 testes novos).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1316 valid=1388 pct=94.81
+  files=26` (piso 90 — agora COM `.cs` tocado nesta iteracao, ao contrario das partes anteriores do
+  iter 5). `COVERAGE_JS covered=1422 valid=1432 pct=99.30 files=5` (piso 85). `COVERAGE_GUARD
+  new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes`: exit 2, mas pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  desta parte; os arquivos `.cs` REALMENTE tocados (`TranslationManager.cs`, `PromptUtility.cs`,
+  `PromptUtilityTests.cs`, `SnippetTranslationManagerTests.cs`) nao aparecem no log.
+- Invariantes re-conferidos: diff vazio de `translation.js`/`paginated.js`/`scroll.js` vs
+  `BASELINE` (`02a4c6c`); zero `querySelectorAll('...')` com aspas simples contendo p/h1/li/div em
+  `snippets.js`; nenhum nome de teste perdido (JS e C#, `comm -23` vazio nos dois); golden geometry
+  (`_blobPath`, `OFF`/`padX`/`padY`) intocado por este diff.
+- `git status`/`git diff --name-only` confirmam escopo: `snippets.js`, `snippets.test.js`,
+  `TranslationManager.cs`, `PromptUtility.cs`, `PromptUtilityTests.cs`,
+  `SnippetTranslationManagerTests.cs` (mais os arquivos de estado do `.jdi/` do orquestrador do
+  loop, nao tocados por este specialist).
+
+Commit: `25ef3f3` — `fix(snippet-translation): snippet context no longer leaks sibling snips' shown
+text and chip labels into the prompt` (1 commit atomico — JS + C# + testes juntos, pela mesma logica
+dos fixes anteriores desta phase: as duas camadas sao partes complementares do mesmo defeito
+reportado e um commit intermediario deixaria a poluicao de contexto sem o endurecimento do prompt
+que a torna inofensiva, ou o cache salgado sem a fonte da poluicao corrigida).
