@@ -126,6 +126,24 @@ class FakeElement extends FakeNode {
         return this.rect;
     }
 
+    // Multi-line spans (a period wrapping across a line break) need one rect per line; a single
+    // rect would collapse the wrap and break the blob's line-grouping math in snippets.js.
+    getClientRects() {
+        return Array.isArray(this.rects) ? this.rects : [this.rect];
+    }
+
+    // Selector groups reuse the same parser/matcher as querySelectorAll, so `closest` fails CLOSED
+    // on a selector the harness cannot read instead of silently reporting "no ancestor matches".
+    closest(selector) {
+        const parsedParts = parseSelector(selector);
+        for (let node = this; node !== null; node = node.parentNode) {
+            if (node.nodeType === ELEMENT_NODE && matchesAnyPart(node, parsedParts)) {
+                return node;
+            }
+        }
+        return null;
+    }
+
     addEventListener(type, handler) {
         addListener(this.listeners, type, handler);
     }
@@ -191,6 +209,20 @@ class FakeDocument {
     querySelector(selector) {
         const found = this.querySelectorAll(selector);
         return found.length > 0 ? found[0] : null;
+    }
+
+    // Later elements paint on top of earlier ones in document order, so the LAST rect containing
+    // the point is what a real hit-test at (x, y) would return — needed for pointermove drag-select.
+    elementFromPoint(x, y) {
+        let found = null;
+        for (const element of descendantElements(this.documentElement)) {
+            const rect = element.rect;
+            if (rect.width > 0 && rect.height > 0 &&
+                x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                found = element;
+            }
+        }
+        return found;
     }
 
     addEventListener(type, handler) {

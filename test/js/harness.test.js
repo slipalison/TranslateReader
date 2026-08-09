@@ -109,3 +109,48 @@ test('querySelector with a selector group returns the first element in document 
     assert.strictEqual(env.document.querySelector('div, p').textContent, 'um');
     assert.strictEqual(env.document.body.querySelector('div, p').tagName, 'P');
 });
+
+// The snippet blob geometry (D-2026-08-09-snippet-translation-4) needs multi-line rects, ancestor
+// lookup and hit-testing that querySelectorAll alone cannot provide — these three capabilities are
+// what snippets.js relies on to group periods into lines and to resolve drag targets.
+
+test('getClientRects returns the set rect array, or falls back to the single element rect', () => {
+    const env = withBody('<p>texto</p>');
+    const paragraph = env.document.body.querySelector('p');
+
+    assert.deepStrictEqual(paragraph.getClientRects(), [paragraph.rect]);
+
+    paragraph.rects = [
+        { top: 0, left: 0, right: 10, bottom: 5, width: 10, height: 5 },
+        { top: 5, left: 0, right: 8, bottom: 10, width: 8, height: 5 },
+    ];
+
+    assert.deepStrictEqual(paragraph.getClientRects(), paragraph.rects);
+});
+
+test('closest climbs the ancestor chain, including the element itself', () => {
+    const env = withBody('<div><span data-pi="0"><em>x</em></span></div>');
+    const em = env.document.body.querySelectorAll('em')[0];
+
+    assert.strictEqual(em.closest('[data-pi]').tagName, 'SPAN');
+    assert.strictEqual(em.closest('em').tagName, 'EM');
+});
+
+test('closest returns null when no ancestor matches', () => {
+    const env = withBody('<div><span>x</span></div>');
+    const span = env.document.body.querySelectorAll('span')[0];
+
+    assert.strictEqual(span.closest('[data-pi]'), null);
+});
+
+test('elementFromPoint returns the topmost element containing the point, or null outside every rect', () => {
+    const env = withBody('');
+    const back = env.appendToBody(
+        'div', { rect: { top: 0, left: 0, right: 100, bottom: 100, width: 100, height: 100 } });
+    const front = env.appendToBody(
+        'div', { rect: { top: 10, left: 10, right: 50, bottom: 50, width: 40, height: 40 } });
+
+    assert.strictEqual(env.document.elementFromPoint(20, 20), front);
+    assert.strictEqual(env.document.elementFromPoint(70, 70), back);
+    assert.strictEqual(env.document.elementFromPoint(200, 200), null);
+});

@@ -116,7 +116,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `B=.jdi/phases/snippet-translation/BASELINE; test -f "$B" && test "$(git cat-file -t "$(cat "$B")" 2>/dev/null)" = commit && git merge-base --is-ancestor "$(cat "$B")" HEAD && S=design/v0.2.0/PIXEL-SPEC.md && test -f "$S" && for k in "blur(9px) saturate(180%)" "blur(26px) saturate(190%)" "blur(20px) saturate(180%)" "border-radius: 8px" "0.1em 0.24em" "box-decoration-break" "stroke-width" "1.25" "trGlassIn" "trPulse" "rgba(28,30,48,0.58)" "rgba(28,30,48,0.6)" "bottom: 102px" "data-idiom"; do grep -qF "$k" "$S" || { echo "MISSING $k"; exit 1; }; done && test "$(ls design/v0.2.0/screenshots/*.jpg 2>/dev/null | wc -l)" -ge 4`
 - **Dependencies:** none · **Test:** DoD 1 (task de ancoragem, sem teste novo)
 - **Commit:** `docs(snippet-translation): T-1 record phase baseline commit`
-- **Status:** pending
+- **Status:** completed
 
 ### T-2: Harness JS ganha `getClientRects`, `closest` e `elementFromPoint`
 - **Wave:** 2 · **Specialist:** jdi-doer-translatereader
@@ -144,7 +144,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `H=test/js/harness.js; grep -qF 'getClientRects()' "$H" && grep -qF 'closest(selector)' "$H" && grep -qF 'elementFromPoint(' "$H" && mkdir -p TestResults && node --test --test-reporter=tap test/js/harness.test.js > TestResults/snip-t2.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t2.log && BASE=$(git show main:test/js/harness.test.js | grep -cE '^test\(') && NOW=$(grep -cE '^test\(' test/js/harness.test.js) && test "$NOW" -ge "$((BASE+4))"`
 - **Dependencies:** T-1 · **Test:** `test/js/harness.test.js`
 - **Commit:** `test(snippet-translation): T-2 teach the JS harness client rects, closest and elementFromPoint`
-- **Status:** pending
+- **Status:** completed
 
 ### T-3: `snippets.js` nasce — nucleo puro, raizes e gate de cobertura
 - **Wave:** 3 · **Specialist:** jdi-doer-translatereader
