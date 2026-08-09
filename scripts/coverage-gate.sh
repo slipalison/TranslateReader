@@ -3,12 +3,14 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 COVERAGE_MIN=${COVERAGE_MIN:-90}
+COVERAGE_JS_MIN=${COVERAGE_JS_MIN:-85}
 
 # Boundary commit that separates legacy code (exempt, D-2) from new/changed code that must
 # meet the floor. Literal constant on purpose -- never overridable via env (D-...-1).
 BOUNDARY=4285f25
 GATE_DIR=TestResults/coverage-gate
 APP_PREFIX="src/TranslateReader/"
+JS_DIR="src/TranslateReader/Resources/Raw/wwwroot/js"
 
 # Own directory, wiped at the start of every run so a stale report can never be read back
 # as if it were this execution's measurement.
@@ -138,8 +140,88 @@ fi
 PCT=$(awk -v c="$TOTAL_COVERED" -v v="$TOTAL_VALID" 'BEGIN{printf "%.2f", 100*c/v}')
 echo "COVERAGE_SCOPE covered=$TOTAL_COVERED valid=$TOTAL_VALID pct=$PCT files=$MEASURED_FILES"
 
+GATE_FAILED=0
 if awk -v p="$PCT" -v m="$COVERAGE_MIN" 'BEGIN{exit !(p+0 < m+0)}'; then
   echo "FAIL: scope coverage ${PCT}% below floor ${COVERAGE_MIN}%" >&2
+  GATE_FAILED=1
+fi
+
+# --- JS: the four production WebView scripts, measured by this execution too (not just by
+# Sonar). Node's own coverage engine already dedups DA lines per file, so no extra pass is
+# needed here. ---
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: node not found -- cannot measure JS coverage" >&2
+  exit 3
+fi
+
+JS_LCOV="$GATE_DIR/js-lcov.info"
+if ! node --test --experimental-test-coverage --test-reporter=lcov \
+     --test-reporter-destination="$JS_LCOV" test/js/ \
+     > "$GATE_DIR/node-test.log" 2>&1
+then
+  echo "ERROR: node --test failed (red JS suite) -- see $GATE_DIR/node-test.log" >&2
+  tail -n 60 "$GATE_DIR/node-test.log" >&2 || true
+  exit 3
+fi
+
+declare -A JS_VALID
+declare -A JS_COVERED
+current_sf=""
+while IFS= read -r line; do
+  case "$line" in
+    SF:*)
+      current_sf="${line#SF:}"
+      current_sf="${current_sf//\\//}"
+      ;;
+    DA:*)
+      if [[ -n "$current_sf" ]]; then
+        rest="${line#DA:}"
+        da_hits="${rest#*,}"
+        JS_VALID["$current_sf"]=$(( ${JS_VALID["$current_sf"]:-0} + 1 ))
+        if [[ "$da_hits" != "0" ]]; then
+          JS_COVERED["$current_sf"]=$(( ${JS_COVERED["$current_sf"]:-0} + 1 ))
+        fi
+      fi
+      ;;
+    end_of_record)
+      current_sf=""
+      ;;
+  esac
+done < "$JS_LCOV"
+
+JS_TOTAL_COVERED=0
+JS_TOTAL_VALID=0
+JS_FILES=0
+for name in bridge paginated scroll translation; do
+  expected="$JS_DIR/$name.js"
+  match=""
+  for sf in "${!JS_VALID[@]}"; do
+    if [[ "$sf" == *"$expected" ]]; then
+      match="$sf"
+      break
+    fi
+  done
+  if [[ -n "$match" ]]; then
+    JS_TOTAL_COVERED=$((JS_TOTAL_COVERED + ${JS_COVERED["$match"]:-0}))
+    JS_TOTAL_VALID=$((JS_TOTAL_VALID + ${JS_VALID["$match"]}))
+    JS_FILES=$((JS_FILES + 1))
+  fi
+done
+
+if [[ "$JS_FILES" -ne 4 ]]; then
+  echo "ERROR: expected exactly 4 production JS files in lcov, found $JS_FILES" >&2
+  exit 3
+fi
+
+JS_PCT=$(awk -v c="$JS_TOTAL_COVERED" -v v="$JS_TOTAL_VALID" 'BEGIN{printf "%.2f", (v>0) ? 100*c/v : 0}')
+echo "COVERAGE_JS covered=$JS_TOTAL_COVERED valid=$JS_TOTAL_VALID pct=$JS_PCT files=$JS_FILES"
+
+if awk -v p="$JS_PCT" -v m="$COVERAGE_JS_MIN" 'BEGIN{exit !(p+0 < m+0)}'; then
+  echo "FAIL: JS coverage ${JS_PCT}% below floor ${COVERAGE_JS_MIN}%" >&2
+  GATE_FAILED=1
+fi
+
+if [[ "$GATE_FAILED" -eq 1 ]]; then
   exit 1
 fi
 
