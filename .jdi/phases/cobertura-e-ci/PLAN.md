@@ -88,7 +88,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   zero `| sort | tail`, zero `;` entre medicao e avaliacao no script.
 - **Dependencies:** none
 - **Test:** a propria suite roda dentro do script — `Failed: 0`, `Total >= 375`
-- **Status:** pending
+- **Status:** completed
 
 ## T-2: bloco JS no gate (4 scripts do WebView, piso 85%)
 - **Specialist:** jdi-doer-translatereader
@@ -112,7 +112,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   `100755`, verde no repo real, **vermelho com `COVERAGE_MIN=101`**, sentinel apagado).
 - **Dependencies:** T-1
 - **Test:** `node --test test/js/` verde + `bash scripts/coverage-gate.sh` exit 0
-- **Status:** pending
+- **Status:** completed
 
 ## T-3: guarda do app MAUI + `.jdi/coverage-waivers.txt`
 - **Specialist:** jdi-doer-translatereader
@@ -135,7 +135,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   e **arvore limpa no fim** (waiver restaurado, probe removido).
 - **Dependencies:** T-2
 - **Test:** o proprio red-then-green de DoD 3 + `bash scripts/coverage-gate.sh` exit 0 sem probe
-- **Status:** pending
+- **Status:** completed
 
 ## T-4: `coverage.yml` + caller no `pipeline.yml` + `ci.yml` perde a coleta
 - **Specialist:** jdi-doer-translatereader
@@ -170,7 +170,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   commit (separar entregaria PR que mede duas vezes ou nenhuma).
 - **Dependencies:** T-3
 - **Test:** n/a local (YAML) — a prova real e o 1o run da PR, coberto em T-7
-- **Status:** pending
+- **Status:** completed
 
 ## T-5: uma regra, um lugar — reviewer chama o script e os docs param de mentir a versao
 - **Specialist:** jdi-doer-translatereader
@@ -196,7 +196,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   mudanca de severidade em Gates 1/2/4/5.
 - **Dependencies:** T-4
 - **Test:** n/a (documentacao de processo)
-- **Status:** pending
+- **Status:** completed
 
 ## T-6: baseline da branch protection + documento de remap (mutacao NAO executada)
 - **Specialist:** jdi-doer-translatereader
@@ -229,7 +229,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
   `before.json` e acrescenta exatamente 1 context.
 - **Dependencies:** T-5
 - **Test:** n/a (artefato de operacao)
-- **Status:** pending
+- **Status:** completed
 
 ## T-7: W-2 do Android — medir no CI e registrar (por ultimo, so na PR)
 - **Specialist:** jdi-doer-translatereader
@@ -252,7 +252,7 @@ ordem de commits e locked (D-...-6) e T-1..T-3 sao o mesmo arquivo. Specialist d
 - **Acceptance:** **DoD 7 literal** exit 0; `Build (Android)` verde no run citado.
 - **Dependencies:** T-6
 - **Test:** job `Build (Android)` do pipeline (evidencia = URL do run no arquivo)
-- **Status:** pending
+- **Status:** completed
 
 ---
 
