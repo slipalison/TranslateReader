@@ -58,3 +58,50 @@ csharp_prefer_static_local_function = true:suggestion
 # normalisation to `dotnet format whitespace`, so full formatting drift in
 # pre-4285f25 files must never break the build.
 dotnet_diagnostic.IDE0055.severity = suggestion
+
+# ---------------------------------------------------------------------------
+# Rule calibration (D-...-6(2)).
+#
+# Below are the analyzer rules whose PREMISE does not hold in a given folder.
+# This is not a way around the NoWarn list of Directory.Build.props: D-...-6(2)
+# still forbids silencing a rule merely because fixing it would be work. Each
+# rule here passes the objective test "would the code get WORSE if this were
+# fixed instead of suppressed?", and each stays fully enforced in every folder
+# where its premise does hold.
+# ---------------------------------------------------------------------------
+
+[test/**.cs]
+# CA1707 (identifiers must not contain underscores) - 688 hits, every single one in
+# this project and none in src/. xUnit test names are `Method_Scenario_Expected`;
+# the underscore is what makes a failing test name readable in the runner output.
+# Renaming the suite to satisfy a public-API naming guideline would make it worse.
+# Still enforced in src/, where the guideline does apply.
+dotnet_diagnostic.CA1707.severity = none
+
+# CA1711 (type name must not end in a reserved suffix) - 1 hit,
+# `NonParallelCollection` in ParsingEngineMemoryTests.cs. That type is an xUnit
+# [CollectionDefinition] marker, and `<Name>Collection` is xUnit's own idiom for it.
+# The rule protects API consumers from a type that looks like an ICollection and is
+# not one; a marker in a non-shipped test assembly has no consumers.
+# Still enforced in src/.
+dotnet_diagnostic.CA1711.severity = none
+
+[src/TranslateReader/**.cs]
+# MA0004 (use Task.ConfigureAwait) - 214 hits in the MAUI Client layer. Here
+# `ConfigureAwait(false)` is not a style preference, it is a defect:
+# .claude/rules/csharp.md section 3 requires UI state to change on the main thread,
+# and these continuations touch pages, [ObservableProperty] setters and the WebView.
+# Deliberately NOT applied to src/TranslateReader.Core/: that project is a library,
+# ConfigureAwait(false) is correct there, and its 330 hits are debt (see MA0004 in
+# the NoWarn list), not calibration. This key is what keeps the Client layer correct
+# on the day that debt is paid and MA0004 leaves NoWarn.
+dotnet_diagnostic.MA0004.severity = none
+
+[src/TranslateReader.Core/Models/**.cs]
+# CA1805 (do not initialise to the default value) - 2 hits,
+# `ReadingSettings.LetterSpacing` and `.WordSpacing`. All 11 properties of that POCO
+# state their default inline; the class IS the readable spec of the reading defaults.
+# Dropping `= 0` from the two that happen to default to zero would leave the table
+# half-documented, to save a field initialisation on an object built a handful of
+# times. Still enforced outside Models/.
+dotnet_diagnostic.CA1805.severity = none

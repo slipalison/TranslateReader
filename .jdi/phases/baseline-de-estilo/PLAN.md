@@ -153,11 +153,17 @@ T-4. Specialist de TODAS as tasks: `jdi-doer-translatereader` (single-stack, glo
 - **Acceptance:** **DoD 2 literal** exit 0 (agora completo, `TreatWarningsAsErrors=true` nos 3
   projetos); **DoD 6 literal** exit 0 (`0 Error(s)` nos 2 builds, zero `: warning CS|CA|MA|IDE`,
   `NoWarn` so com IDs concretos, <= 12, cada ID em >= 2 linhas); **DoD 5 literal** exit 0.
+- **EMENDA (D-...-6, pos-iteracao 1):** o teto de 12 do passo 4 e da acceptance esta **revogado**.
+  A lista `NoWarn` passa a ser exatamente o que a medicao deixou apos calibrar, no `.editorconfig`
+  e no escopo mais estreito possivel, as rules cujo pressuposto nao vale naquela pasta. Calibrar
+  para encurtar a lista continua proibido; a validacao estrutural do `NoWarn` continua integral.
 - **Dependencies:** T-4
 - **Test:** builds Release do app (Windows) e de Tests, ambos `0 Error(s)`
-- **Status:** blocked — inventario medido em T-4 tem 24 IDs `CS/CA/MA` (0 `IDE*`) contra o teto de
-  12 de D-...-3(3b); nem CS+CA sozinhos (13) cabem. Regra de parada acionada: humano decide se
-  `latest-recommended` + Meziantou ficam. Lista completa no SUMMARY.md.
+- **Status:** completed — 4 rules calibradas por escopo no `.editorconfig` (`CA1707`, `CA1711` em
+  `[test/**.cs]`; `MA0004` em `[src/TranslateReader/**.cs]`; `CA1805` em
+  `[src/TranslateReader.Core/Models/**.cs]`) e os **21 IDs restantes** no `<NoWarn>` unico, 6 deles
+  marcados `RISCO:` e roteados para `.jdi/todos/2026-08-08-baseline-de-estilo.md`.
+  `TreatWarningsAsErrors=true` nos 3 projetos; app e Tests com `0 Error(s)` e `0 Warning(s)`.
 
 ## T-6: `dotnet format whitespace` no repo inteiro (commit proprio)
 - **Specialist:** jdi-doer-translatereader
