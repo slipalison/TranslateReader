@@ -71,3 +71,64 @@ futuro em `.jdi/todos/2026-08-09-snippet-translation.md`.
 - Coverage (`bash scripts/coverage-gate.sh`, escopo AM pos-`4285f25`): C# 94.79% (1311/1383, floor 90%), JS 98.54% (1216/1234, floor 85%, files=5). `COVERAGE_GUARD new_app_cs=0` — nenhum `.cs` novo sem instrumentacao no app MAUI.
 - Build: `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` — 0 Warning(s), 0 Error(s).
 - Lint: `dotnet format whitespace --verify-no-changes` limpo em todo arquivo tocado pela phase.
+
+## Iter 2 (ralph loop, pos-REVIEW.md BLOCKED) — fix de B-1 e W-1
+
+Reviewer (iter 1, `b7df369`) bloqueou por B-1: o fluxo `snip|` nunca garantia a engine pronta e
+engolia a falha sem estado de erro (primeiro uso em sessao nova falhava em silencio; modo rolagem
+nao tinha caminho algum que inicializasse a engine — violando o requisito inegociavel 4; um segundo
+`snip|` cancelando o primeiro deixava os placeholders do primeiro orfaos pulsando).
+
+**Fix B-1** (`7c4b236`):
+- `ReaderPageModel.TranslateSnippetsAsync` agora chama `EnsureModelDownloadedAsync(ct)` ele mesmo,
+  antes de traduzir — independente de `ReadingMode` (ao contrario de `TranslateAsync`, que recusa
+  Scroll). Isso cobre paginado E rolagem com o MESMO overlay visivel de download/carregamento
+  (`IsModelDownloading`/`IsModelLoading`) ja usado pela traducao por paragrafo — decisao explicita
+  de nao inventar um segundo overlay silencioso: reusar o existente ja satisfaz "nao e download
+  silencioso de 2 GB" (progresso visivel + botao Cancelar).
+- A fronteira UMA-so de conversao excecao->estado amigavel (csharp.md S1) passou a viver no
+  PageModel: `TranslateSnippetsAsync` faz `catch (OperationCanceledException) { throw; }` (nunca
+  convertida em erro, sempre flui) seguido de `catch (Exception ex)` que loga e mostra
+  `DisplayAlert`, devolvendo lista vazia. Nao virou `[RelayCommand]` (o CommunityToolkit geraria
+  cancelamento proprio, incompativel com o `_snippetCts` que a Page ja usa para "segundo `snip|`
+  cancela o primeiro"); segue o MESMO padrao ja usado por `LoadCurrentChapterAsync`/`InitializeAsync`
+  no mesmo arquivo — metodo de PageModel, entry point de um caso de uso, catch+log+DisplayAlert.
+- `ReaderPage.HandleSnipRequestAsync`: na captura de `OperationCanceledException` (a corrida foi
+  suplantada por um `snip|` mais novo, ou pelo Cancelar do overlay de download) e quando
+  `results.Count == 0` (falha ja convertida em alerta pelo PageModel), chama o novo
+  `clearSnippetLoading(keysJson)` antes de (re)lancar/retornar — o placeholder `.tr-loading` para
+  de pulsar nos dois casos.
+- `OnCancelDownloadClicked` agora tambem cancela `_snippetCts` (o overlay e compartilhado entre os
+  dois fluxos desde este fix).
+- `snippets.js`: `window.clearSnippetLoading(keys)` novo — inverso de `setSnippetLoading`, splica o
+  texto original (capturado no `childNodes[0]` do placeholder, antes do blob) de volta em periodos
+  individuais via `_spliceSpanBackToPeriods` (extraida de `_restoreSnipToPeriods`, que passou a
+  chamar essa mesma funcao — DRY, comportamento identico ao anterior).
+- Testes: 6 novos (+3 JS em `snippets.test.js`: `clearSnippetLoading` restaura periodos, nao toca
+  snip ja traduzido, no-op se o paragrafo sumiu; +1 C# `HybridWebViewContractTests` confere
+  `window.clearSnippetLoading` presente; ver tambem W-1 abaixo).
+
+**Fix W-1** (`9c0bd44`): `LibraryManager` ganhou `ISnippetTranslationAccess` no ctor (7 params,
+dentro do limite); `DeleteBookAsync` agora chama `RemoveSnippetsForBookAsync(bookId)` junto da
+limpeza de `TranslationCache`/`ReadingState`. DI em `MauiProgram.cs` atualizado. +1 teste em
+`LibraryManagerTests.cs` (`DeleteBookAsync_RemovesSnippetTranslationsForTheBook`).
+
+**Nao alterado:** W-2..W-8 (fora de escopo desta iteracao por instrucao explicita — so B-1 e W-1).
+
+**Verificacao pos-fix:**
+- Build Windows Release: `0 Warning(s), 0 Error(s)`.
+- C#: 406 total (404 passed, 2 skipped GPU-only pre-existentes, 0 failed) — +2 vs os 404 do iter 1
+  (`DeleteBookAsync_RemovesSnippetTranslationsForTheBook`, `SnippetsJs_ExposesClearSnippetLoading`).
+- JS: 130 total (130 passed, 0 failed, 0 skipped) — +3 vs os 127 do iter 1.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1313 valid=1385 pct=94.80
+  files=26` (piso 90). `COVERAGE_JS covered=1249 valid=1266 pct=98.66 files=5` (piso 85).
+  `COVERAGE_GUARD new_app_cs=0 waived=0`. `ReaderPageModel.cs`/`ReaderPage.xaml.cs` seguem
+  `COVERAGE_SKIP reason=app-maui-not-instrumented` (o projeto de teste so referencia
+  `TranslateReader.Core` — nao ha como testar unitariamente essas duas classes neste repo; a
+  cobertura do fix nelas e estrutural, via `HybridWebViewContractTests` + build).
+- `dotnet format whitespace --verify-no-changes`: exit 0, limpo.
+- Reverti incidentalmente `Platforms/Android/MainActivity.cs`/`MainApplication.cs` (o `dotnet
+  format` rodado sem escopo teria corrigido o FINALNEWLINE legado do W-7) — fora do escopo desta
+  iteracao (D-2, W-7 e explicitamente "phase futura").
+
+Commits: `7c4b236` (B-1), `9c0bd44` (W-1).
