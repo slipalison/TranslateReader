@@ -1,0 +1,14 @@
+# Coverage gate waivers (D-2026-08-08-cobertura-e-ci-4).
+#
+# scripts/coverage-gate.sh fails the gate (exit 2) when a NEW .cs file under
+# src/TranslateReader/ (the MAUI app, which the coverage run never instruments -- see
+# D-2026-08-08-cobertura-e-ci-2/-4) ships without a matching line here.
+#
+# Format: one path per line, relative to the repo root, followed by a `#` comment that MUST
+# cite the decision accepting the gap. A line without that reference is not a valid waiver --
+# the gate prints COVERAGE_WAIVER_INVALID and keeps counting the file as a violation.
+#
+#   src/TranslateReader/Pages/SomeNewPage.xaml.cs  # D-2026-XX-XX-some-phase-N justification
+#
+# No blank waiver rows: today's baseline is zero live entries -- the app has not gained a new
+# .cs file since the boundary commit 4285f25.

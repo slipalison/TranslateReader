@@ -34,6 +34,53 @@ for f in "${SCOPE_FILES[@]}"; do
 done
 SCOPE_FILES=("${EXISTING_SCOPE_FILES[@]}")
 
+# --- Waivers: one path per line, comment MUST cite a decision (# D-...). A line without that
+# reference is not a valid waiver -- it is reported and still counts as a violation. ---
+WAIVERS_FILE=.jdi/coverage-waivers.txt
+declare -A WAIVED_PATHS
+WAIVED_COUNT=0
+if [[ -f "$WAIVERS_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$trimmed" ]] && continue
+    [[ "$trimmed" == \#* ]] && continue
+    waiver_path="${trimmed%%[[:space:]]*}"
+    comment="${trimmed#*#}"
+    if [[ "$trimmed" == *"#"* && "$comment" == *"D-"* ]]; then
+      WAIVED_PATHS["$waiver_path"]=1
+      WAIVED_COUNT=$((WAIVED_COUNT + 1))
+    else
+      echo "COVERAGE_WAIVER_INVALID $waiver_path"
+    fi
+  done < "$WAIVERS_FILE"
+fi
+
+# --- Guard: new .cs files under the MAUI app never get instrumented by this run (the test
+# project only references TranslateReader.Core), so a NEW file there must ship pre-tested
+# elsewhere or be waived -- never silently uncounted. Runs before the expensive dotnet test
+# call so an unwaived new file fails cheap (git only) instead of after a full suite run. ---
+mapfile -t NEW_APP_TRACKED < <(
+  git log --diff-filter=A --pretty=format: --name-only "${BOUNDARY}..HEAD" 2>/dev/null \
+    | sort -u \
+    | grep -E '\.cs$' \
+    | grep -E "^${APP_PREFIX}" \
+    | grep -vE '(^|/)obj/' \
+    | grep -vE '(^|/)bin/' \
+    || true
+)
+mapfile -t NEW_APP_UNTRACKED < <(
+  git ls-files --others --exclude-standard -- "${APP_PREFIX}**.cs" 2>/dev/null || true
+)
+mapfile -t NEW_APP_CS < <(
+  printf '%s\n' "${NEW_APP_TRACKED[@]}" "${NEW_APP_UNTRACKED[@]}" | sed '/^$/d' | sort -u
+)
+NEW_APP_CS_COUNT=${#NEW_APP_CS[@]}
+
+echo "COVERAGE_GUARD new_app_cs=$NEW_APP_CS_COUNT waived=$WAIVED_COUNT"
+if [[ "$NEW_APP_CS_COUNT" -gt "$WAIVED_COUNT" ]]; then
+  exit 2
+fi
+
 # --- Measure now: run the suite with coverage collection into our own clean directory. ---
 # Never read someone else's artifact -- this execution's report is the only one considered.
 if ! dotnet test test/TranslateReader.Tests/TranslateReader.Tests.csproj -c Release \
@@ -108,7 +155,11 @@ MEASURED_FILES=0
 
 for f in "${SCOPE_FILES[@]}"; do
   if [[ "$f" == "$APP_PREFIX"* ]]; then
-    echo "COVERAGE_SKIP $f reason=app-maui-not-instrumented"
+    if [[ -n "${WAIVED_PATHS[$f]:-}" ]]; then
+      echo "COVERAGE_SKIP $f reason=waived"
+    else
+      echo "COVERAGE_SKIP $f reason=app-maui-not-instrumented"
+    fi
     continue
   fi
 
