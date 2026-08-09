@@ -248,3 +248,102 @@ exatamente UM `M` e UM `Z` (contorno unico); `_blobPath([], 10)` nao lanca, devo
 Commit: `4d6d0a8` — `fix(snippet-translation): glass blob stays under text, persists on snips,
 draws as one contour` (1 commit atomico, implementacao + testes juntos, mesmo padrao dos fixes
 B-1/W-1 do iter 2).
+
+## Iter 4 (ralph loop, pos-REVIEW.md BLOCKED — fix de B-2)
+
+Reviewer (iter 3, revisao `48cae53`) bloqueou por B-2: `_unwrapParagraph` (usada por
+`unmountSnippetLayer`) lia `node.className.indexOf('tr-blob')` para pular os nos do blob durante o
+desembrulho do paragrafo. Isso funciona no mask (`<span>`, `className` string), mas o `<svg>` irmao
+(criado via `_svgEl`/`createElementNS`) tem `className` como `SVGAnimatedString` em qualquer WebView
+real (WebView2/Chromium, Android System WebView, WKWebView) — objeto truthy SEM `.indexOf` ->
+TypeError no primeiro paragrafo com qualquer blob. Como a iter 3 tornou todo snip permanentemente
+dono de um blob (o proprio objetivo do fix de UX daquela iteracao), o defeito passou a ser
+alcancavel no caminho principal: traduzir um trecho -> ativar a traducao por paragrafo ->
+`unmountSnippetLayer()` quebra em silencio (`EvaluateJavaScriptAsync` engole excecao JS), `_blobs`
+nao e limpo, `_mounted` fica `true`, e o remonte seguinte pula paragrafos ainda com `data-pi` —
+camada de snippets morta ate a proxima reinjecao de capitulo. Os 142 testes nao pegavam isso porque
+`test/js/harness.js` nao tinha `createElementNS`: `_svgEl` caia no fallback `createElement`, cujo
+`className` e string — o teste exercitava um tipo de elemento diferente do de producao.
+
+### Fix B-2 (`a4aa004`)
+
+Duas partes, como exigido pela revisao:
+
+1. **Reordenacao em `unmountSnippetLayer`**: a limpeza dos blobs (varrer `_blobs`, `.remove()`
+   mask+svg, `_blobs.clear()`) agora roda ANTES do loop de desembrulho dos paragrafos (era depois).
+   Isso significa que `_unwrapParagraph` nunca mais encontra um no de blob no unico call site que
+   existe hoje — a causa raiz fica inalcancavel na pratica.
+2. **Checagem de classe string-safe** (cinto e suspensorio, exigido mesmo com o item 1 resolvendo o
+   alcance): novo helper `_hasClass(node, cls)` — usa `node.className` diretamente quando e string,
+   cai para `node.getAttribute('class')` quando nao e (SVG real ou o novo `FakeSvgElement` do
+   harness). Preserva a semantica de substring que o codigo ja usava
+   (`'tr-blob-svg'.indexOf('tr-blob') === 0` cobre mask, variante com pulse e svg com UMA checagem).
+   Auditados TODOS os `className.indexOf` do arquivo (pedido explicito da revisao):
+   `_updateSentClasses` e `_loadingSpanAt` tambem migraram para `_hasClass` por
+   uniformidade/robustez futura, apesar de ambos serem PROVADAMENTE inalcancaveis por nos SVG hoje
+   (operam so sobre spans `[data-si]`, que svg nunca carrega) — julgamento registrado em comentario
+   no proprio codigo. `_svgEl` deixou de ter o fallback
+   `document.createElementNS ? ... : document.createElement(...)` (existia so pra contornar a
+   limitacao antiga do harness) e passou a chamar `createElementNS` sempre — API padrao suportada
+   por WebView2/Android WebView/WKWebView ha muito tempo.
+
+**Fechamento do ponto cego do harness** (`test/js/harness.js`): `FakeDocument.createElementNS(ns,
+tag)` novo — devolve um `FakeSvgElement` (extends `FakeElement`) quando `ns` e o namespace SVG. O
+`FakeSvgElement` inicializa `className` como um OBJETO (`{baseVal, animVal}`, nunca reescrito para
+string mesmo apos `setAttribute('class', ...)`, via um hook `_setClassName` que a subclasse
+sobrescreve) — reproduz de proposito o mesmo perigo de `SVGAnimatedString`. `getAttribute('class')`
+continua devolvendo string normal em ambos os casos (mask e svg), exatamente como um DOM real.
+Efeito colateral necessario: `matches()` (usada por `querySelectorAll`/`closest`) fazia
+`element.className.split(' ')` sem guarda — com um `FakeSvgElement` em QUALQUER lugar da arvore,
+isso quebraria toda checagem de selector no documento inteiro (nao so as que pedem uma classe SVG).
+Extraido `classTokensOf(element)` (le a `class` refletida quando `className` nao e string) e usado
+dentro de `matches()` — comportamento identico ao anterior para todo elemento HTML comum (`className`
+ja e string, mesmo caminho), muda so para o `FakeSvgElement` novo.
+
+### Testes novos (6)
+
+- `test/js/harness.test.js` (+4): `createElementNS` no namespace SVG devolve elemento com
+  `className` que nao e string; `getAttribute('class')` continua funcionando apos `setAttribute`;
+  `createElementNS` fora do namespace SVG se comporta como `createElement`; `querySelectorAll` casa
+  um elemento SVG por classe mesmo com `className` nao-string (prova o fix de `classTokensOf`).
+- `test/js/snippets.test.js` (+2): `_unwrapParagraph` chamado diretamente sobre um paragrafo com um
+  blob "orfao" ainda anexado (bypassa a reordenacao de proposito) nao lanca e descarta o blob —
+  prova a Parte 2 isoladamente; `unmountSnippetLayer()` com um snip traduzido E uma selecao ativa
+  simultaneos (o cenario exato da B-2: 2 blobs no paragrafo) completa sem lancar, limpa
+  `[data-pi]`/`[data-si]`/`[data-snip]`/`.tr-blob`/`.tr-blob-svg`/`_blobs` por completo, e um
+  `mountSnippetLayer()` seguinte re-envolve o paragrafo — a espiral da morte da B-2, agora coberta
+  fim a fim.
+- Teste de z-order existente (iter 3) ajustado: comparava `node.className === 'tr-blob-svg'`
+  diretamente — passa a comparar via `getAttribute('class')`, ja que o svg real deixou de ter
+  `className` string (o proprio comportamento que este fix introduz de proposito no harness).
+
+**Nao alterado**: W-2..W-12 seguem fora de escopo desta iteracao (instrucao explicita — so B-2).
+
+### Verificacao pos-fix
+
+- JS: **148/148 passando** (142 + 6 novos), 0 fail, 0 skipped. `comm -23` contra a suite anterior a
+  esta iter: **vazio** (zero teste perdido, so 6 adicoes, nomeadas acima).
+- Golden geometry (DoD 4): os 4 testes de nome exato continuam passando, corpo do teste
+  byte-identico (`git diff` confirma zero mudanca no bloco `blob geometry:`).
+- Invariantes congelados re-confirmados: diff vazio de `translation.js`/`paginated.js`/`scroll.js`
+  vs `BASELINE` (`02a4c6c`); zero `querySelectorAll('...')` com aspas simples contendo p/h1/li/div;
+  `_blobPath(bands, 10)` literal + `OFF=8`/`padX=5`/`padY=1.5` intactos; `_splitSentences` com fonte
+  e regex unicas (1x cada).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1313 valid=1385 pct=94.80
+  files=26` (piso 90, **identico** ao iter 3 — confirma que nenhum `.cs` foi tocado).
+  `COVERAGE_JS covered=1352 valid=1362 pct=99.27 files=5` (piso 85, subiu de 98.89% — os testes
+  novos exercitam `_hasClass`/`_svgEl` que antes tinham cobertura parcial). `COVERAGE_GUARD
+  new_app_cs=0 waived=0`.
+- `dotnet test` (Release, prova de nao-regressao — iteracao 100% JS): **404 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 406 total** — identico ao iter 3.
+- `dotnet format whitespace --verify-no-changes`: exit 2, mas pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  desta iteracao (nenhum `.cs` tocado).
+- `git status`/`git diff --name-only` confirmam escopo: so `snippets.js`, `harness.js`,
+  `harness.test.js`, `snippets.test.js` (mais os arquivos de estado do `.jdi/` do orquestrador do
+  loop, nao tocados por este specialist).
+
+Commit: `a4aa004` — `fix(snippet-translation): unmount never hands a blob node to the unwrap loop,
+and the class check is SVG-safe (B-2)` (1 commit atomico — producao + harness + testes juntos,
+porque o fix de producao sozinho quebraria a suite existente sem o `createElementNS` do harness no
+MESMO commit: seriam commits intermediarios com suite vermelha se divididos).
