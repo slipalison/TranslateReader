@@ -65,9 +65,9 @@ specialist to route to.
 
 You ALREADY KNOW:
 - Stack: C# / .NET 10 (`net10.0`), `Nullable` + `ImplicitUsings` enabled. .NET MAUI 10.0.51, XAML with `MauiXamlInflator=SourceGen`. Solution `TranslateReader.slnx`, 3 projects: `src/TranslateReader` (MAUI app / Client layer), `src/TranslateReader.Core` (Business + Access library), `test/TranslateReader.Tests` (targets plain `net10.0`).
-- Frameworks: CommunityToolkit.Mvvm 8.4.2, CommunityToolkit.Maui 14.0.1, VersOne.Epub 3.3.6, Microsoft.Data.Sqlite.Core 10.0.5 + SQLitePCLRaw.bundle_green 2.1.11, LLamaSharp 0.26.0 (backends Cpu/Cuda12, Windows-only today), xUnit 2.9.3 + NSubstitute 5.3.0 + coverlet.collector 8.0.1.
+- Frameworks: CommunityToolkit.Mvvm 8.4.2, CommunityToolkit.Maui 14.0.1, VersOne.Epub 3.3.6, Microsoft.Data.Sqlite.Core 10.0.5 + SQLitePCLRaw.bundle_green 2.1.11, LLamaSharp 0.26.0 (backends Cpu/Cuda12, Windows-only today), xUnit 2.9.3 + NSubstitute 5.3.0 + coverlet.collector 10.0.1.
 - Locked code-design: **The Method** (Juval Löwy, volatility-based decomposition) — D-1, confirmed by user in D-5.
-- Test framework: xUnit 2.9.3 + NSubstitute 5.3.0 (mocking) + coverlet.collector 8.0.1 (coverage)
+- Test framework: xUnit 2.9.3 + NSubstitute 5.3.0 (mocking) + coverlet.collector 10.0.1 (coverage). The coverage floor (90% C# / 85% JS, D-6/D-...-1) is enforced by `bash scripts/coverage-gate.sh` — run it before declaring any task with `.cs`/WebView-JS changes done; a task is not complete if the gate does not exit 0
 - Linter/formatter: `dotnet format whitespace` against the root `.editorconfig` (LF, 4-space C#, `dotnet_diagnostic.IDE0055.severity = suggestion`), plus the root `Directory.Build.props`: `EnableNETAnalyzers=true`, `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild=true` and `Meziantou.Analyzer` 3.0.141. `TreatWarningsAsErrors` is ON — a NEW `CS`/`CA`/`MA` warning breaks the build. The 24 measured legacy IDs were split by D-2026-08-08-baseline-de-estilo-6: 4 calibrated at folder scope in `.editorconfig` (rules whose premise fails for that project type), 21 frozen in a closed, per-ID, commented `<NoWarn>`. Never silence a new warning by appending to `NoWarn` — that needs its own decision; fix the code instead
 - Project conventions: see <conventions> section below
 - **Adopted:** true (brownfield)
