@@ -127,3 +127,500 @@ function _snippetRoots() {
     }
     return roots.filter(function (item) { return item.root; });
 }
+
+// The app's own accent (ColorAccent, #9184d9) marks the pill/hint icons and the primary button —
+// distinct from the reading theme's accent (AC), which colors the blob and the snip chip.
+var _APP_ACCENT = '#9184d9';
+
+// Filled in by window.setSnippetLabels; every value starts empty so no pt-BR string lives in this
+// file before the C# side supplies one.
+var _labels = {
+    selectHint: '', extendTip: '', sentenceOne: '', sentenceMany: '', translateSnip: '',
+    extendSel: '', shrinkSel: '', onlySentence: '', toggleSnip: '', removeSnip: '', langMap: {},
+};
+var _accentRgb = '';
+var _darkPage = false;
+
+var _sel = null;
+var _dragging = false;
+var _dragStart = null;
+var _dragMoved = false;
+var _mounted = false;
+var _selBlob = null;
+var _pillEl = null;
+var _hintEl = null;
+var _hintDismissed = false;
+
+var _SNIPPET_CSS = [
+    "@font-face { font-family: 'Phosphor'; src: url('fonts/Phosphor.ttf') format('truetype'); }",
+    "@font-face { font-family: 'Inter'; src: url('fonts/Inter-Regular.ttf') format('truetype'); font-weight: 400; }",
+    "@font-face { font-family: 'Inter'; src: url('fonts/Inter-Medium.ttf') format('truetype'); font-weight: 500; }",
+    ".ph { font-family: 'Phosphor'; line-height: 1; font-style: normal; }",
+    '.ph-text-align-left:before{content:"\\e484"}',
+    '.ph-minus:before{content:"\\e32a"}',
+    '.ph-plus:before{content:"\\e3d4"}',
+    '.ph-x:before{content:"\\e4f6"}',
+    '.ph-cursor-text:before{content:"\\e7d8"}',
+    '.ph-arrows-left-right:before{content:"\\e0a0"}',
+    '.ph-translate:before{content:"\\e4a2"}',
+    '.tr-sent { position: relative; cursor: pointer; user-select: none; -webkit-user-select: none; border-radius: 8px; padding: 0.1em 0.24em; margin: 0 -0.24em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }',
+    'html[data-idiom="desktop"] .tr-sent { transition: background 0.22s ease; }',
+    'html[data-idiom="desktop"] .tr-sent:not(.tr-on):hover { background: rgba(127,127,168,0.14); }',
+    '[data-snip] { position: relative; padding: 0.1em 0.24em; margin: 0 -0.24em; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; user-select: none; -webkit-user-select: none; }',
+    '.tr-blob { position: absolute; left: -8px; top: -8px; display: block; pointer-events: none; backdrop-filter: blur(9px) saturate(180%); -webkit-backdrop-filter: blur(9px) saturate(180%); animation: trGlassIn 0.25s ease; }',
+    '.tr-blob-svg { position: absolute; left: -8px; top: -8px; overflow: visible; pointer-events: none; }',
+    '.tr-loading .tr-blob { animation: trPulse 1.1s ease-in-out infinite; }',
+    '@keyframes trGlassIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }',
+    '@keyframes trPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }',
+    '@keyframes trFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }',
+    ".tr-pill { position: fixed; left: 50%; transform: translateX(-50%); z-index: 35; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 16px; border-radius: 999px; background: rgba(28,30,48,0.58); backdrop-filter: blur(26px) saturate(190%); -webkit-backdrop-filter: blur(26px) saturate(190%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.35), 0 16px 40px -12px rgba(0,0,0,0.75); color: #e9e9ed; font-family: 'Inter', var(--font-body); animation: trFadeUp 0.22s ease; }",
+    'html[data-idiom="phone"] .tr-pill { left: 10px; right: 10px; transform: none; z-index: 30; gap: 6px; padding: 6px 6px 6px 12px; background: rgba(28,30,48,0.6); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.35), 0 16px 40px -14px rgba(0,0,0,0.8); }',
+    '.tr-pill-count { font-size: 12px; white-space: nowrap; }',
+    'html[data-idiom="phone"] .tr-pill-count { font-size: 11px; }',
+    '.tr-pill-tip { font-size: 11px; color: rgba(233,233,237,0.55); }',
+    '.tr-pill-only { font-size: 11px; color: rgba(233,233,237,0.5); }',
+    '.tr-pill-spacer { flex: 1; }',
+    '.tr-pill-group { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: rgba(255,255,255,0.07); }',
+    '.tr-pill-group button { width: 26px; height: 26px; font-size: 13px; border: none; background: transparent; color: inherit; cursor: pointer; opacity: 1; }',
+    'html[data-idiom="phone"] .tr-pill-group button { width: 28px; height: 28px; }',
+    '.tr-pill-group button[disabled] { opacity: 0.35; cursor: default; }',
+    '.tr-pill-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.16); }',
+    ".tr-pill-primary { min-height: 32px; border-radius: 999px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; background: " + _APP_ACCENT + "; color: #fff; font-family: 'Inter', var(--font-body); font-size: 14px; font-weight: 500; }",
+    'html[data-idiom="phone"] .tr-pill-primary { height: 32px; font-size: 12px; }',
+    '.tr-pill-close { width: 28px; height: 28px; border: none; background: transparent; color: inherit; cursor: pointer; }',
+    'html[data-idiom="phone"] .tr-pill-close { width: 30px; height: 30px; }',
+    ".tr-hint { position: fixed; left: 50%; transform: translateX(-50%); z-index: 34; display: flex; align-items: center; gap: 9px; padding: 8px 16px; border-radius: 999px; background: rgba(28,30,48,0.5); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px -14px rgba(0,0,0,0.8); color: rgba(233,233,237,0.82); font-size: 12px; font-family: 'Inter', var(--font-body); animation: trFadeUp 0.4s ease; }",
+    'html[data-idiom="phone"] .tr-hint { gap: 8px; padding: 7px 14px; background: rgba(28,30,48,0.55); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px -16px rgba(0,0,0,0.85); font-size: 11px; }',
+    ".tr-snip-chip { display: inline-flex; align-items: center; gap: 5px; vertical-align: 0.08em; margin-left: 7px; padding: 2px 8px; border-radius: 999px; font-family: var(--font-body); font-size: 0.6em; font-weight: 500; letter-spacing: 0.07em; white-space: nowrap; }",
+    'html[data-idiom="phone"] .tr-snip-chip { gap: 4px; margin-left: 6px; padding: 2px 7px; }',
+].join('\n');
+
+function _idiom() {
+    return document.documentElement.dataset.idiom;
+}
+
+// D-2026-08-09-snippet-translation-4 derivation B: the app footer is XAML outside the WebView, so
+// the pill sits a fixed offset above the WebView's own bottom edge instead of the mockup's raw
+// `bottom` (which assumed the footer shared the same window).
+function _pillBottom() {
+    return _currentMode === 'scroll' ? 32 : (_idiom() === 'phone' ? 10 : 24);
+}
+
+function _hintBottom() {
+    return _idiom() === 'phone' ? _pillBottom() + 2 : _pillBottom();
+}
+
+function _ensureStyle() {
+    if (document.getElementById('_snipStyle')) return;
+    var style = document.createElement('style');
+    style.id = '_snipStyle';
+    style.textContent = _SNIPPET_CSS;
+    (document.head || document.documentElement).appendChild(style);
+}
+
+function _blobFill() {
+    return _darkPage
+        ? 'linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.07))'
+        : 'linear-gradient(180deg, rgba(' + _accentRgb + ',0.17), rgba(' + _accentRgb + ',0.07))';
+}
+
+function _blobStroke() {
+    return 'rgba(' + _accentRgb + ',' + (_darkPage ? '0.45' : '0.34') + ')';
+}
+
+function _blobGlow() {
+    return 'rgba(' + _accentRgb + ',0.3)';
+}
+
+// SVG elements need the SVG namespace to render in a real WebView; the test harness has no
+// createElementNS, so it falls back to a plain (still testable) element.
+function _svgEl(tag) {
+    return document.createElementNS ? document.createElementNS('http://www.w3.org/2000/svg', tag) : document.createElement(tag);
+}
+
+function _makeBlob() {
+    var mask = document.createElement('span');
+    mask.className = 'tr-blob';
+    var svg = _svgEl('svg');
+    svg.setAttribute('class', 'tr-blob-svg');
+    var path = _svgEl('path');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-width', '1.25');
+    svg.appendChild(path);
+    return { mask: mask, svg: svg, path: path };
+}
+
+function _updateBlob(blob, geometry) {
+    blob.mask.style.width = geometry.w + 'px';
+    blob.mask.style.height = geometry.h + 'px';
+    blob.mask.style.clipPath = "path('" + geometry.d + "')";
+    blob.mask.style.background = _blobFill();
+    blob.svg.setAttribute('width', String(geometry.w));
+    blob.svg.setAttribute('height', String(geometry.h));
+    blob.path.setAttribute('d', geometry.d);
+    blob.path.setAttribute('stroke', _blobStroke());
+    blob.path.style.filter = 'drop-shadow(0 6px 16px ' + _blobGlow() + ')';
+}
+
+function _ensureSelBlob(p) {
+    if (_selBlob && _selBlob.mask.parentNode === p) return;
+    _removeSelBlob();
+    _selBlob = _makeBlob();
+    p.appendChild(_selBlob.mask);
+    p.appendChild(_selBlob.svg);
+}
+
+function _removeSelBlob() {
+    if (!_selBlob) return;
+    _selBlob.mask.remove();
+    _selBlob.svg.remove();
+    _selBlob = null;
+}
+
+// Every currently-wrapped period gets its selected state reflected as a class so the desktop hover
+// rule (`:not(.tr-on):hover`) can stay pure CSS instead of tracking hover in JS too.
+function _updateSentClasses() {
+    for (var span of document.querySelectorAll("[data-si]")) {
+        var isOn = !!(_sel && span.parentNode === _sel.p && _sel.set.has(Number(span.dataset.si)));
+        span.className = isOn ? 'tr-sent tr-on' : 'tr-sent';
+    }
+}
+
+function _sentEls(p, set) {
+    return Array.from(p.querySelectorAll("[data-si]")).filter(function (el) {
+        return set.has(Number(el.dataset.si));
+    });
+}
+
+function _hidePill() {
+    if (!_pillEl) return;
+    _pillEl.remove();
+    _pillEl = null;
+}
+
+function _onExtendClick() {
+    if (!_sel) return;
+    var total = _sel.p.querySelectorAll("[data-si]").length;
+    var maxSelected = Math.max.apply(null, Array.from(_sel.set));
+    if (maxSelected < total - 1) {
+        _sel.set.add(maxSelected + 1);
+        _renderSelection();
+    }
+}
+
+function _onShrinkClick() {
+    if (!_sel || _sel.set.size <= 1) return;
+    var maxSelected = Math.max.apply(null, Array.from(_sel.set));
+    _sel.set.delete(maxSelected);
+    _renderSelection();
+}
+
+function _buildPill() {
+    var idiom = _idiom();
+    var totalSentences = _sel.p.querySelectorAll("[data-si]").length;
+    var count = _sel.set.size;
+    var maxSelected = Math.max.apply(null, Array.from(_sel.set));
+    var isPhone = idiom === 'phone';
+
+    var pill = document.createElement('div');
+    pill.className = 'tr-pill';
+    pill.style.bottom = _pillBottom() + 'px';
+
+    if (!isPhone) {
+        var icon = document.createElement('i');
+        icon.className = 'ph ph-text-align-left';
+        icon.style.fontSize = '15px';
+        icon.style.color = _APP_ACCENT;
+        pill.appendChild(icon);
+    }
+
+    var counter = document.createElement('span');
+    counter.className = 'tr-pill-count';
+    counter.textContent = count + ' ' + (count === 1 ? _labels.sentenceOne : _labels.sentenceMany);
+    pill.appendChild(counter);
+
+    if (!isPhone) {
+        if (count === 1 && totalSentences > 1) {
+            var tip = document.createElement('span');
+            tip.className = 'tr-pill-tip';
+            tip.textContent = '· ' + _labels.extendTip;
+            pill.appendChild(tip);
+        } else if (totalSentences === 1) {
+            var only = document.createElement('span');
+            only.className = 'tr-pill-only';
+            only.textContent = _labels.onlySentence;
+            pill.appendChild(only);
+        }
+    } else {
+        var spacer = document.createElement('span');
+        spacer.className = 'tr-pill-spacer';
+        pill.appendChild(spacer);
+    }
+
+    var group = document.createElement('span');
+    group.className = 'tr-pill-group';
+    var minus = document.createElement('button');
+    minus.className = 'ph ph-minus';
+    minus.setAttribute('aria-label', _labels.shrinkSel);
+    if (count <= 1) minus.setAttribute('disabled', 'disabled');
+    minus.addEventListener('click', _onShrinkClick);
+    var plus = document.createElement('button');
+    plus.className = 'ph ph-plus';
+    plus.setAttribute('aria-label', _labels.extendSel);
+    if (maxSelected >= totalSentences - 1) plus.setAttribute('disabled', 'disabled');
+    plus.addEventListener('click', _onExtendClick);
+    group.appendChild(minus);
+    group.appendChild(plus);
+    pill.appendChild(group);
+
+    if (!isPhone) {
+        var divider = document.createElement('span');
+        divider.className = 'tr-pill-divider';
+        pill.appendChild(divider);
+    }
+
+    var primary = document.createElement('button');
+    primary.className = 'tr-pill-primary';
+    var translateIcon = document.createElement('i');
+    translateIcon.className = 'ph ph-translate';
+    translateIcon.style.fontSize = isPhone ? '14px' : '15px';
+    primary.appendChild(translateIcon);
+    var translateLabel = document.createElement('span');
+    translateLabel.textContent = _labels.translateSnip;
+    primary.appendChild(translateLabel);
+    pill.appendChild(primary);
+
+    var close = document.createElement('button');
+    close.className = 'tr-pill-close ph ph-x';
+    close.setAttribute('aria-label', _labels.removeSnip);
+    close.addEventListener('click', function () { _clearSelection(); });
+    pill.appendChild(close);
+
+    return pill;
+}
+
+function _showPill() {
+    _hidePill();
+    _pillEl = _buildPill();
+    (document.body).appendChild(_pillEl);
+}
+
+function _buildHint() {
+    var hint = document.createElement('div');
+    hint.className = 'tr-hint';
+    hint.style.bottom = _hintBottom() + 'px';
+    var icon = document.createElement('i');
+    icon.className = 'ph ph-cursor-text';
+    icon.style.fontSize = _idiom() === 'phone' ? '14px' : '15px';
+    icon.style.color = _APP_ACCENT;
+    hint.appendChild(icon);
+    var text = document.createElement('span');
+    text.textContent = _labels.selectHint;
+    hint.appendChild(text);
+    return hint;
+}
+
+function _removeHint() {
+    if (!_hintEl) return;
+    _hintEl.remove();
+    _hintEl = null;
+}
+
+function _renderHint() {
+    if (_hintDismissed || _sel) {
+        _removeHint();
+        return;
+    }
+    if (_hintEl) return;
+    _hintEl = _buildHint();
+    document.body.appendChild(_hintEl);
+}
+
+function _renderSelection() {
+    _updateSentClasses();
+    if (!_sel) {
+        _removeSelBlob();
+        _hidePill();
+        _renderHint();
+        return;
+    }
+    _hintDismissed = true;
+    _removeHint();
+    var els = _sentEls(_sel.p, _sel.set);
+    if (els.length === 0) {
+        _sel = null;
+        _removeSelBlob();
+        _hidePill();
+        _renderHint();
+        return;
+    }
+    _ensureSelBlob(_sel.p);
+    _updateBlob(_selBlob, _blobFromEls(els));
+    _showPill();
+}
+
+function _clearSelection() {
+    _sel = null;
+    _renderSelection();
+}
+
+window.clearSnippetSelection = function () {
+    _clearSelection();
+};
+
+function _toggleTap(p, si) {
+    if (_sel && _sel.p === p) {
+        if (_sel.set.has(si)) {
+            _sel.set.delete(si);
+        } else {
+            _sel.set.add(si);
+        }
+        if (_sel.set.size === 0) _sel = null;
+    } else {
+        _sel = { p: p, anchor: si, set: new Set([si]) };
+    }
+    _renderSelection();
+}
+
+function _onSentPointerDown(e) {
+    var span = e.target && e.target.closest("[data-si]");
+    if (!span) return;
+    _dragStart = { p: span.closest("[data-pi]"), si: Number(span.dataset.si) };
+    _dragMoved = false;
+    _dragging = true;
+}
+
+function _onPointerMove(e) {
+    if (!_dragging || !_dragStart) return;
+    var hit = document.elementFromPoint(e.clientX, e.clientY);
+    var span = hit && hit.closest("[data-si]");
+    if (!span) return;
+    var p = span.closest("[data-pi]");
+    if (p !== _dragStart.p) return;
+    var si = Number(span.dataset.si);
+    if (si === _dragStart.si) return;
+    _dragMoved = true;
+    var lo = Math.min(_dragStart.si, si);
+    var hi = Math.max(_dragStart.si, si);
+    var set = new Set();
+    for (var i = lo; i <= hi; i++) set.add(i);
+    _sel = { p: p, anchor: _dragStart.si, set: set };
+    _renderSelection();
+}
+
+function _onPointerUp() {
+    if (!_dragging) return;
+    _dragging = false;
+    if (!_dragMoved && _dragStart) {
+        _toggleTap(_dragStart.p, _dragStart.si);
+    }
+    _dragStart = null;
+    _dragMoved = false;
+}
+
+function _onDocumentClick(e) {
+    var target = e.target;
+    if (target && (target.closest("[data-pi]") || target.closest(".tr-pill") || target.closest(".tr-hint"))) return;
+    _clearSelection();
+}
+
+function _onKeyDown(e) {
+    if (e.key === 'Escape' && _idiom() !== 'phone') {
+        _clearSelection();
+    }
+}
+
+function _onResize() {
+    if (_sel) _renderSelection();
+}
+
+// A paragraph with element children (an inline `<em>`/`<a>`/`<img>` from the book, untrusted HTML
+// per csharp.md §4) keeps that markup intact as ONE period by moving its childNodes rather than
+// serializing and reparsing them; a text-only paragraph splits into one span per sentence.
+function _wrapParagraph(el, pi) {
+    if (el.dataset.original !== undefined) return;
+    if (el.dataset.pi !== undefined) return;
+    var hasElementChild = Array.from(el.childNodes).some(function (node) { return node.tagName; });
+    el.dataset.pi = String(pi);
+    el.style.position = 'relative';
+    if (!hasElementChild) {
+        var sentences = _splitSentences(el.textContent);
+        el.textContent = '';
+        sentences.forEach(function (sentence, index) {
+            if (index > 0) el.appendChild(document.createTextNode(' '));
+            var span = document.createElement('span');
+            span.className = 'tr-sent';
+            span.dataset.si = String(index);
+            span.textContent = sentence;
+            span.addEventListener('pointerdown', _onSentPointerDown);
+            el.appendChild(span);
+        });
+    } else {
+        var wrap = document.createElement('span');
+        wrap.className = 'tr-sent';
+        wrap.dataset.si = '0';
+        wrap.addEventListener('pointerdown', _onSentPointerDown);
+        for (var child of Array.from(el.childNodes)) {
+            wrap.appendChild(child);
+        }
+        el.appendChild(wrap);
+    }
+}
+
+// The inverse of _wrapParagraph: a plain period span gives back its own text, a snip gives back
+// the ORIGINAL text it stored (not whatever is currently displayed), and a markup period gives
+// back the exact nodes that were moved in — never a re-serialized/reparsed string.
+function _unwrapParagraph(el) {
+    var ordered = [];
+    for (var node of Array.from(el.childNodes)) {
+        if (!node.tagName) {
+            ordered.push(node);
+        } else if (node.className && node.className.indexOf('tr-blob') !== -1) {
+            continue;
+        } else if (node.dataset && node.dataset.snip !== undefined) {
+            ordered.push(document.createTextNode(node.dataset.orig));
+        } else if (node.dataset && node.dataset.si !== undefined) {
+            for (var child of Array.from(node.childNodes)) {
+                ordered.push(child);
+            }
+        } else {
+            ordered.push(node);
+        }
+    }
+    while (el.firstChild) el.removeChild(el.firstChild);
+    for (var item of ordered) el.appendChild(item);
+    delete el.dataset.pi;
+    el.style.position = '';
+}
+
+window.mountSnippetLayer = function () {
+    _ensureStyle();
+    for (var rootInfo of _snippetRoots()) {
+        var candidates = _translatableCandidates(rootInfo.root);
+        for (var pi = 0; pi < candidates.length; pi++) {
+            _wrapParagraph(candidates[pi], pi);
+        }
+    }
+    if (!_mounted) {
+        _mounted = true;
+        document.addEventListener('pointermove', _onPointerMove);
+        document.addEventListener('pointerup', _onPointerUp);
+        document.addEventListener('click', _onDocumentClick);
+        document.addEventListener('keydown', _onKeyDown);
+        window.addEventListener('resize', _onResize);
+    }
+    _renderHint();
+};
+
+window.unmountSnippetLayer = function () {
+    _sel = null;
+    _dragging = false;
+    _dragStart = null;
+    _removeSelBlob();
+    _hidePill();
+    _removeHint();
+    for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
+        _unwrapParagraph(el);
+    }
+    _mounted = false;
+};

@@ -199,3 +199,227 @@ test('root: scroll mode resolves one root per chapter with its own href', () => 
     assert.strictEqual(roots[0].root, first);
     assert.strictEqual(roots[1].root, second);
 });
+
+// snippets.js reads `_translatableCandidates` (translation.js) and `_currentMode` (bridge.js), so
+// the visual/interaction layer needs all three files sharing one context, exactly as index.html
+// loads them in the WebView.
+function loadFull(options) {
+    const env = createEnv(options);
+    env.document.documentElement.dataset.idiom = 'desktop';
+    env.load('bridge.js');
+    env.load('translation.js');
+    env.load('snippets.js');
+    return env;
+}
+
+function mountWithParagraphs(env, texts) {
+    const pager = env.document.createElement('div');
+    pager.id = '_pager';
+    env.document.body.appendChild(pager);
+    const paragraphs = texts.map((text) => {
+        const paragraph = env.document.createElement('p');
+        paragraph.textContent = text;
+        pager.appendChild(paragraph);
+        return paragraph;
+    });
+    env.window.mountSnippetLayer();
+    return paragraphs;
+}
+
+// The harness has no generic event dispatcher, so tests reach into the element's/document's own
+// `listeners` map (populated by addEventListener) and invoke the registered handler directly with
+// a hand-built event object — the same technique translation.test.js and scroll.test.js use for
+// window/document listeners, extended here to per-element ones.
+function fire(target, type, event) {
+    for (const handler of target.listeners.get(type) ?? []) {
+        handler(event ?? {});
+    }
+}
+
+function tap(env, span) {
+    fire(span, 'pointerdown', { target: span });
+    fire(env.document, 'pointerup');
+}
+
+test('mount: wrapping the same paragraphs twice does not double-wrap them', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+
+    env.window.mountSnippetLayer();
+
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 2);
+});
+
+test('unmount: restores the original text and is safe to call twice', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+
+    env.window.unmountSnippetLayer();
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(paragraphs[0].textContent, 'Ela chegou. Ele saiu.');
+    assert.strictEqual(paragraphs[0].dataset.pi, undefined);
+});
+
+test('mount: a paragraph with element children becomes a single period preserving its markup', () => {
+    const env = loadFull();
+    const pager = env.document.createElement('div');
+    pager.id = '_pager';
+    env.document.body.appendChild(pager);
+    const paragraph = env.document.createElement('p');
+    paragraph.innerHTML = 'Hello <em>world</em>!';
+    pager.appendChild(paragraph);
+    const em = paragraph.querySelectorAll('em')[0];
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 1);
+    assert.strictEqual(spans[0].dataset.si, '0');
+    assert.ok(
+        Array.from(spans[0].childNodes).includes(em),
+        'the original <em> node should be moved in, not recreated');
+});
+
+test('tap: tapping a period shows the selection blob and pill', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+
+    tap(env, spans[0]);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 1);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 1);
+    assert.strictEqual(spans[0].className, 'tr-sent tr-on');
+});
+
+test('tap: tapping a selected period again clears the selection', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Um periodo so.']);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+
+    tap(env, spans[0]);
+    tap(env, spans[0]);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
+    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
+});
+
+test('tap: tapping a period in another paragraph restarts the selection there', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Primeiro periodo.', 'Segundo periodo.']);
+    const firstSpan = paragraphs[0].querySelectorAll('[data-si]')[0];
+    const secondSpan = paragraphs[1].querySelectorAll('[data-si]')[0];
+
+    tap(env, firstSpan);
+    tap(env, secondSpan);
+
+    assert.strictEqual(firstSpan.className, 'tr-sent');
+    assert.strictEqual(secondSpan.className, 'tr-sent tr-on');
+});
+
+test('drag: dragging from one period to another selects the contiguous range', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+    spans[0].rect = { top: 0, left: 0, right: 20, bottom: 20, width: 20, height: 20 };
+    spans[1].rect = { top: 0, left: 20, right: 40, bottom: 20, width: 20, height: 20 };
+    spans[2].rect = { top: 0, left: 40, right: 60, bottom: 20, width: 20, height: 20 };
+
+    fire(spans[0], 'pointerdown', { target: spans[0] });
+    fire(env.document, 'pointermove', { clientX: 50, clientY: 10 });
+    fire(env.document, 'pointerup');
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 1);
+    assert.strictEqual(env.document.querySelectorAll('.tr-on').length, 3);
+});
+
+test('extend and shrink buttons grow and shrink the contiguous selection', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres.']);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+    tap(env, spans[0]);
+
+    fire(env.document.querySelectorAll('.ph-plus')[0], 'click');
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-on').length, 2);
+
+    fire(env.document.querySelectorAll('.ph-minus')[0], 'click');
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-on').length, 1);
+});
+
+test('Escape clears the selection on desktop', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document, 'keydown', { key: 'Escape' });
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
+});
+
+test('Escape does nothing on phone', () => {
+    const env = loadFull();
+    env.document.documentElement.dataset.idiom = 'phone';
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document, 'keydown', { key: 'Escape' });
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 1);
+});
+
+test('click outside the paragraph text clears the selection', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    const outside = env.appendToBody('div');
+
+    fire(env.document, 'click', { target: outside });
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-pill').length, 0);
+});
+
+test('pillBottom: paginated desktop sits 24px above the footer', () => {
+    const env = loadFull();
+
+    assert.strictEqual(env.window._pillBottom(), 24);
+});
+
+test('pillBottom: paginated phone sits 10px above the footer', () => {
+    const env = loadFull();
+    env.document.documentElement.dataset.idiom = 'phone';
+
+    assert.strictEqual(env.window._pillBottom(), 10);
+});
+
+test('pillBottom: scroll desktop sits 32px above the WebView bottom edge', () => {
+    const env = loadFull();
+    env.window.setMode('scroll');
+
+    assert.strictEqual(env.window._pillBottom(), 32);
+});
+
+test('pillBottom: scroll phone also sits 32px above the WebView bottom edge', () => {
+    const env = loadFull();
+    env.document.documentElement.dataset.idiom = 'phone';
+    env.window.setMode('scroll');
+
+    assert.strictEqual(env.window._pillBottom(), 32);
+});
+
+test('hint: shows before the first selection and never returns after it', () => {
+    const env = loadFull();
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-hint').length, 1);
+
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-hint').length, 0);
+
+    env.window.clearSnippetSelection();
+
+    assert.strictEqual(env.document.querySelectorAll('.tr-hint').length, 0);
+});

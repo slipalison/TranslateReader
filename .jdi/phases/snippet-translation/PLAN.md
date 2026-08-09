@@ -293,7 +293,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `J=src/TranslateReader/Resources/Raw/wwwroot/js/snippets.js; for v in "blur(9px) saturate(180%)" "blur(26px) saturate(190%)" "blur(20px) saturate(180%)" "border-radius: 8px" "0.1em 0.24em" "0 -0.24em" "box-decoration-break: clone" "999px" "rgba(28,30,48,0.58)" "rgba(28,30,48,0.6)" "trGlassIn 0.25s" "trPulse 1.1s" "ph-translate" "ph-cursor-text" "ph-arrows-left-right"; do grep -qF "$v" "$J" || { echo "JS MISSING $v"; exit 1; }; done && test "$(grep -cE 'período|Traduzir|Toque em|Alternar|Descartar|Estender|Reduzir|seleção|tradução' "$J")" -eq 0 && grep -qF 'dataset.idiom' "$J" && for f in Phosphor Inter-Regular Inter-Medium; do test -s "src/TranslateReader/Resources/Raw/wwwroot/fonts/$f.ttf" || exit 1; done && mkdir -p TestResults && node --test --test-reporter=tap test/js/ > TestResults/snip-t4.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t4.log && grep -qE '^# skipped 0$' TestResults/snip-t4.log`
 - **Dependencies:** T-3 · **Test:** `test/js/snippets.test.js`
 - **Commit:** `feat(snippet-translation): T-4 glass blob, selection pill and first-run hint (D-2026-08-09-snippet-translation-2, -4)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-5: Persistencia no JS — restore com guarda de hash, toggle, remove e envio ao C#
 - **Wave:** 5 · **Specialist:** jdi-doer-translatereader
