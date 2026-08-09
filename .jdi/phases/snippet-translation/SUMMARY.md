@@ -132,3 +132,119 @@ limpeza de `TranslationCache`/`ReadingState`. DI em `MauiProgram.cs` atualizado.
   iteracao (D-2, W-7 e explicitamente "phase futura").
 
 Commits: `7c4b236` (B-1), `9c0bd44` (W-1).
+
+## Iter 3 (round 2 — fix de UX pos-feedback do usuario)
+
+Loop reaberto (`total_resets: 1`) apos o usuario testar o app pos-convergencia (iter 2,
+APPROVED_WITH_WARNINGS) e reprovar a experiencia visual do blob vs os mockups `design/v0.2.0`:
+"O balao some depois de traduzido, ao selecionar esta deixando o selecionado opaco, a bolha na
+selecao nao esta parecendo uma bolha de vidro e esta separando as linhas." Causa-raiz de cada
+defeito ja diagnosticada pelo orquestrador antes desta iteracao (confirmada na fonte, nao
+re-descoberta). Escopo 100% JS — nenhum `.cs` tocado.
+
+### Causa -> Fix
+
+1. **Blob some apos traducao.** So `setSnippetLoading` e a selecao criavam um blob;
+   `applySnippetTranslation`/`restoreSnippets` -> `_replaceRangeWithSnip` -> `_buildSnipSpan`
+   criavam o snip SEM blob. Fix: `_renderAllBlobs()` agora varre TRES fontes de blob a cada
+   mutacao (`sel:`, `load:`, `snip:`), entao um snip pronto sempre ganha um blob permanente.
+2. **Selecao deixa o texto opaco (vidro por cima do texto).** `_ensureSelBlob` fazia
+   `p.appendChild(mask); p.appendChild(svg)` — blob entrava DEPOIS dos spans no DOM, entao o
+   blur pintava por cima do texto. Fix: todo blob agora e criado via
+   `owner.prepend(svg); owner.prepend(mask)`, sempre como os PRIMEIROS filhos do paragrafo — o
+   texto pinta por cima do vidro, nao o contrario. Vale para selecao, loading e snip por igual
+   (o bug tambem existia latente na selecao, so nao tinha sido nomeado pelo usuario ainda).
+3. **Nao parece vidro / separa as linhas.** `_blobPath` antigo emitia um rounded-rect
+   INDEPENDENTE por banda (linha), concatenado — visual de capsulas empilhadas com aresta na
+   divisa entre linhas. Fix: `_blobPath` reescrito para tracar UM UNICO contorno (topo da
+   primeira banda, desce a borda DIREITA de todas as bandas com juncoes em S, atravessa a base
+   da ultima, sobe a borda ESQUERDA, fecha com Z) — algoritmo literal fornecido pelo
+   orquestrador, adaptado ao estilo do arquivo mantendo a assinatura `_blobPath(bands, r)` e o
+   ajuste de ponto-medio existente. Os 2 testes dourados de banda unica (linha simples, clamp de
+   raio) saem BYTE-IDENTICOS ao algoritmo antigo (confirmado rodando a funcao em Node antes de
+   editar — uma banda so reduz ao mesmo rounded-rect nos dois algoritmos); o teste de juncao no
+   ponto medio (2 bandas) mantem as mesmas asserções de substring (contem `32.0`, nao contem
+   `30.0`/`34.0`), tambem confirmado.
+4. **Bonus (achado no diagnostico): blob do placeholder de loading deslocado** quando o trecho
+   nao comecava no inicio do paragrafo — `setSnippetLoading` aninhava o blob DENTRO do proprio
+   span (`position: relative` no span), mas a geometria de `_blobFromEls` e relativa ao
+   PARAGRAFO. Fix: resolvido de tabela pela arquitetura nova — o blob nunca mais fica aninhado
+   em nenhum span, sempre filho direto do paragrafo, coordenadas e container agora concordam.
+
+### Arquitetura nova: registro unico + sweep declarativo
+
+Substitui `_selBlob` (referencia unica, so selecao) e o blob-dentro-do-span do loading por um
+Map `_blobs` (chave -> `{mask, svg, path}` vivos no DOM), varrido por `_renderAllBlobs()`:
+
+- Chaves: `'sel:' + pi + ':' + runStart` (UM blob POR RUN CONTIGUO da selecao, via `_runsOf` —
+  nao um blob para a uniao; corrige um bug latente onde uma selecao nao-contigua tipo `{0, 2}`
+  desenhava uma banda atravessando o periodo 1, nao selecionado), `'load:' + snipKey` (a chave
+  completa `chapterHRef:pi:a:b`, armazenada em `dataset.loadKey` — atributo NOVO, deliberadamente
+  diferente de `data-snip` pra nao colidir com o parsing de `_unwrapParagraph`/`_onSnipClick`),
+  `'snip:' + snipKey` (reusa `dataset.snip` que o snip ja carregava).
+- `_blobDescriptors()`: coleta o estado DESEJADO a partir do DOM (runs de `_sel` via `_runsOf`,
+  todo `.tr-loading`, todo `[data-snip]`). `_renderAllBlobs()`: cria o que falta (prepend
+  mask+svg no paragrafo dono), remede tudo que existe (`_updateBlob` + `_blobFromEls`), remove
+  do DOM e do Map tudo que nao esta mais na lista desejada.
+- Kind -> animacao: `sel`/`snip` mantêm `.tr-blob` (`trGlassIn`, inalterado); `load` ganha a
+  classe extra `.tr-blob-pulse` (CSS movido de `.tr-loading .tr-blob` para `.tr-blob-pulse`,
+  porque o blob nao e mais filho do span `.tr-loading`).
+- Chamado ao final de: `_renderSelection`, `applySnippetTranslation`, `restoreSnippets`,
+  `setSnippetLoading`, `clearSnippetLoading`, `_renderSnipSpan` (toggle remede geometria),
+  `_onSnipRemoveClick`, `_onResize` (agora SEMPRE, nao so com `_sel` ativo — loading/snip tambem
+  precisam remedir no resize), `mountSnippetLayer`. `unmountSnippetLayer` limpa tudo
+  (`_blobs.clear()` + remove os nos do DOM).
+- `_blobPath` ganhou guarda `bands.length === 0 -> return ''` — necessaria porque
+  `_renderAllBlobs` agora chama `_blobFromEls` bem mais vezes (todo restore/apply/toggle), e um
+  elemento sem layout real (comum em teste, possivel em producao) gerava zero bandas; o algoritmo
+  antigo tolerava isso via `.map().join()` vazio, o novo precisava do guard explicito.
+- Codigo morto removido sem cadaver comentado: `_selBlob`, `_ensureSelBlob`, `_removeSelBlob`,
+  a regra CSS `.tr-loading .tr-blob`.
+
+### Invariantes do DoD re-conferidos (nao regrediram)
+
+`_blobPath(bands, 10)` literal no call site, `OFF=8`/`padX=5`/`padY=1.5` intactos,
+`_splitSentences`/`_snippetRoots` como fonte unica (contagem 1x cada) — todos re-grepados apos o
+diff. Os 4 testes de geometria dourada mantêm os NOMES EXATOS exigidos; os valores dourados dos
+testes de banda unica (linha simples, clamp de raio) permaneceram os MESMOS literais (confirmado
+programaticamente antes de editar, nao apenas por analise); pelo menos um path dourado literal
+segue comparado caractere a caractere (grep do DoD 4 `'M [0-9]+\.[0-9] .*Q .*Z'` continua
+casando). `translation.js`/`paginated.js`/`scroll.js`: diff VAZIO vs BASELINE `02a4c6c`
+re-confirmado. Aspas duplas em todo `querySelectorAll` de `snippets.js` (nenhuma nova ocorrencia
+com aspas simples). `_translatableCandidates` continua a unica fonte de blocos. Zero string pt-BR
+nova no JS.
+
+### Testes novos (12, todos em `test/js/snippets.test.js`)
+
+Z-order (blob antes do primeiro `[data-si]` no DOM do paragrafo); snip pronto tem blob
+(`applySnippetTranslation` e `restoreSnippets`, cada um com teste dedicado, `clip-path` != `path('')`
+apos setar um rect real); toggle remede o blob quando a geometria muda; selecao nao-contigua
+`{0, 2}` gera DOIS blobs `sel:0:0`/`sel:0:2`, nenhum cobrindo o periodo 1; sweep remove orfaos em 2
+cenarios (`clearSnippetSelection` e remocao de snip via chip); loading pulsa (classe
+`tr-blob-pulse` presente) e `clearSnippetLoading` remove o blob do registro e do DOM; resize
+remede mesmo sem `_sel` ativo (cenario so com loading); novo `_blobPath` com 2 bandas emite
+exatamente UM `M` e UM `Z` (contorno unico); `_blobPath([], 10)` nao lanca, devolve `''`.
+
+### Verificacao pos-fix
+
+- JS: **142/142 passando** (era 130 antes desta iter), 0 skipped, 0 fail. `comm -23` contra a
+  suite anterior desta mesma sessao: nenhum teste perdido (so adicoes).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1331 valid=1346 pct=98.89
+  files=5` (piso 85). `COVERAGE_SCOPE covered=1313 valid=1385 pct=94.80 files=26` (piso 90,
+  **identico** ao iter 2 — confirma que nenhum `.cs` foi tocado). `COVERAGE_GUARD new_app_cs=0
+  waived=0`.
+- `dotnet test` (Release, prova de nao-regressao): **404 passed / 2 skipped (GPU-only
+  pre-existentes) / 0 failed / 406 total** — identico ao iter 2, como esperado (mudanca 100% JS).
+- `dotnet format whitespace --verify-no-changes`: exit 2 a nivel de SOLUCAO, mas pelas MESMAS 2
+  violacoes FINALNEWLINE legadas ja registradas em W-7 (`Platforms/Android/MainActivity.cs`,
+  `MainApplication.cs`) — arquivos INTOCADOS por esta iteracao (nenhum `.cs` no diff). Nao
+  reincide na imprecisao apontada no iter 2 (aquele SUMMARY dizia "exit 0, limpo" a nivel de
+  solucao): aqui o estado exato e reportado — os 2 arquivos tocados nesta iter (`snippets.js`,
+  `snippets.test.js`) sao JS, fora do escopo do `dotnet format`.
+- DoD 7 (fronteira) re-verificado: diff vazio de `translation.js`/`paginated.js`/`scroll.js`
+  contra `BASELINE`; zero `querySelectorAll('...')` com aspas simples contendo p/h1/li/div; zero
+  `window.(applyTranslations|clearTranslations|getVisibleParagraphs) =`.
+
+Commit: `4d6d0a8` — `fix(snippet-translation): glass blob stays under text, persists on snips,
+draws as one contour` (1 commit atomico, implementacao + testes juntos, mesmo padrao dos fixes
+B-1/W-1 do iter 2).
