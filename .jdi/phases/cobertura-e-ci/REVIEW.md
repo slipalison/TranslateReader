@@ -1,0 +1,44 @@
+# Phase 2: Cobertura e CI — Review  (slug: cobertura-e-ci)
+
+**Verdict:** APPROVED_WITH_WARNINGS
+
+## Gates
+| Gate | Status | Details |
+|---|---|---|
+| Build | PASS | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` — 0 warnings, 0 errors |
+| Tests | PASS | 373/375 passing, 2 pre-existing skips (`TranslationEngineTests`, model-dependent), 0 failed — baseline 167, no regression |
+| Coverage | PASS | `bash scripts/coverage-gate.sh` exit 0. `AM` scope C# 95.28% (1090/1144) / 90% floor, JS 100.00% (318/318) / 85% floor. `COVERAGE_GUARD new_app_cs=0 waived=0`. Output matches SUMMARY.md verbatim |
+| Lint | WARN | `dotnet format whitespace --verify-no-changes` exit 2: 2 `FINALNEWLINE` violations in `Platforms/Android/MainActivity.cs` and `MainApplication.cs` — both legacy, **not touched by this phase** (phase diff confirmed to contain zero `.cs`/`.xaml` files), exempt per D-2 |
+| Security/Layer | PASS | Zero `.cs`/`.xaml` production files touched by this phase (`git log --name-only 4230589..HEAD -- '*.cs'` empty). 5.1/5.2/5.10/5.15 checks clean or pre-existing-only. New surfaces (`scripts/coverage-gate.sh`, `coverage.yml`) reviewed — no injection risk, hardened workflow (harden-runner, minimal `permissions`, 100% third-party actions pinned by 40-hex SHA, no secrets passed) |
+| Consistency | PASS | All 14 files in PLAN.md `files_modified` appear in the phase's 9 commits; all commits Conventional Commits, scope `cobertura-e-ci`, types correctly varied (`feat`/`ci`/`docs`/`chore`) |
+| UI Validation | SKIPPED | has_frontend=false (native MAUI client) |
+| DoD | PASS | 9/9 auto-verified PASS (independently re-executed, not taken from SUMMARY.md), 0 manual items (CONTEXT.md declares none) |
+
+## Blockers (if any)
+- None.
+
+## Warnings (if any)
+- **W-1 — Gate 2's literal command is environment-fragile, pre-existing, not introduced by this phase.** The reviewer's own Gate 2 command (`dotnet test`, no project scope) resolves the root `.slnx` and attempts to build the MAUI app for **all** its TFMs as a side effect, which fails on this dev box: `XA5300` (no local Java SDK for `net10.0-android`) and `CA1711` on `Platforms/iOS/AppDelegate.cs` + `Platforms/MacCatalyst/AppDelegate.cs` (pre-existing legacy naming warning, unrelated to this phase). Net effect: bare `dotnet test` returns exit 1 even though the actual test project is green. Scoping to `test/TranslateReader.Tests/TranslateReader.Tests.csproj` (as `scripts/coverage-gate.sh` already does, and as Gate 1 already does for the app project) gives a clean `373 passed, 0 failed, exit 0`. This is a process-doc gap, not a phase-cobertura-e-ci defect — recommend a future task scope Gate 2's documented command the same way Gate 1 already is, but it is out of this phase's PLAN and does not block.
+- **W-2 — DoD 9's literal derivation formula ("Pipeline / Coverage") does not match the name GitHub actually reports ("Coverage / Coverage gate").** Verified live: PR #28's checks list reports `Coverage / Coverage gate` (`gh pr checks 28`), matching Candidate B in the phase's own `branch-protection-remap.md`, not Candidate A (the DoD 9 `Verify:` literal, derived per D-...-5(4b) from the orchestrator's top-level `name:` + the caller job's `name:`). This is **not a defect in this phase's work** — T-6 correctly did not execute any PATCH (confirmed: live `gh api .../branches/main/protection` right now returns the exact same 9 contexts as the committed `branch-protection-before.json`, byte-for-byte), and both `branch-protection-remap.md` and `SUMMARY.md` already flag the conflict and record the empirically-correct name. Flagging only so whoever executes the deferred `PATCH` during PR review uses `Coverage / Coverage gate`, not the DoD 9 literal value — using the wrong one would reproduce the D-2026-07-28-pipeline-unificada-1(d) incident (4 contexts with wrong names locked every PR).
+- **W-3 (hygiene, informational)** — an untracked `.jdi/phases/cobertura-e-ci/LOOP.md` (orchestration state, `iter: 0`, `status: running`) sits in the working tree. Not in any task's `files_modified`, not committed, harmless — noted for cleanup only, not a phase deliverable defect.
+- **W-4 (informational, out of scope)** — Gate 5.12 in `jdi-reviewer-translatereader.md` still documents "baseline at bootstrap: exactly 1 hit" for mutable-static greps, but the repo today has 4 (3 added in the already-shipped `pixel-perfect` phase, in `SettingsOverlay.xaml.cs`, confirmed via `git log` — not touched by `cobertura-e-ci`). Stale baseline comment predates this phase and this phase's diff contains zero `.cs` files, so it is out of scope for this review's verdict; flagged for whichever phase next touches that gate section.
+
+## DoD Checklist (gate 8)
+
+| # | Criterion | Source | Type | Status | Evidence |
+|---|---|---|---|---|---|
+| 1 | Gate exists, committed executable (`100755`), fails when `COVERAGE_MIN=101`, sentinel wiped every run | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0 |
+| 2 | `AM` scope, line-weighted (not averaged): `pct == 100*covered/valid` within tolerance, no `test/` in scope | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; `COVERAGE_SCOPE covered=1090 valid=1144 pct=95.28 files=17` |
+| 3 | Red-then-green MAUI-app guard probe, waiver is the only way out, tree clean after | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; `git status --porcelain` clean post-run |
+| 4 | JS measured by the gate itself, exactly 4 files, 85% floor, Sonar's `js-lcov.info` path untouched | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; `COVERAGE_JS covered=318 valid=318 pct=100.00 files=4`; `sonarqube.yml` untouched by this phase (confirmed via `git log`) |
+| 5 | `coverage.yml` pure `workflow_call`, hardened, 100% pinned SHAs, `pipeline.yml` caller present, `ci.yml` de-collects | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; manually read `coverage.yml`/`pipeline.yml`/`ci.yml` in full, confirms structure |
+| 6 | reportgenerator summary + HTML artifact, zero duplicate artifact name across all workflows | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0 |
+| 7 | Android W-2 measured and recorded from a real CI run, `NoWarn`/`TreatWarningsAsErrors` invariants preserved | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; manually confirmed single `<NoWarn>`, no wildcard, `XA4301` has its own dedicated comment block, `TreatWarningsAsErrors` unconditioned `true` |
+| 8 | Reviewer Gate 3 calls the script (no reimplementation), `coverlet.collector` version fixed everywhere | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; manually re-read Gate 3 (lines 203-233 of `jdi-reviewer-translatereader.md`) — confirms single bash-only implementation, no `Measure-Object -Average`, explicit instruction not to re-derive from XML |
+| 9 | Branch protection baseline snapshotted, remap doc with derived literal, naming conflict surfaced, **no real mutation executed** | CONTEXT.md | Auto | PASS | Literal `Verify:` re-run independently, exit 0; live `gh api .../branches/main/protection` compared byte-for-byte against committed `before.json` — identical, confirming no PATCH ran (see W-2 for the caveat on which literal to use when it eventually does) |
+
+**Totals:** 9 items | Auto: 9 (9 PASS, 0 FAIL) | Manual: 0 pending
+
+## Recommendation
+
+Ship. All 9 phase-specific DoD items are genuinely satisfied — independently re-executed here, not taken on the doer's word — and the five extra-scrutiny points from this review's brief all check out: Gate 3 in the reviewer file is a thin `bash scripts/coverage-gate.sh` call with the non-weighted-average implementation fully removed; `Directory.Build.props`'s `<NoWarn>` stays a single, non-wildcard, per-ID-commented element with `TreatWarningsAsErrors` unconditioned; `ci.yml` cleanly dropped its coverage collection with no orphan or duplicate left behind (the separate `sonarqube.yml` opencover collection is pre-existing, differently-scoped infrastructure, untouched by this phase); and T-6's branch-protection artifact is documentation only — the live API confirms zero mutation occurred. The two substantive warnings (W-1, W-2) are both about pre-existing process-doc precision, not about this phase's own deliverables, and neither blocks: W-1 is a Gate 2 command that was already fragile on this dev box before this phase existed, and W-2 is a naming-derivation flaw in an inherited decision that the doer caught, worked around correctly, and documented rather than silently trusting. No code review action is required before merge; carry W-2's note into whoever executes the deferred branch-protection `PATCH`.
