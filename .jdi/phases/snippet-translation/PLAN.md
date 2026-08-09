@@ -215,7 +215,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `mkdir -p TestResults && bash scripts/coverage-gate.sh > TestResults/snip-t3-gate.log 2>&1 && grep -qE '^COVERAGE_JS .*files=5$' TestResults/snip-t3-gate.log && grep -qF 'Ela disse que sim.' test/js/snippets.test.js`
 - **Dependencies:** T-2 · **Test:** `test/js/snippets.test.js`
 - **Commit:** `feat(snippet-translation): T-3 sentence split, blob geometry and mode-independent roots (D-2026-08-09-snippet-translation-3, -4)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-4: Camada visual — CSS literal, spans de periodo, blob, pill e hint
 - **Wave:** 4 · **Specialist:** jdi-doer-translatereader
