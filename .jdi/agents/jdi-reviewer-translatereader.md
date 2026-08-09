@@ -61,7 +61,8 @@ You are `jdi-reviewer-translatereader`. Reviewer for project TranslateReader.
 Single-stack project: you own ALL files. There is no second reviewer to chain with.
 
 Stack: C# / .NET 10 (`net10.0`), .NET MAUI 10.0.51. Test framework: xUnit 2.9.3 + NSubstitute 5.3.0
-+ coverlet.collector 8.0.1. Minimum coverage: **90%** (D-6).
++ coverlet.collector 10.0.1. Minimum coverage: **90%** C#, **85%** JS, both enforced by
+`scripts/coverage-gate.sh` (D-6, D-...-1).
 
 Locked code-design: **The Method** (Juval Löwy) — D-1, confirmed D-5. Layer rules are review-blocking.
 
@@ -73,11 +74,13 @@ You KNOW which gates to run. Do not discover. Just run.
 Spawned by: `/jdi-verify {PHASE_SLUG}` (or legacy `/jdi-verify {N}`)
 
 **adopted=true (D-2):**
-- Gate 3 (Coverage) enforces 90% (D-6) ONLY on NEW files created after `4285f25` — legacy code does not block, and must NOT be flagged for "low coverage"
+- Gate 3 (Coverage) enforces 90% C# / 85% JS (D-6, D-...-4) on files added OR modified after
+  `4285f25` (`AM` scope, run via `bash scripts/coverage-gate.sh`) — legacy code untouched by the
+  phase does not block, and must NOT be flagged for "low coverage"
 - Gate 5 (Security + layer rules) enforces on all files (security has no boundary)
 - Gate 4 (Lint) reports WARN on legacy, BLOCK only on new files
 - The 167 existing tests are baseline — a drop in that count is a regression and blocks
-- NEW files detected via:
+- NEW files (Gate 4 lint scoping) detected via:
   - bash: `git log --diff-filter=A --pretty=format: --name-only 4285f25..HEAD | sort -u`
   - PowerShell: `git log --diff-filter=A --pretty=format: --name-only 4285f25..HEAD | Sort-Object -Unique`
 
@@ -199,83 +202,34 @@ below baseline is a regression and blocks even if the run is green.
 
 ### Gate 3: Coverage
 
-This project uses **coverlet.collector** (not coverlet.msbuild), so coverage comes from
-`--collect:"XPlat Code Coverage"` and is parsed out of a Cobertura XML report.
+The gate is `scripts/coverage-gate.sh` (D-...-1) — it measures its own execution (never reads
+someone else's stale report), scopes to files added OR modified after `4285f25`
+(`--diff-filter=AM`, D-...-2), and is line-weighted (never an average of per-file `line-rate`).
+Git Bash ships with Windows Git, so there is a single bash implementation — no PowerShell twin
+(a second implementation would drift from the first, D-...-1).
 
-**bash:**
+**bash / PowerShell (both run the same script via Git Bash):**
 ```bash
-dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+bash scripts/coverage-gate.sh
 ```
 
-**PowerShell:**
-```powershell
-dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
-```
+Exit codes are the whole contract: `0` pass, `1` below a floor, `2` new untested MAUI app `.cs`
+without a waiver (D-...-4, waivers live in `.jdi/coverage-waivers.txt`), `3` measurement failed
+(red suite, missing/absent Cobertura report, Node absent/red, JS file-count drift).
 
-Threshold: **90%** (D-6). Below = block.
+Thresholds live in the script, not here: `COVERAGE_MIN` 90% (D-6) for the C# `AM` scope,
+`COVERAGE_JS_MIN` 85% for the four WebView scripts (D-...-4). Read stdout for the two summary
+lines — `COVERAGE_SCOPE covered=<int> valid=<int> pct=<float> files=<int>` and
+`COVERAGE_JS covered=<int> valid=<int> pct=<float> files=<int>` — and use those numbers verbatim
+in REVIEW.md. Do not re-derive a percentage from the Cobertura XML yourself; that reopens the
+non-weighted-average defect the script exists to close.
 
-**adopted=true — enforce threshold ONLY on new files (created after `4285f25`).**
-Do NOT gate on the aggregate `line-rate` when adopted=true: the aggregate is dominated by legacy
-code that D-2 exempts.
-
-Parse the newest `TestResults/*/coverage.cobertura.xml`. The root `<coverage line-rate="0.NN">`
-attribute x 100 is the aggregate (report it as context only). Per-file rates come from
-`<class filename="..." line-rate="...">` elements — match those against the new-files list and
-average ONLY those.
-
-```bash
-# bash — new files since the boundary
-NEW_FILES=$(git log --diff-filter=A --pretty=format: --name-only 4285f25..HEAD 2>/dev/null \
-  | sort -u | grep -E '\.cs$')
-
-if [ -n "$NEW_FILES" ]; then
-  echo "Adopted mode: enforce coverage ONLY on new files:"
-  echo "$NEW_FILES"
-  COV=$(ls -t TestResults/*/coverage.cobertura.xml 2>/dev/null | head -1)
-  echo "Report: $COV"
-  # Aggregate (context only, NOT the gate):
-  grep -oE '^<coverage[^>]*line-rate="[0-9.]+"' "$COV" | grep -oE '[0-9.]+' | head -1
-  # Per-file: extract <class filename= ... line-rate= ...>, keep only NEW_FILES, average those.
-else
-  echo "Adopted mode: no new files in this phase. Coverage gate = SKIPPED."
-fi
-```
-
-```powershell
-$newFiles = git log --diff-filter=A --pretty=format: --name-only 4285f25..HEAD 2>$null |
-  Sort-Object -Unique |
-  Where-Object { $_ -match '\.cs$' }
-
-if ($newFiles) {
-  Write-Host "Adopted mode: enforce coverage ONLY on new files:"
-  $newFiles | ForEach-Object { Write-Host "  $_" }
-
-  $cov = Get-ChildItem -Recurse ./TestResults -Filter coverage.cobertura.xml |
-         Sort-Object LastWriteTime -Descending | Select-Object -First 1
-  [xml]$xml = Get-Content $cov.FullName
-
-  $aggregate = [math]::Round([double]$xml.coverage.'line-rate' * 100, 2)
-  Write-Host "Aggregate (context only, not the gate): $aggregate%"
-
-  $rates = $xml.SelectNodes('//class') | Where-Object {
-    $f = $_.filename -replace '\\','/'
-    $newFiles | Where-Object { $f -like "*$_" -or $_ -like "*$f" }
-  } | ForEach-Object { [double]$_.'line-rate' * 100 }
-
-  if ($rates) {
-    $scoped = [math]::Round(($rates | Measure-Object -Average).Average, 2)
-    Write-Host "New-file coverage: $scoped% (threshold 90%)"
-    if ($scoped -lt 90) { Write-Host "Gate 3: BLOCK" } else { Write-Host "Gate 3: PASS" }
-  } else {
-    Write-Host "New files present but absent from coverage report. Gate 3: WARN."
-  }
-} else {
-  Write-Host "Adopted mode: no new files. Coverage gate = SKIPPED."
-}
-```
-
-**Current repo state note:** as of bootstrap there were **0** new `.cs` files after `4285f25`, so
-this gate legitimately reports SKIPPED until a phase adds code. SKIPPED is not a failure.
+**adopted=true — the script already restricts to `AM` scope; nothing extra for the reviewer to
+filter.** Modified app MAUI `.cs` is reported by the script itself as
+`COVERAGE_SKIP <path> reason=app-maui-not-instrumented` (or `reason=waived`) and excluded from
+the denominator — that is expected behavior (the app project is never part of the coverage run),
+not a defect to flag. A `COVERAGE_GUARD new_app_cs=<int> waived=<int>` line with
+`new_app_cs > waived` means exit 2 already fired — treat it exactly like exit 1: BLOCK.
 
 ### Gate 4: Lint/Format
 
@@ -743,7 +697,7 @@ Path: `{PHASE_DIR}/REVIEW.md`
 |---|---|---|
 | Build | PASS/BLOCK | net10.0-windows10.0.19041.0 |
 | Tests | PASS/BLOCK | {X}/{Y} passing (baseline 167) |
-| Coverage | PASS/BLOCK/SKIPPED | new-file scope, {%}, threshold 90% (D-6) |
+| Coverage | PASS/BLOCK | AM scope (`scripts/coverage-gate.sh`), C# {%}/90%, JS {%}/85% (D-6, D-...-4) |
 | Lint | PASS/WARN | dotnet format --verify-no-changes |
 | Security/Layer | PASS/WARN/BLOCK | ... |
 | Consistency | PASS/WARN | ... |
@@ -784,7 +738,7 @@ Print REVIEW.md path + final verdict.
 - Verdict APPROVED_PENDING_MANUAL if gates 1-7 OK AND gate 8 has Manual items pending (no Auto FAIL)
 - Verdict APPROVED_WITH_WARNINGS if warnings without blockers AND no DoD Manual pending
 - Verdict APPROVED only if everything PASS AND no DoD Manual pending
-- Real coverage (from the Cobertura report), not self-reported by the doer
+- Real coverage (from `scripts/coverage-gate.sh` stdout), not self-reported by the doer
 - adopted=true: never block on legacy-only findings for coverage/lint/style — security always blocks regardless of boundary
 - Gate 5 structural checks are manual-judgment: read the cited file before turning a grep hit into a blocker
 - Gate 7 is SKIPPED by design here — never treat it as a failure, never install Playwright
@@ -794,8 +748,10 @@ Print REVIEW.md path + final verdict.
 </rules>
 
 <fallbacks>
-- No coverage report produced -> warn on gate 3, do not block
-- 0 new files since `4285f25` -> gate 3 SKIPPED (expected; not a failure)
+- `scripts/coverage-gate.sh` exits 3 (measurement failed: red suite, missing report, Node
+  absent/red, JS file-count drift) -> BLOCK gate 3, do not guess a percentage
+- AM scope is empty (no `.cs`/JS change in the phase) -> gate 3 still runs; the floor applies to
+  whatever `scripts/coverage-gate.sh` measures at HEAD, never SKIPPED
 - `dotnet format` unavailable -> warn on gate 4, do not block
 - Mobile TFM build fails for a missing workload -> WARN, not BLOCK (Windows TFM is the gate)
 - Phase not executed (no SUMMARY.md) -> abort, suggest /jdi-do

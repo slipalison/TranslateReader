@@ -24,7 +24,7 @@ Boundary legado: commit `4285f25` (ver D-2).
 - EPUB: `VersOne.Epub` 3.3.6
 - Persistencia: `Microsoft.Data.Sqlite.Core` 10.0.5 + `SQLitePCLRaw.bundle_green` 2.1.11
 - LLM local: `LLamaSharp` 0.26.0 (+ backends `Cpu` e `Cuda12`, hoje so no target Windows)
-- Testes: xUnit 2.9.3 + NSubstitute 5.3.0 + coverlet.collector 8.0.1
+- Testes: xUnit 2.9.3 + NSubstitute 5.3.0 + coverlet.collector 10.0.1
 - Solution: `TranslateReader.slnx` (3 projetos)
 - Linter/formatter: nenhum configurado (sem `.editorconfig`, sem analyzers custom)
 - Conventional commits: **nao** em uso (0 de 10 commits seguem o padrao)
@@ -81,7 +81,9 @@ Schema/migrations: sem framework de migration — DDL inline `CREATE TABLE IF NO
 Rotas/endpoints: N/A (app cliente, sem API HTTP).
 
 Testes existentes: xUnit, 17 arquivos, ~2.526 linhas, **167** `[Fact]`/`[Theory]`.
-`coverlet.collector` presente, mas sem gate de cobertura configurado; cobertura atual desconhecida.
+Gate de cobertura versionado em `scripts/coverage-gate.sh` (D-2026-08-08-cobertura-e-ci-1):
+escopo `AM` pos-`4285f25`, ponderado por linha, medido em 2026-08-09 em 95.28% (1090/1144) no
+C# do Core e 100% (318/318) nos 4 scripts JS do WebView — ambos acima dos pisos de 90%/85%.
 
 ## Restricoes globais
 

@@ -20,6 +20,12 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci.yml
 
+  coverage:
+    name: Coverage
+    permissions:
+      contents: read
+    uses: ./.github/workflows/coverage.yml
+
   codeql:
     name: CodeQL
     permissions:

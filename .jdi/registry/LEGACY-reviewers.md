@@ -16,7 +16,7 @@ o catch-all `**/*`.
 |---|---|---|
 | 1 Build | `dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0` | BLOCK |
 | 2 Tests | `dotnet test` (baseline 167) | BLOCK |
-| 3 Coverage | `dotnet test --collect:"XPlat Code Coverage"` -> Cobertura, 90% (D-6) | BLOCK (so em arquivos novos pos-`4285f25`) |
+| 3 Coverage | `bash scripts/coverage-gate.sh` -> ponderado por linha, 90% C# / 85% JS (D-6, D-2026-08-08-cobertura-e-ci-1/-4) | BLOCK (escopo `AM` pos-`4285f25`) |
 | 4 Lint | `dotnet format --verify-no-changes` | WARN (sem `.editorconfig`/analyzers ainda) |
 | 5 Security/Layer | greps de camada, zip-slip, XXE, WebView JS, sync-over-async, leak de evento, static mutavel | BLOCK / WARN conforme o check |
 | 6 Consistency | log de commits x PLAN, conventional commits (D-4) | WARN |
@@ -33,6 +33,7 @@ o catch-all `**/*`.
 - Gate 4 ja e BLOCK sobre os arquivos tocados pela phase em review (WARN fora do diff): a phase
   `baseline-de-estilo` entregou `.editorconfig` + `Directory.Build.props` com analyzers, e o
   comando do gate passou a ser `dotnet format whitespace --verify-no-changes`.
-- Gate 3 reporta SKIPPED enquanto nao houver arquivo `.cs` novo depois de `4285f25`
-  (no bootstrap havia 0). SKIPPED nao e falha.
+- Gate 3 nunca fica SKIPPED (desde a phase `cobertura-e-ci`): `scripts/coverage-gate.sh` sempre
+  mede o escopo `AM` (criados OU modificados) pos-`4285f25`. Exit 2 (guarda do app MAUI) e exit 3
+  (falha de medicao) bloqueiam igual a exit 1 (abaixo do piso).
 - Prioridade em conflito: seguranca > performance > boas praticas.

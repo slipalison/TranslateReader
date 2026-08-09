@@ -1,0 +1,62 @@
+name: Coverage
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Coverage gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Run coverage gate
+        run: bash scripts/coverage-gate.sh
+
+      # if: !cancelled() so the number is visible in the summary EVEN when the gate above
+      # failed the build -- a red run without a report is the one place a regression would
+      # go unexplained.
+      - name: Install reportgenerator
+        if: ${{ !cancelled() }}
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Build coverage report
+        if: ${{ !cancelled() }}
+        run: |
+          reportgenerator -reports:TestResults/coverage-gate/**/coverage.cobertura.xml \
+            -targetdir:TestResults/coverage-gate/report \
+            -reporttypes:'MarkdownSummaryGithub;Html'
+
+      - name: Publish summary
+        if: ${{ !cancelled() }}
+        run: cat TestResults/coverage-gate/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-html-report
+          path: TestResults/coverage-gate/report
+          if-no-files-found: error
