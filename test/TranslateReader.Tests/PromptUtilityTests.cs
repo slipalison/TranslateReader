@@ -111,4 +111,34 @@ public class PromptUtilityTests
         Assert.Contains("Previous paragraph", systemMessage);
         Assert.Equal("Hello world", userMessage);
     }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_UserMessageContainsTheSnippet()
+    {
+        var (_, userMessage) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Ela chegou. Ele saiu.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.Equal("Ela chegou.", userMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_SystemMessageContainsTheParagraphAsContext()
+    {
+        var (systemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Ela chegou. Ele saiu.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.Contains("Ela chegou. Ele saiu.", systemMessage);
+        Assert.Contains("only the translation of the excerpt", systemMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_SystemMessageDiffersFromBuildTranslationMessages()
+    {
+        var (snippetSystemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Ela chegou. Ele saiu.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+        var (paragraphSystemMessage, _) = _sut.BuildTranslationMessages(
+            "Ela chegou.", "Brazilian Portuguese (PT-BR)", "English", null, null, null);
+
+        Assert.NotEqual(paragraphSystemMessage, snippetSystemMessage);
+    }
 }

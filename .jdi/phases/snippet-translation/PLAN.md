@@ -467,7 +467,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
 - **Dependencies:** T-6 (Model/Access), T-3 (vetor dourado do hash)
 - **Test:** `SnippetTranslationManagerTests.cs`, `PromptUtilityTests.cs`, `SettingsManagerTests.cs`
 - **Commit:** `feat(snippet-translation): T-7 snippet translation manager, contextual prompt and theme colors (D-2026-08-09-snippet-translation-5)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-8: Ponte no `ReaderPage`, orquestracao com a traducao por paragrafo e fechamento dos gates
 - **Wave:** 6 · **Specialist:** jdi-doer-translatereader

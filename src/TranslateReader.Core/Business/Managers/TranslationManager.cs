@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +19,8 @@ public class TranslationManager(
     IPromptUtility promptUtility,
     IBooksAccess booksAccess,
     IParsingEngine parsingEngine,
-    ISettingsAccess settingsAccess) : ITranslationManager
+    ISettingsAccess settingsAccess,
+    ISnippetTranslationAccess snippetTranslationAccess) : ITranslationManager, ISnippetTranslationManager
 {
     private static readonly ModelInfo GemmaModel = new(
         Name: "gemma-2-2b",
@@ -370,6 +372,61 @@ public class TranslationManager(
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes)[..16];
     }
+
+    // FNV-1a 32-bit, no language salt: the WebView reproduces this exact algorithm in
+    // _snipHash (snippets.js) to decide, without an async digest API, whether a restored
+    // anchor's text still matches what was translated.
+    private static string ComputeSnippetHash(string text)
+    {
+        unchecked
+        {
+            var h = 2166136261u;
+            foreach (var c in text)
+            {
+                h ^= c;
+                h *= 16777619u;
+            }
+            return h.ToString("x8", CultureInfo.InvariantCulture);
+        }
+    }
+
+    public async Task<SnippetTranslation> TranslateSnippetAsync(
+        int bookId, SnippetRequest request, string sourceLanguage, string targetLanguage, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var hash = ComputeHash(request.Text, sourceLanguage, targetLanguage);
+        var cached = await translationCacheAccess.FetchTranslationAsync(bookId, request.ChapterHRef, hash);
+        if (cached is null)
+        {
+            var book = await booksAccess.FetchBookAsync(bookId);
+            var (systemMessage, userMessage) = promptUtility.BuildSnippetTranslationMessages(
+                request.Text, request.Paragraph, sourceLanguage, targetLanguage, book.Title, null);
+            var maxTokens = request.Text.Length * MaxTokenMultiplier;
+            var translated = await translationEngine.GenerateAsync(
+                systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
+            cached = CleanTranslationOutput(translated);
+            await translationCacheAccess.SaveTranslationAsync(bookId, request.ChapterHRef, hash, cached);
+        }
+
+        var snippet = new SnippetTranslation(
+            0, bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart,
+            request.SentenceEnd, ComputeSnippetHash(request.Text), cached, false, DateTime.UtcNow);
+        await snippetTranslationAccess.SaveSnippetAsync(snippet);
+        return snippet;
+    }
+
+    public Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef) =>
+        snippetTranslationAccess.FetchSnippetsAsync(bookId, chapterHRef);
+
+    public Task SetShowingOriginalAsync(int bookId, SnippetToggleRequest request) =>
+        snippetTranslationAccess.SetShowingOriginalAsync(
+            bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart,
+            request.SentenceEnd, request.ShowingOriginal);
+
+    public Task RemoveSnippetAsync(int bookId, SnippetRemoveRequest request) =>
+        snippetTranslationAccess.RemoveSnippetAsync(
+            bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart, request.SentenceEnd);
 
     private static string CleanTranslationOutput(string output)
     {

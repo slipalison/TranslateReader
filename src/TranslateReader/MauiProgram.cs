@@ -98,6 +98,7 @@ public static class MauiProgram
             sp.GetRequiredService<IFileUtility>(),
             booksDirectory));
         services.AddTransient<ITranslationManager, TranslationManager>();
+        services.AddTransient<ISnippetTranslationManager, TranslationManager>();
         services.AddTransient<ISettingsManager, SettingsManager>();
 
         services.AddTransient<LibraryPageModel>();
