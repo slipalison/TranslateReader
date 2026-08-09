@@ -383,3 +383,27 @@ fecharam juntas.
 - JS: `node --test test/js/` — 79 tests, 79 pass, 0 fail.
 - Build app Windows Release: `0 Error(s)`, `0 Warning(s)`. Build Tests Release: idem.
 - Cobertura: zero `.cs` novo na phase -> Gate 3 SKIPPED por D-2, sem exigencia nova.
+
+## Fix-round (iter 2, pos-review) — W-1: sincronizar docs de processo com o que a phase entregou
+
+O reviewer aprovou com 7 warnings. O W-1 era concreto e barato: T-7 rodou ENQUANTO T-5 estava
+BLOCKED, entao os 3 arquivos de processo ficaram descrevendo o estado intermediario — afirmavam que
+`TreatWarningsAsErrors` estava DESLIGADO, citando o teto de 12 que a D-6 revogou. O DoD 8 literal
+passa mesmo assim (ele nao checa esse texto), mas a phase chegaria na `main` documentando o oposto
+do que shipou. Corrigido em 3 arquivos:
+
+- `.jdi/agents/jdi-reviewer-translatereader.md` (Gate 4): passa a dizer que `TreatWarningsAsErrors`
+  esta LIGADO e que o build ja pega warning novo antes deste gate. Ganhou tambem a consequencia que
+  faltava: **acrescentar ID ao `NoWarn` exige decisao propria** — silenciar warning novo por essa
+  via em vez de corrigir e finding de BLOCK. Entradas `RISCO:` sao bug congelado, nao comportamento
+  aceito; tocar num desses arquivos sem tratar o risco marcado e WARN, nunca BLOCK.
+- `.jdi/agents/jdi-doer-translatereader.md:71`: mesma correcao do lado do executor, com a regra
+  explicita de nunca silenciar warning novo appendando no `NoWarn`.
+- `.jdi/registry/LEGACY.md:30`: idem, citando a revogacao do teto por D-6.
+
+Conferido depois: zero referencias remanescentes ao teto de 12 fora do proprio texto que registra a
+revogacao; `.github/` continua intocado; `grep -ci 'WARN.only'` no arquivo do reviewer = 0.
+
+W-2 (exposicao do `build-android` ao `TreatWarningsAsErrors`) NAO foi corrigido: e inverificavel
+nesta maquina (sem Android SDK, o TFM nem entra em `TargetFrameworks`) e D-5(3) proibe tocar
+`.github/` para relaxar o job. Fica para o CI do proprio PR responder antes do merge.

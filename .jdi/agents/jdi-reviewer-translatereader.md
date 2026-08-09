@@ -302,11 +302,19 @@ Scope the verdict by the phase's own diff — the gate already computes that fil
 - Violation in a file **outside that diff** = WARN, never a blocker. Pre-`4285f25` code is exempt
   by D-2 and must not be reformatted for style.
 
-**Analyzer warnings:** `TreatWarningsAsErrors` is deliberately NOT enabled. `baseline-de-estilo`
-measured 24 distinct `CS`/`CA`/`MA` IDs on legacy code against the 12-ID `NoWarn` cap of
-D-2026-08-08-baseline-de-estilo-3 and stopped at that cap instead of growing the list. Until a
-human revisits `AnalysisLevel=latest-recommended`, treat a NEW `CS`/`CA`/`MA` warning in a file the
-phase touched as a BLOCK finding of this gate; legacy warnings are noise the gate ignores.
+**Analyzer warnings:** `TreatWarningsAsErrors` IS enabled (root `Directory.Build.props`), so any
+NEW `CS`/`CA`/`MA` warning is already a hard build error — the build gate catches it before this
+gate does. `baseline-de-estilo` measured 24 distinct IDs on legacy code; 4 were rules whose premise
+does not hold for the project shape and were calibrated at folder scope in `.editorconfig`
+(D-2026-08-08-baseline-de-estilo-6), and the remaining 21 are frozen in a closed, per-ID, commented
+`<NoWarn>` list. The 12-ID cap of D-2026-08-08-baseline-de-estilo-3 was REVOKED by D-6 and replaced
+by "exactly what the measurement left after calibration".
+
+Consequence for this gate: adding an ID to `NoWarn` requires its own decision — a phase that
+silences a new warning that way instead of fixing it is a BLOCK finding here. Entries marked
+`RISCO:` in that list are frozen potential bugs (not accepted behaviour) and are routed to a future
+fix phase via `.jdi/todos/`; a phase that touches one of those files without addressing the marked
+risk is a WARN, never BLOCK.
 
 ### Gate 5: Security / Layer / Concurrency / Memory rules (project-specific)
 
