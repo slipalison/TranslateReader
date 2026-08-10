@@ -403,23 +403,61 @@ public class TranslationManager(
 
         var hash = ComputeHash(SnippetCacheKeySalt + request.Text, sourceLanguage, targetLanguage);
         var cached = await translationCacheAccess.FetchTranslationAsync(bookId, request.ChapterHRef, hash);
-        if (cached is null)
-        {
-            var book = await booksAccess.FetchBookAsync(bookId);
-            var (systemMessage, userMessage) = promptUtility.BuildSnippetTranslationMessages(
-                request.Text, request.Paragraph, sourceLanguage, targetLanguage, book.Title, null);
-            var maxTokens = request.Text.Length * MaxTokenMultiplier;
-            var translated = await translationEngine.GenerateAsync(
-                systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
-            cached = CleanTranslationOutput(translated);
-            await translationCacheAccess.SaveTranslationAsync(bookId, request.ChapterHRef, hash, cached);
-        }
+        var translated = cached is not null && !IsSnippetTranslationTooLong(request.Text, cached)
+            ? cached
+            : await GenerateValidSnippetTranslationAsync(bookId, request, sourceLanguage, targetLanguage, ct);
+
+        if (!string.Equals(translated, cached, StringComparison.Ordinal))
+            await translationCacheAccess.SaveTranslationAsync(bookId, request.ChapterHRef, hash, translated);
 
         var snippet = new SnippetTranslation(
             0, bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart,
-            request.SentenceEnd, ComputeSnippetHash(request.Text), cached, false, DateTime.UtcNow);
+            request.SentenceEnd, ComputeSnippetHash(request.Text), translated, false, DateTime.UtcNow);
         await snippetTranslationAccess.SaveSnippetAsync(snippet);
         return snippet;
+    }
+
+    // EN->PT rarely expands past ~1.6x; 3x the excerpt's own length plus slack for very short
+    // excerpts is a conservative ceiling that still catches a model echoing the whole surrounding
+    // paragraph (or a stale, pre-hardening cache/DB row) back instead of just the delimited excerpt.
+    private static bool IsSnippetTranslationTooLong(string text, string translated) =>
+        translated.Length > (text.Length * 3) + 120;
+
+    // A cache hit that fails the guard is treated exactly like a miss (regenerated and overwritten);
+    // a fresh generation gets one deterministic retry with the paragraph dropped entirely before the
+    // whole use case fails — nothing is ever persisted or applied from a response that never passed.
+    private async Task<string> GenerateValidSnippetTranslationAsync(
+        int bookId, SnippetRequest request, string sourceLanguage, string targetLanguage, CancellationToken ct)
+    {
+        var book = await booksAccess.FetchBookAsync(bookId);
+
+        var withContext = await GenerateSnippetTranslationAsync(
+            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: true, ct);
+        if (!IsSnippetTranslationTooLong(request.Text, withContext))
+            return withContext;
+
+        var withoutContext = await GenerateSnippetTranslationAsync(
+            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: false, ct);
+        if (!IsSnippetTranslationTooLong(request.Text, withoutContext))
+            return withoutContext;
+
+        throw new InvalidOperationException(
+            "The translation model returned an implausibly long response for this excerpt, both with and without paragraph context.");
+    }
+
+    private async Task<string> GenerateSnippetTranslationAsync(
+        SnippetRequest request, string sourceLanguage, string targetLanguage, string? bookTitle,
+        bool includeParagraphContext, CancellationToken ct)
+    {
+        var (systemMessage, userMessage) = includeParagraphContext
+            ? promptUtility.BuildSnippetTranslationMessages(
+                request.Text, request.Paragraph, sourceLanguage, targetLanguage, bookTitle, null)
+            : promptUtility.BuildSnippetTranslationMessages(
+                request.Text, sourceLanguage, targetLanguage, bookTitle, null);
+        var maxTokens = request.Text.Length * MaxTokenMultiplier;
+        var translated = await translationEngine.GenerateAsync(
+            systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
+        return CleanTranslationOutput(translated);
     }
 
     public Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef) =>

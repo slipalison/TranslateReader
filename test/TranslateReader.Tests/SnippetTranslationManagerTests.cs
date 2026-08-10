@@ -154,6 +154,82 @@ public class SnippetTranslationManagerTests
         return Convert.ToHexString(bytes)[..16];
     }
 
+    // Guard (D-2026-08-09-snippet-translation): a stale/poisoned cache entry (or a pre-hardening
+    // row from before this guard existed) must never be trusted just because it is present.
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenCachedTranslationIsImplausiblyLong_TreatsItAsAMissAndOverwritesTheCache()
+    {
+        var poisoned = new string('x', 500);
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(poisoned);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("She said yes.");
+
+        var result = await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
+
+        Assert.Equal("She said yes.", result.TranslatedText);
+        await _translationEngine.Received(1).GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), "She said yes.");
+    }
+
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenFirstAttemptIsTooLong_RetriesWithoutParagraphContext()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-with-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        var tooLong = new string('x', 500);
+        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(tooLong);
+        _translationEngine.GenerateAsync("system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("She said yes.");
+
+        var result = await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
+
+        Assert.Equal("She said yes.", result.TranslatedText);
+        _promptUtility.Received(1).BuildSnippetTranslationMessages(
+            "Ela disse que sim.", "Ela disse que sim. Ele concordou.", "English", "Portuguese",
+            "Test Book", Arg.Any<string?>());
+        _promptUtility.Received(1).BuildSnippetTranslationMessages(
+            "Ela disse que sim.", "English", "Portuguese", "Test Book", Arg.Any<string?>());
+        await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), "She said yes.");
+    }
+
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenBothAttemptsAreTooLong_ThrowsAndPersistsNothing()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-with-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        var tooLong = new string('x', 500);
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(tooLong);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None));
+
+        await _cacheAccess.DidNotReceive().SaveTranslationAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
+        await _snippetTranslationAccess.DidNotReceive().SaveSnippetAsync(Arg.Any<SnippetTranslation>());
+    }
+
     [Fact]
     public async Task TranslateSnippetAsync_WhenCancelled_PropagatesOperationCanceledException()
     {

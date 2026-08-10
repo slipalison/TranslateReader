@@ -151,4 +151,45 @@ public class PromptUtilityTests
 
         Assert.NotEqual(paragraphSystemMessage, snippetSystemMessage);
     }
+
+    // No-context overload (D-2026-08-09-snippet-translation): the deterministic retry when a first
+    // attempt with paragraph context came back implausibly long. Without a paragraph in the prompt
+    // at all, there is nothing left for a small model to leak back.
+    [Fact]
+    public void BuildSnippetTranslationMessages_WithoutParagraph_UserMessageContainsTheSnippet()
+    {
+        var (_, userMessage) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.Equal("Ela chegou.", userMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_WithoutParagraph_SystemMessageContainsNoParagraphContext()
+    {
+        var (systemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.DoesNotContain("Paragraph for context", systemMessage);
+        Assert.DoesNotContain("disambiguation context only", systemMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_WithoutParagraph_StillDemandsExclusivelyTheExcerpt()
+    {
+        var (systemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Brazilian Portuguese (PT-BR)", "English", null, null);
+
+        Assert.Contains("EXCLUSIVELY", systemMessage);
+        Assert.Contains("\"\"\"Ela chegou.\"\"\"", systemMessage);
+    }
+
+    [Fact]
+    public void BuildSnippetTranslationMessages_WithoutParagraph_IncludesBookTitle_WhenProvided()
+    {
+        var (systemMessage, _) = _sut.BuildSnippetTranslationMessages(
+            "Ela chegou.", "Brazilian Portuguese (PT-BR)", "English", "My Book", null);
+
+        Assert.Contains("Book: My Book", systemMessage);
+    }
 }

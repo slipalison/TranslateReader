@@ -41,6 +41,15 @@ function _snipHash(text) {
     return h.toString(16).padStart(8, '0');
 }
 
+// Mirrors TranslationManager.IsSnippetTranslationTooLong: EN->PT rarely expands past ~1.6x, so a
+// translation more than 3x the original excerpt's length (plus slack for short excerpts) means the
+// model echoed back more than just the requested excerpt - most often the whole surrounding
+// paragraph. Used on restore to auto-purge rows persisted before that guard existed, since the C#
+// side only validates new translations, never rewrites an already-saved row on its own.
+function _isSnippetTranslationTooLong(originalText, translatedText) {
+    return translatedText.length > (originalText.length * 3) + 120;
+}
+
 function _n(v) {
     return v.toFixed(1);
 }
@@ -992,6 +1001,17 @@ window.restoreSnippets = function (list) {
         if (!p) continue;
         var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
         if (!original || _snipHash(original) !== item.originalHash) continue;
+        if (_isSnippetTranslationTooLong(original, item.translatedText)) {
+            // A row poisoned before the length guard existed (or by a stale cache entry from an
+            // earlier session): skip applying it AND ask the C# side to delete the dead row, so the
+            // very first time the book reopens after this fix quietly cleans up past damage instead
+            // of re-rendering it forever.
+            window.sendRawMessage('snip-remove|' + JSON.stringify({
+                chapterHRef: item.chapterHRef, paragraphIndex: item.paragraphIndex,
+                sentenceStart: item.sentenceStart, sentenceEnd: item.sentenceEnd,
+            }));
+            continue;
+        }
         _replaceRangeWithSnip(
             p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
             original, item.translatedText, item.showingOriginal);

@@ -138,6 +138,22 @@ test('snipHash: different text yields a different hash', () => {
         env.window._snipHash('Ela disse que sim.'), env.window._snipHash('Ele disse que nao.'));
 });
 
+// Iter 6 (D-A): mirrors TranslationManager.IsSnippetTranslationTooLong so restoreSnippets can purge
+// a row a small model poisoned before this guard existed, without an async digest/RPC round trip.
+test('isSnippetTranslationTooLong: flags a response far longer than the original excerpt', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(
+        env.window._isSnippetTranslationTooLong('Ela disse que sim.', 'x'.repeat(200)), true);
+});
+
+test('isSnippetTranslationTooLong: a plausible translation is not flagged', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(
+        env.window._isSnippetTranslationTooLong('Ela disse que sim.', 'She said yes.'), false);
+});
+
 test('blob geometry: a single line yields one rounded band', () => {
     const env = loadSnippets();
 
@@ -595,6 +611,58 @@ test('restore: a snippet whose hash diverges is dropped and the paragraph is unt
     assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
     assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 1);
     assert.strictEqual(paragraphs[0].textContent, 'Ela disse que sim.');
+});
+
+// Iter 6 (D-A): a row poisoned before the length guard existed (or by a stale, pre-hardening cache
+// entry) must be purged the first time the book reopens, not rendered as a "duplicated" paragraph.
+test('restore: a translation implausibly longer than the original is dropped and its dead row is purged via snip-remove', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    const poisoned = 'Ela disse que sim. ' + 'x'.repeat(200);
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: poisoned, showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 1);
+    assert.strictEqual(sent.length, 1);
+    assert.ok(sent[0].startsWith('snip-remove|'));
+    assert.deepStrictEqual(JSON.parse(sent[0].slice('snip-remove|'.length)), {
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+    });
+});
+
+test('restore: a plausible translation is applied and never triggers a purge', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 1);
+    assert.strictEqual(sent.length, 0);
+});
+
+test('restore: a snippet whose hash diverges is discarded silently, without purging anything', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: 'deadbeef', translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(sent.length, 0);
 });
 
 test('restore: a snippet saved showing the original comes back showing the original', () => {
