@@ -534,3 +534,133 @@ text and chip labels into the prompt` (1 commit atomico — JS + C# + testes jun
 dos fixes anteriores desta phase: as duas camadas sao partes complementares do mesmo defeito
 reportado e um commit intermediario deixaria a poluicao de contexto sem o endurecimento do prompt
 que a torna inofensiva, ou o cache salgado sem a fonte da poluicao corrigida).
+
+## Iter 6 (fix round pos-loop, autorizado pelo usuario — 3o feedback com screenshots do app real)
+
+Loop ja tinha convergido (`d947dad`, round 3 iter 1 APPROVED_WITH_WARNINGS) quando o usuario testou o
+app real de novo e reportou DOIS defeitos novos com screenshots: **D-A** — o modelo devolvia o
+paragrafo inteiro mesmo com o prompt endurecido do iter 5, E registros `SnippetTranslations`
+envenenados de sessoes anteriores continuavam sendo restaurados (o salt do iter 5 so invalidou o
+CACHE de inferencia, nao a tabela de persistencia); **D-B** — nenhum snip mostrava o vidro no app
+real (so no harness Chrome), porque `SetupSnippetLayerAsync` media os blobs ANTES do
+`Task.Delay(300)` + `GoToPageAsync`/`RestoreScrollPositionAsync` + carregamento assincrono das
+fontes, cujo reflow subsequente deixava as coordenadas do clip-path mortas; agravado por paragrafo
+fragmentado entre colunas do `_pager` (paginacao via CSS columns) gerando bandas absurdas.
+
+Correcao prescrita em 4 partes, entregue em **2 commits atomicos por causa-raiz** (D-A = partes 1+2;
+D-B = partes 3+4 — os arquivos tocados por cada causa sao quase inteiramente disjuntos, exceto
+`snippets.js`, dividido por hunk entre os dois commits e verificado com `diff` contra o baseline e
+contra o estado final antes de cada commit).
+
+### D-A — guarda de proporcao + retry sem contexto + purga no restore
+
+**Parte 1 (C#, `TranslationManager.TranslateSnippetAsync`):**
+- `IsSnippetTranslationTooLong(text, translated)`: invalido se
+  `translated.Length > text.Length * 3 + 120` (EN->PT raramente excede ~1.6x).
+- Fluxo: cache hit invalido -> tratado como miss (sobrescreve ao salvar); inferencia 1 (prompt
+  trecho+contexto, existente) -> invalida -> inferencia 2 SEM o paragrafo de contexto (overload novo
+  `IPromptUtility.BuildSnippetTranslationMessages(snippet, sourceLanguage, targetLanguage, bookTitle,
+  chapterTitle)`, 5 parametros, sem `paragraph`) -> ainda invalida -> `InvalidOperationException`
+  propagada (fail fast, csharp.md S1) SEM persistir nada — nem `SaveSnippetAsync` nem
+  `SaveTranslationAsync` sao chamados nesse caminho.
+- `PromptUtility.BuildSnippetSystemMessage` ganhou `paragraph` nullable: o bloco de contexto so entra
+  quando `paragraph` nao e nulo/vazio: o overload novo delega com `paragraph: null`.
+- 3 testes novos em `SnippetTranslationManagerTests.cs` (cache podre sobrescrito; retry sem contexto
+  acionado com `Received(1)` nas DUAS assinaturas do `BuildSnippetTranslationMessages`; falha total
+  com `DidNotReceive()` em ambos os Save) + 4 em `PromptUtilityTests.cs` (overload sem paragrafo: sem
+  bloco de contexto, ainda exige EXCLUSIVELY, inclui book title, contem o trecho).
+
+**Parte 2 (JS, `restoreSnippets`):**
+- `_isSnippetTranslationTooLong(originalText, translatedText)` — mesma formula, espelhando o C# (o
+  JS nao tem digest assincrono para reusar o `ComputeSnippetHash`, entao a formula e reimplementada,
+  nao chamada via RPC).
+- `restoreSnippets`: apos a guarda de hash existente, roda a guarda de comprimento; reprovou -> NAO
+  aplica o snip E `sendRawMessage('snip-remove|' + JSON com {chapterHRef, paragraphIndex,
+  sentenceStart, sentenceEnd})` — reusa o handler `snip-remove` que ja existe no C#
+  (`ReaderPage.HandleSnipRemoveAsync` -> `RemoveSnippetAsync`), entao a primeira reabertura do livro
+  apos este fix limpa sozinha o estrago de sessoes anteriores. Hash divergente continua descarte
+  silencioso SEM remove (comportamento intocado — pode ser paragrafo re-paginado).
+- 5 testes novos em `snippets.test.js`: 2 unitarios de `_isSnippetTranslationTooLong`; poisoned ->
+  nao aplica + `snip-remove|` com a ancora exata (`deepStrictEqual` no JSON); legitimo -> aplica E
+  NAO manda `snip-remove`; hash divergente -> descarta SEM `snip-remove`.
+
+### D-B — re-medicao confiavel + blob ciente de colunas
+
+**Parte 3 (JS `mountSnippetLayer`/`unmountSnippetLayer` + C# `ReaderPage`):**
+- `document.fonts.ready.then(_renderAllBlobs)` no mount, guardado com `if (document.fonts)` (fonte
+  do livro + Inter carregam async; qualquer blob medido antes fica com coordenadas mortas).
+- `ResizeObserver` reusado (nao recriado por mount) guardado com
+  `typeof ResizeObserver !== 'undefined'`, observando cada paragrafo `[data-pi]` a cada mount;
+  `disconnect()` + reobserva no INICIO de todo `mountSnippetLayer()` (nao so no primeiro) para nunca
+  acumular observacoes de paragrafos de um capitulo anterior ja destacados do DOM; tambem
+  desconectado em `unmountSnippetLayer()`. Callback coalescido via `_scheduleBlobRefresh`
+  (`requestAnimationFrame`, fallback `setTimeout` quando ausente — e o caso do harness).
+- `window.refreshSnippetBlobs = _renderAllBlobs` exposto; `ReaderPage` chama
+  `refreshSnippetBlobs()` apos `GoToPageAsync`/`GoToLastPageAsync`/`NextPageAsync`/`PrevPageAsync`/
+  `RestoreScrollPositionAsync` — cinto extra barato (sweep sem nada para fazer e um no-op).
+  `translation.js`/`paginated.js`/`scroll.js` permanecem INTOCADOS (diff vazio vs BASELINE).
+- `test/js/harness.js` ganhou stubs OPT-IN (`{ resizeObserver: true }`, `{ fonts: { ready } }`),
+  ausentes por padrao — a maioria dos testes ja existentes continua exercitando de graca o caminho
+  "host sem suporte" (guardas `if (document.fonts)` / `typeof ResizeObserver !== 'undefined'`).
+- 9 testes novos: 4 em `harness.test.js` (default ausente dos dois; stub de `ResizeObserver` grava
+  observe/unobserve/disconnect/callback; `document.fonts.ready` e um thenable); 5 em
+  `snippets.test.js` (`refreshSnippetBlobs === _renderAllBlobs`; mount observa cada paragrafo;
+  unmount desconecta; callback do observer re-mede via o timer de fallback — asserta o DELTA de
+  timers pendentes, nao um total absoluto, porque o proprio `_sendReady` do `bridge.js` ja mantem 1
+  timer pendente neste harness sem host; `document.fonts.ready` resolvendo re-mede um blob, teste
+  `async` que se apoia na ordem FIFO de `.then()` no mesmo `Promise`); +1 prova que mount nao lanca
+  sem nenhum dos dois suportado. `HybridWebViewContractTests.cs` ganhou
+  `SnippetsJs_ExposesRefreshSnippetBlobs`.
+
+**Parte 4 (JS `_blobFromEls`, blob ciente de colunas):**
+- Causa raiz real: `_blobFromEls` ordenava `points` globalmente por `y1,x1` ANTES de agrupar em
+  linhas — isso escondia o "salto para tras" que sinaliza wrap de coluna (a cauda da coluna N, em
+  y grande, e a cabeca da coluna N+1, em y pequeno, ficavam intercaladas pela ordenacao em vez de
+  preservar a ordem de leitura natural que `getClientRects()` ja devolve). Fix: **removida a
+  ordenacao**; `points`/`lines` agora processados na ordem NATURAL de chegada.
+- `_columnGroupsOf(lines)` nova: particiona as linhas (ja agrupadas por proximidade de `cy`, como
+  antes) em grupos de coluna — novo grupo quando a linha N+1 tem `top` MENOR que o `top` da linha N
+  (1 comentario WHY, criterio de 1 linha).
+- `_blobFromEls` gera bandas POR GRUPO (variavel local `bands`, preservando o literal
+  `_blobPath(bands, 10)` exigido pelo DoD 4) e concatena os `d` de cada grupo com espaco
+  (`M...Z M...Z`, subpaths validos em `path()`/SVG).
+- Goldens single-column (`_blobPath` chamado direto com bands literais) INTOCADOS — nao passam por
+  `_blobFromEls`, byte-identicos por construcao; confirmado com `git diff` vazio no bloco
+  `blob geometry:` dos testes existentes.
+- 2 testes novos: 2 colunas simuladas (cauda em y=560-590, cabeca em y=16-46, x bem distantes) ->
+  exatamente 2 `M` e 2 `Z` no `d` (nenhuma banda atravessando o vao); 2 linhas na MESMA coluna ainda
+  tracam 1 `M`/1 `Z` (regressao de seguranca — o contorno unico do iter 3 continua funcionando
+  quando NAO ha wrap de coluna).
+
+### Verificacao pos-fix (repetida em cada um dos 2 commits antes de commitar, nao so no HEAD final)
+
+- JS: **175/175 passando** (era 158 antes deste iter — 5 (D-A) + 12 (D-B) = 17 novos), 0 fail, 0
+  skipped. `comm -23` nome a nome (sort + comm) contra a suite de `d947dad`, nos 2 arquivos tocados
+  (`snippets.test.js`, `harness.test.js`): **vazio** nos dois — zero teste perdido, so adicoes.
+  Estado intermediario (so D-A aplicado, D-B revertido para o baseline em memoria): **167/167**
+  passando antes do 1o commit.
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **414 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 416 total** — +8 vs os 406 de `d947dad` (3+4 em
+  `SnippetTranslationManagerTests`/`PromptUtilityTests` do D-A, 1 em `HybridWebViewContractTests` do
+  D-B). `comm -23` nome a nome (public async Task/void) contra `d947dad`: vazio, +8 adicoes.
+  Estado intermediario (so D-A, com `HybridWebViewContractTests.cs` temporariamente resetado ao
+  baseline para nao acusar `SnippetsJs_ExposesRefreshSnippetBlobs` ausente): **413 passed / 2
+  skipped / 0 failed / 415 total**, verificado ANTES do 1o commit.
+- `bash scripts/coverage-gate.sh`: exit 0 nos DOIS commits. Final: `COVERAGE_SCOPE covered=1340
+  valid=1411 pct=94.97 files=26` (piso 90 — `TranslationManager.cs` 257/257=100%,
+  `PromptUtility.cs` 39/40=97.5%, ambos tocados). `COVERAGE_JS covered=1512 valid=1522 pct=99.34
+  files=5` (piso 85). `COVERAGE_GUARD new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes` restrito aos arquivos `.cs` tocados por este iter:
+  exit 0, limpo (as 2 violacoes FINALNEWLINE legadas de `Platforms/Android/*` — W-7 — continuam fora
+  do escopo, nenhum arquivo deste iter aparece no log de erro do `--verify-no-changes` a nivel de
+  solucao).
+- Invariantes: `translation.js`/`paginated.js`/`scroll.js` diff VAZIO vs `BASELINE` (`02a4c6c`);
+  zero `querySelectorAll('...')` com aspas simples em `snippets.js`; `_blobPath(bands, 10)` literal +
+  `OFF=8`/`padX=5`/`padY=1.5` + regex unica de `_splitSentences` + fonte unica de `_snippetRoots`
+  todos re-grepados apos o diff (1x cada).
+- `git status` limpo apos os 2 commits; escopo confere exatamente com os arquivos listados em cada
+  mensagem de commit.
+
+Commits: `044870b` — `fix(snippet-translation): guard snippet translations against implausibly long
+responses and purge poisoned rows on restore (D-A)`; `daf11a7` — `fix(snippet-translation): keep
+glass blobs measured after reflow and trace one contour per pagination column (D-B)`.
