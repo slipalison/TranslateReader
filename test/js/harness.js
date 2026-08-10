@@ -97,6 +97,21 @@ class FakeText extends FakeNode {
     set textContent(value) {
         this.data = String(value);
     }
+
+    // Mirrors Node.splitText: truncates this node's data to `offset` and inserts a NEW text node
+    // holding the rest as the very next sibling, still attached to the same parent. snippets.js uses
+    // this to carve period spans out of a paragraph's text nodes around inline markup without ever
+    // serializing and reparsing it (csharp.md §4: book HTML is untrusted input).
+    splitText(offset) {
+        const tail = new FakeText(this.ownerDocument, this.data.slice(offset));
+        this.data = this.data.slice(0, offset);
+        if (this.parentNode) {
+            const siblings = this.parentNode.childNodes;
+            siblings.splice(siblings.indexOf(this) + 1, 0, tail);
+            tail.parentNode = this.parentNode;
+        }
+        return tail;
+    }
 }
 
 class FakeElement extends FakeNode {

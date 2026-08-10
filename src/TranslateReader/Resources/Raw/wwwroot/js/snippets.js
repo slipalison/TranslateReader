@@ -1,9 +1,27 @@
-// Splits a paragraph's text into sentences on the same boundary the v0.2.0 mockups use: a
-// sentence-ending mark (optionally followed by a closing quote/paren) then whitespace then a
-// capital letter or an opening quote/paren. This is the ONLY place the regex lives — every other
-// function that needs sentence boundaries calls this one.
+// The sentence-boundary pattern lives here ONCE: a sentence-ending mark (optionally followed by a
+// closing quote/paren) then whitespace then a capital letter or an opening quote/paren, exactly the
+// boundary the v0.2.0 mockups use. Both _splitSentences (trimmed pieces) and _sentenceBoundaryMatches
+// (raw offsets, for _wrapMarkupParagraph) read this SAME RegExp object instead of writing the
+// pattern a second time.
+var _SENTENCE_BOUNDARY_RE = /(?<=[.!?…]["”’»)\]]?)\s+(?=[A-ZÀ-Þ"“«'(])/;
+
 function _splitSentences(text) {
-    return String(text).split(/(?<=[.!?…]["”’»)\]]?)\s+(?=[A-ZÀ-Þ"“«'(])/).map(s => s.trim()).filter(Boolean);
+    return String(text).split(_SENTENCE_BOUNDARY_RE).map(s => s.trim()).filter(Boolean);
+}
+
+// Sibling of _splitSentences: same pattern (via .source, never a second literal), but returns the
+// [start, end) offset of every boundary's own whitespace in `text` instead of the trimmed pieces
+// around it — what _wrapMarkupParagraph needs to map a period onto specific DOM nodes.
+function _sentenceBoundaryMatches(text) {
+    var re = new RegExp(_SENTENCE_BOUNDARY_RE.source, 'g');
+    var matches = [];
+    var m = re.exec(text);
+    while (m !== null) {
+        matches.push({ start: m.index, end: m.index + m[0].length });
+        if (re.lastIndex === m.index) re.lastIndex++;
+        m = re.exec(text);
+    }
+    return matches;
 }
 
 // Turns a selection's sentence-index set into contiguous [a, b] runs, so a drag over sentences
@@ -253,6 +271,14 @@ var _hintDismissed = false;
 // declarative sweep: it decides from DOM state alone what should exist, creates what is missing,
 // re-measures what remains, and removes what fell off the desired list.
 var _blobs = new Map();
+
+// Original DOM nodes of a range, stashed by setSnippetLoading right before it first replaces them
+// with a plain-text loading placeholder, keyed by the same 'chapterHRef:pi:a:b' string a snip later
+// carries in dataset.snip. Consumed (and deleted) by _spliceSpanBackToPeriods so a snip removed by
+// the user, or a loading placeholder undone after a failed/superseded translation, gets its markup
+// back verbatim instead of a freshly re-split, plain-text approximation. Cleared in full on unmount —
+// the same bound as _blobs: nothing here outlives the chapter it was captured from.
+var _snipOriginalNodes = new Map();
 
 // One glass layer per snippet root: a direct, absolutely-positioned FIRST child of the root itself
 // (never the paragraph — a paragraph fragmented across the pager's CSS columns still fragments its
@@ -805,36 +831,112 @@ function _onResize() {
     }
 }
 
-// A paragraph with element children (an inline `<em>`/`<a>`/`<img>` from the book, untrusted HTML
-// per csharp.md §4) keeps that markup intact as ONE period by moving its childNodes rather than
-// serializing and reparsing them; a text-only paragraph splits into one span per sentence.
+// A text-only paragraph splits on real sentence boundaries; a paragraph with element children (an
+// inline `<em>`/`<a>`/`<img>` from the book, untrusted HTML per csharp.md §4) splits the SAME way
+// but keeps every element intact — see _wrapMarkupParagraph.
 function _wrapParagraph(el, pi) {
     if (el.dataset.original !== undefined) return;
     if (el.dataset.pi !== undefined) return;
     var hasElementChild = Array.from(el.childNodes).some(function (node) { return node.tagName; });
     el.dataset.pi = String(pi);
-    if (!hasElementChild) {
-        var sentences = _splitSentences(el.textContent);
-        el.textContent = '';
-        sentences.forEach(function (sentence, index) {
-            if (index > 0) el.appendChild(document.createTextNode(' '));
-            var span = document.createElement('span');
-            span.className = 'tr-sent';
-            span.dataset.si = String(index);
-            span.textContent = sentence;
-            span.addEventListener('pointerdown', _onSentPointerDown);
-            el.appendChild(span);
-        });
+    if (hasElementChild) {
+        _wrapMarkupParagraph(el);
     } else {
-        var wrap = document.createElement('span');
-        wrap.className = 'tr-sent';
-        wrap.dataset.si = '0';
-        wrap.addEventListener('pointerdown', _onSentPointerDown);
-        for (var child of Array.from(el.childNodes)) {
-            wrap.appendChild(child);
-        }
-        el.appendChild(wrap);
+        _wrapPlainParagraph(el);
     }
+}
+
+function _wrapPlainParagraph(el) {
+    var sentences = _splitSentences(el.textContent);
+    el.textContent = '';
+    sentences.forEach(function (sentence, index) {
+        if (index > 0) el.appendChild(document.createTextNode(' '));
+        el.appendChild(_periodSpan(sentence, index));
+    });
+}
+
+function _periodSpan(text, index) {
+    var span = _emptyPeriodSpan(index);
+    span.textContent = text;
+    return span;
+}
+
+function _emptyPeriodSpan(index) {
+    var span = document.createElement('span');
+    span.className = 'tr-sent';
+    span.dataset.si = String(index);
+    span.addEventListener('pointerdown', _onSentPointerDown);
+    return span;
+}
+
+// Splits a paragraph that has element children on the SAME sentence boundaries _splitSentences
+// finds (via _sentenceBoundaryMatches, the shared regex — never a second literal), located as
+// offsets in the flattened text rather than re-parsed from the trimmed strings _splitSentences
+// returns. An inline element is atomic: any boundary whose matched whitespace sits inside one is
+// dropped before the walk even starts, so the period that would have ended there simply keeps going
+// until the next boundary that actually lands in free text — the element itself is never cut, and
+// no node is ever serialized/reparsed (csharp.md §4: book HTML is untrusted input).
+function _wrapMarkupParagraph(el) {
+    var elementRanges = _topLevelElementRanges(el);
+    var matches = _sentenceBoundaryMatches(el.textContent).filter(function (m) {
+        return !elementRanges.some(function (r) { return m.start >= r.start && m.start < r.end; });
+    });
+    var state = { ordered: [], si: 0, span: _emptyPeriodSpan(0), matchIdx: 0, pos: 0 };
+    for (var node of Array.from(el.childNodes)) {
+        if (node.tagName) {
+            state.span.appendChild(node);
+            state.pos += node.textContent.length;
+        } else {
+            _consumeTextNode(node, state, matches);
+        }
+    }
+    state.ordered.push(state.span);
+    while (el.firstChild) el.removeChild(el.firstChild);
+    for (var item of state.ordered) el.appendChild(item);
+}
+
+// Flattened-text [start, end) range of every node that is a DIRECT child of `el` and an element —
+// the only nodes _wrapMarkupParagraph ever moves whole, so the only ranges a boundary must avoid.
+function _topLevelElementRanges(el) {
+    var ranges = [];
+    var pos = 0;
+    for (var node of Array.from(el.childNodes)) {
+        var len = node.textContent.length;
+        if (node.tagName) ranges.push({ start: pos, end: pos + len });
+        pos += len;
+    }
+    return ranges;
+}
+
+// Walks one top-level text node against every remaining boundary that starts before it ends,
+// cutting it with the native Text.splitText at each one: the piece before a match closes the
+// CURRENT period span, the matched whitespace itself is left in `state.ordered` as its own loose
+// node (never inside a span — _unwrapParagraph already restores a plain child untouched), and a
+// fresh span opens for the period that follows. Whatever is left after the last boundary stays in
+// the still-open span, since a later sibling node may continue the same period.
+function _consumeTextNode(node, state, matches) {
+    var nodeStart = state.pos;
+    var nodeEnd = nodeStart + node.data.length;
+    var remaining = node;
+    var remainingStart = nodeStart;
+    while (state.matchIdx < matches.length && matches[state.matchIdx].start < nodeEnd) {
+        var m = matches[state.matchIdx];
+        if (m.start > remainingStart) {
+            var beforeSep = remaining.splitText(m.start - remainingStart);
+            state.span.appendChild(remaining);
+            remaining = beforeSep;
+        }
+        state.ordered.push(state.span);
+        state.si++;
+        state.span = _emptyPeriodSpan(state.si);
+        var afterSep = remaining.splitText(m.end - m.start);
+        state.ordered.push(remaining);
+        remaining = afterSep;
+        remainingStart = m.end;
+        state.matchIdx++;
+    }
+    state.span.appendChild(remaining);
+    state.pos = nodeEnd;
 }
 
 // The inverse of _wrapParagraph: a plain period span gives back its own text, a snip gives back
@@ -905,6 +1007,7 @@ window.unmountSnippetLayer = function () {
         _removeLayerFor(rootInfo.root);
     }
     _blobs.clear();
+    _snipOriginalNodes.clear();
     for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
         _unwrapParagraph(el);
     }
@@ -1037,34 +1140,42 @@ function _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOrig
 }
 
 // Shared by _restoreSnipToPeriods (undo a translated snip) and clearSnippetLoading (undo a loading
-// placeholder that failed or was superseded): splits originalText back into periods and splices
-// them into span's own position, indexed from startIndex so later selections stay consistent with
-// the rest of the paragraph.
-function _spliceSpanBackToPeriods(span, originalText, startIndex) {
+// placeholder that failed or was superseded): splices the range back into individual periods at
+// span's own position. When the exact original nodes are still stashed under `key` (captured by
+// setSnippetLoading before it first replaced them — see _snipOriginalNodes), those nodes are
+// spliced back verbatim so inline markup like <em> survives; otherwise (a snip restored straight
+// from a persisted session, which only ever carries plain text server-side) the text is re-split
+// into fresh plain-text spans, losing any markup until the chapter is re-injected.
+function _spliceSpanBackToPeriods(span, originalText, startIndex, key) {
     var parent = span.parentNode;
     var nodes = Array.from(parent.childNodes);
     var idx = nodes.indexOf(span);
     if (idx === -1) return;
-    var sentences = _splitSentences(originalText);
-    var replacement = [];
-    sentences.forEach(function (sentence, offset) {
-        if (offset > 0) replacement.push(document.createTextNode(' '));
-        var s = document.createElement('span');
-        s.className = 'tr-sent';
-        s.dataset.si = String(startIndex + offset);
-        s.textContent = sentence;
-        s.addEventListener('pointerdown', _onSentPointerDown);
-        replacement.push(s);
-    });
+    var stashed = key ? _snipOriginalNodes.get(key) : null;
+    var replacement = stashed || _plainPeriodSpans(originalText, startIndex);
+    if (key) _snipOriginalNodes.delete(key);
     var ordered = nodes.slice(0, idx).concat(replacement, nodes.slice(idx + 1));
     while (parent.firstChild) parent.removeChild(parent.firstChild);
     for (var item of ordered) parent.appendChild(item);
 }
 
+// Fallback for _spliceSpanBackToPeriods when no original nodes were stashed: re-splits plain text
+// into fresh period spans, indexed from startIndex so later selections stay consistent with the
+// rest of the paragraph.
+function _plainPeriodSpans(originalText, startIndex) {
+    var sentences = _splitSentences(originalText);
+    var replacement = [];
+    sentences.forEach(function (sentence, offset) {
+        if (offset > 0) replacement.push(document.createTextNode(' '));
+        replacement.push(_periodSpan(sentence, startIndex + offset));
+    });
+    return replacement;
+}
+
 // The inverse of _buildSnipSpan: turns a snip back into individual, re-selectable periods,
 // discarding the translation.
 function _restoreSnipToPeriods(span, info) {
-    _spliceSpanBackToPeriods(span, span.dataset.orig, info.a);
+    _spliceSpanBackToPeriods(span, span.dataset.orig, info.a, span.dataset.snip);
 }
 
 // A root with a null chapterHRef is the single paginated pager, which always represents whichever
@@ -1087,10 +1198,11 @@ function _rangeText(p, a, b) {
     return spans.map(function (el) { return el.textContent; }).join(' ');
 }
 
-// Splices out every node whose `data-si` falls in [a, b] — periods AND a loading placeholder
-// alike, since both carry the attribute — and puts `replacement` in their place, keeping the
-// separators before and after the range untouched.
-function _spliceRange(p, a, b, replacement) {
+// Finds the [firstIdx, lastIdx] span of p.childNodes covered by data-si in [a, b] — shared by
+// _spliceRange (replace) and _captureRangeNodes (stash before replacing), so the two never disagree
+// on what counts as "the range". Periods AND a loading placeholder both qualify, since both carry
+// the attribute.
+function _rangeNodeIndices(p, a, b) {
     var nodes = Array.from(p.childNodes);
     var firstIdx = -1;
     var lastIdx = -1;
@@ -1103,11 +1215,25 @@ function _spliceRange(p, a, b, replacement) {
             }
         }
     });
-    if (firstIdx === -1) return false;
-    var ordered = nodes.slice(0, firstIdx).concat(replacement, nodes.slice(lastIdx + 1));
+    return firstIdx === -1 ? null : { nodes: nodes, firstIdx: firstIdx, lastIdx: lastIdx };
+}
+
+// Puts `replacement` where the range used to be, keeping the separators before and after it
+// untouched. Returns false (no-op) when the range does not exist in `p` at all.
+function _spliceRange(p, a, b, replacement) {
+    var range = _rangeNodeIndices(p, a, b);
+    if (!range) return false;
+    var ordered = range.nodes.slice(0, range.firstIdx).concat(replacement, range.nodes.slice(range.lastIdx + 1));
     while (p.firstChild) p.removeChild(p.firstChild);
     for (var item of ordered) p.appendChild(item);
     return true;
+}
+
+// Reads (without removing) the live nodes a range currently occupies, so setSnippetLoading can
+// stash them in _snipOriginalNodes before _spliceRange discards them.
+function _captureRangeNodes(p, a, b) {
+    var range = _rangeNodeIndices(p, a, b);
+    return range ? range.nodes.slice(range.firstIdx, range.lastIdx + 1) : null;
 }
 
 function _replaceRangeWithSnip(p, chapterHRef, pi, a, b, original, translated, showingOriginal) {
@@ -1170,6 +1296,8 @@ window.setSnippetLoading = function (keys) {
         var p = _findParagraph(info.chapterHRef, info.paragraphIndex);
         if (!p) continue;
         _removeOverlappingSnips(p, info.a, info.b);
+        var captured = _captureRangeNodes(p, info.a, info.b);
+        if (captured) _snipOriginalNodes.set(key, captured);
         var original = _rangeText(p, info.a, info.b);
         var span = document.createElement('span');
         span.className = 'tr-loading';
@@ -1201,7 +1329,7 @@ window.clearSnippetLoading = function (keys) {
         if (!p) continue;
         var span = _loadingSpanAt(p, info.a);
         if (!span) continue;
-        _spliceSpanBackToPeriods(span, span.textContent, info.a);
+        _spliceSpanBackToPeriods(span, span.textContent, info.a, key);
     }
     _renderAllBlobs();
 };
@@ -1231,7 +1359,10 @@ function _originalParagraphText(p) {
         } else if (node.dataset && node.dataset.snip !== undefined) {
             parts.push(node.dataset.orig);
         } else if (node.dataset && node.dataset.si !== undefined) {
-            parts.push(node.childNodes[0] ? node.childNodes[0].textContent : '');
+            // The FULL flattened text, not just the first child: a plain period/loading placeholder
+            // has one text child either way, but a period carrying inline markup (_wrapMarkupParagraph)
+            // can hold several nodes, and childNodes[0] alone silently truncated it at the first one.
+            parts.push(node.textContent);
         }
     }
     return parts.join('');

@@ -279,3 +279,44 @@ test('getComputedStyle reports the inline position, defaulting to static when un
 
     assert.strictEqual(env.window.getComputedStyle(element).position, 'relative');
 });
+
+// Iter 8: snippets.js splits a paragraph's text nodes around inline markup (<em>/<a>/<img>) with
+// the native Text.splitText instead of serializing/reparsing the paragraph's HTML.
+
+test('splitText truncates the node and inserts the tail as the very next sibling', () => {
+    const env = withBody('<p>hello world</p>');
+    const paragraph = env.document.body.querySelectorAll('p')[0];
+    const textNode = paragraph.childNodes[0];
+
+    const tail = textNode.splitText(5);
+
+    assert.strictEqual(textNode.data, 'hello');
+    assert.strictEqual(tail.data, ' world');
+    assert.deepStrictEqual(paragraph.childNodes, [textNode, tail]);
+    assert.strictEqual(tail.parentNode, paragraph);
+});
+
+test('splitText on a detached text node still truncates it, but has no sibling to insert', () => {
+    const env = createEnv();
+    const textNode = env.document.createTextNode('hello world');
+
+    const tail = textNode.splitText(5);
+
+    assert.strictEqual(textNode.data, 'hello');
+    assert.strictEqual(tail.data, ' world');
+    assert.strictEqual(tail.parentNode, null);
+});
+
+test('splitText can be called twice on the tail it produced, carving three pieces out of one node', () => {
+    const env = withBody('<p>ABCDEF</p>');
+    const paragraph = env.document.body.querySelectorAll('p')[0];
+    const first = paragraph.childNodes[0];
+
+    const second = first.splitText(2);
+    const third = second.splitText(2);
+
+    assert.strictEqual(first.data, 'AB');
+    assert.strictEqual(second.data, 'CD');
+    assert.strictEqual(third.data, 'EF');
+    assert.deepStrictEqual(paragraph.childNodes, [first, second, third]);
+});

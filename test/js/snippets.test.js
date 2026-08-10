@@ -493,6 +493,146 @@ test('mount: a paragraph with element children becomes a single period preservin
         'the original <em> node should be moved in, not recreated');
 });
 
+// Iter 8 (derivation D delivered): a paragraph with inline markup no longer collapses into a single
+// period whenever a REAL sentence boundary exists outside the markup — the mockups' `onlySentence`
+// state stays reachable (see the test above) only when the paragraph genuinely has one sentence.
+
+function pagerWithMarkup(env, html) {
+    const pager = env.document.createElement('div');
+    pager.id = '_pager';
+    env.document.body.appendChild(pager);
+    const paragraph = env.document.createElement('p');
+    paragraph.innerHTML = html;
+    pager.appendChild(paragraph);
+    return paragraph;
+}
+
+test('mount: inline markup between two real sentence boundaries stays inside its own period, and the other periods split normally', () => {
+    const env = loadFull();
+    const paragraph = pagerWithMarkup(env, 'A <em>bold</em> claim here. Second sentence follows. Third one ends.');
+    const em = paragraph.querySelectorAll('em')[0];
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans.map((s) => s.dataset.si).join(','), '0,1,2');
+    assert.ok(Array.from(spans[0].childNodes).includes(em), 'the <em> lives inside period 0');
+    assert.strictEqual(spans[0].textContent, 'A bold claim here.');
+    assert.strictEqual(spans[1].textContent, 'Second sentence follows.');
+    assert.strictEqual(spans[2].textContent, 'Third one ends.');
+    assert.strictEqual(
+        paragraph.textContent, 'A bold claim here. Second sentence follows. Third one ends.');
+
+    tap(env, spans[1]);
+
+    assert.strictEqual(spans[0].className, 'tr-sent');
+    assert.strictEqual(spans[1].className, 'tr-sent tr-on');
+    assert.strictEqual(spans[2].className, 'tr-sent', 'selecting period 1 must not select period 2');
+});
+
+test('mount: a sentence boundary that would fall inside an inline element is deferred to after it, never cutting the element', () => {
+    const env = loadFull();
+    const paragraph = pagerWithMarkup(
+        env, 'Intro text <em>ends here. And continues</em> after. Final sentence.');
+    const em = paragraph.querySelectorAll('em')[0];
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 2);
+    assert.ok(
+        Array.from(spans[0].childNodes).includes(em),
+        'the whole <em> stays inside period 0, including the boundary that would have cut through it');
+    assert.strictEqual(spans[0].textContent, 'Intro text ends here. And continues after.');
+    assert.strictEqual(spans[1].textContent, 'Final sentence.');
+});
+
+test('unmount: a paragraph with inline markup between real sentence boundaries restores the exact original DOM structure', () => {
+    const env = loadFull();
+    const paragraph = pagerWithMarkup(
+        env, 'A <em>bold</em> claim here. Second sentence follows. Third one ends.');
+    const originalHtml = paragraph.innerHTML;
+
+    env.window.mountSnippetLayer();
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(paragraph.innerHTML, originalHtml);
+    assert.strictEqual(paragraph.dataset.pi, undefined);
+});
+
+test('_originalParagraphText: a period carrying inline markup contributes its FULL text, not just its first child (W-13)', () => {
+    const env = loadWithLabels();
+    const paragraph = pagerWithMarkup(
+        env, 'A <em>bold</em> claim here. Second sentence follows. Third one ends.');
+    env.window.mountSnippetLayer();
+    env.window.restoreSnippets([{
+        chapterHRef: null, paragraphIndex: 0, sentenceStart: 1, sentenceEnd: 1,
+        originalHash: env.window._snipHash('Second sentence follows.'),
+        translatedText: 'Segunda frase segue.', showingOriginal: false,
+    }]);
+
+    const text = env.window._originalParagraphText(paragraph);
+
+    assert.strictEqual(text, 'A bold claim here. Second sentence follows. Third one ends.');
+});
+
+test('snip: translating a period that carries inline markup works normally, and removing it restores the exact original <em> node', () => {
+    const env = loadWithLabels();
+    const paragraph = pagerWithMarkup(env, 'A <em>bold</em> claim here. Second sentence follows.');
+    env.window.mountSnippetLayer();
+    const em = paragraph.querySelectorAll('em')[0];
+
+    env.window.setSnippetLoading(['null:0:0:0']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: null, paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'A bold claim here, translated.', showingOriginal: false,
+    }]);
+
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    assert.ok(snip, 'the finished snip must exist');
+    assert.strictEqual(snip.childNodes[0].textContent, 'A bold claim here, translated.');
+
+    const closeIcon = snip.querySelector('.tr-snip-chip').querySelectorAll('.ph-x')[0];
+    fire(closeIcon, 'click', { target: closeIcon });
+
+    const restored = paragraph.querySelectorAll('[data-si]')[0];
+    assert.ok(
+        Array.from(restored.childNodes).includes(em),
+        'removing the snip must bring back the ORIGINAL <em> node, not a re-serialized copy');
+    assert.strictEqual(env.window._snipOriginalNodes.size, 0, 'consumed on restore, no leak');
+});
+
+test('clearSnippetLoading: restores the ORIGINAL <em> node (not a re-serialized copy) when a markup period was loading and its translation never arrived', () => {
+    const env = loadWithLabels();
+    const paragraph = pagerWithMarkup(env, 'A <em>bold</em> claim here.');
+    env.window.mountSnippetLayer();
+    const em = paragraph.querySelectorAll('em')[0];
+
+    env.window.setSnippetLoading(['null:0:0:0']);
+    assert.strictEqual(env.window._snipOriginalNodes.size, 1);
+
+    env.window.clearSnippetLoading(['null:0:0:0']);
+
+    const restored = paragraph.querySelectorAll('[data-si]')[0];
+    assert.ok(Array.from(restored.childNodes).includes(em));
+    assert.strictEqual(env.window._snipOriginalNodes.size, 0, 'consumed on restore, no leak');
+});
+
+test('unmount: clears every stashed original-node entry, never leaking a detached subtree across chapters', () => {
+    const env = loadWithLabels();
+    pagerWithMarkup(env, 'A <em>bold</em> claim here.');
+    env.window.mountSnippetLayer();
+    env.window.setSnippetLoading(['null:0:0:0']);
+    assert.strictEqual(env.window._snipOriginalNodes.size, 1);
+
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(env.window._snipOriginalNodes.size, 0);
+});
+
 test('tap: tapping a period shows the selection blob and pill', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
