@@ -216,6 +216,35 @@ test('blob geometry: no bands yields an empty path instead of throwing', () => {
     assert.strictEqual(env.window._blobPath([], 10), '');
 });
 
+// Iter 6 (D-B): CSS multi-column pagination can fragment a paragraph across two columns/pages. The
+// tail of one column and the head of the next sit at similar heights but are far apart horizontally
+// — before this fix the height-only line grouping merged them into one band spanning the gap.
+test('blob geometry: a paragraph fragmented across two columns traces one contour per column, never bridging the gap', () => {
+    const env = loadSnippets();
+    const paragraph = makeParagraph(env, { top: 0, left: 0, right: 600, bottom: 600, width: 600, height: 600 });
+    const tail = makeSpan(env, paragraph, { top: 560, left: 8, right: 108, bottom: 590, width: 100, height: 30 });
+    const head = makeSpan(env, paragraph, { top: 16, left: 408, right: 488, bottom: 46, width: 80, height: 30 });
+
+    const result = env.window._blobFromEls([tail, head]);
+
+    const tokens = result.d.split(' ');
+    assert.strictEqual(tokens.filter((token) => token === 'M').length, 2);
+    assert.strictEqual(tokens.filter((token) => token === 'Z').length, 2);
+});
+
+test('blob geometry: two lines in the same column still trace a single contour', () => {
+    const env = loadSnippets();
+    const paragraph = makeParagraph(env, { top: 0, left: 0, right: 200, bottom: 100, width: 200, height: 100 });
+    const first = makeSpan(env, paragraph, { top: 8, left: 8, right: 108, bottom: 38, width: 100, height: 30 });
+    const second = makeSpan(env, paragraph, { top: 42, left: 8, right: 88, bottom: 72, width: 80, height: 30 });
+
+    const result = env.window._blobFromEls([first, second]);
+
+    const tokens = result.d.split(' ');
+    assert.strictEqual(tokens.filter((token) => token === 'M').length, 1);
+    assert.strictEqual(tokens.filter((token) => token === 'Z').length, 1);
+});
+
 test('root: paginated mode resolves the pager as the single root', () => {
     const env = loadSnippets();
     const pager = env.document.createElement('div');
@@ -1040,4 +1069,81 @@ test('resize: rebuilds the pill when a selection is active, so it can re-fit a n
     const after = env.document.querySelectorAll('.tr-pill');
     assert.strictEqual(after.length, 1);
     assert.notStrictEqual(after[0], before, 'resize must rebuild the pill element, not reuse the old one');
+});
+
+// Iter 6 (D-B): SetupSnippetLayerAsync measures blobs right after mount, before the async book/Inter
+// fonts and the pagination reflow that follows settle - these three triggers keep every blob's
+// geometry honest afterwards, without touching the frozen translation/paginated/scroll.js files.
+
+test('refreshSnippetBlobs: exposes _renderAllBlobs for the C# side to call after page navigation', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(env.window.refreshSnippetBlobs, env.window._renderAllBlobs);
+});
+
+test('mount: observes each wrapped paragraph with a ResizeObserver when the host supports it', () => {
+    const env = loadFull({ resizeObserver: true });
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+
+    const observer = env.resizeObserverInstances[0];
+    assert.ok(observer, 'a ResizeObserver instance should have been created');
+    assert.ok(observer.targets.includes(paragraphs[0]));
+});
+
+test('unmount: disconnects the ResizeObserver', () => {
+    const env = loadFull({ resizeObserver: true });
+    mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    const observer = env.resizeObserverInstances[0];
+
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(observer.disconnected, true);
+});
+
+test('resize observer: a size change on a wrapped paragraph re-measures its blob through the fallback timer (no rAF in this harness)', () => {
+    const env = loadFull({ resizeObserver: true });
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+    spans[0].rect = { top: 0, left: 0, right: 40, bottom: 20, width: 40, height: 20 };
+    env.window._renderAllBlobs();
+    const before = env.window._blobs.get('sel:0:0').mask.style.clipPath;
+    const observer = env.resizeObserverInstances[0];
+    // bridge.js's own "ready" retry already keeps one timer pending in this harness (no host ever
+    // accepts the message here), so this asserts the DELTA the resize callback adds, not an
+    // absolute queue length.
+    const pendingBefore = env.timers.length;
+
+    spans[0].rect = { top: 0, left: 0, right: 300, bottom: 20, width: 300, height: 20 };
+    observer.callback();
+
+    assert.strictEqual(env.timers.length, pendingBefore + 1, 'exactly one coalesced refresh is scheduled');
+    env.runTimers();
+    const after = env.window._blobs.get('sel:0:0').mask.style.clipPath;
+    assert.notStrictEqual(after, before);
+});
+
+test('mount: re-measures blobs once the async book/Inter fonts finish loading', async () => {
+    let resolveReady;
+    const ready = new Promise((resolve) => { resolveReady = resolve; });
+    const env = loadFull({ fonts: { ready } });
+    const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+    const spans = paragraphs[0].querySelectorAll('[data-si]');
+    spans[0].rect = { top: 0, left: 0, right: 40, bottom: 20, width: 40, height: 20 };
+    env.window._renderAllBlobs();
+    const before = env.window._blobs.get('sel:0:0').mask.style.clipPath;
+
+    spans[0].rect = { top: 0, left: 0, right: 300, bottom: 20, width: 300, height: 20 };
+    resolveReady();
+    await ready;
+
+    const after = env.window._blobs.get('sel:0:0').mask.style.clipPath;
+    assert.notStrictEqual(after, before);
+});
+
+test('mount: does not throw when neither ResizeObserver nor document.fonts is supported', () => {
+    const env = loadFull();
+
+    assert.doesNotThrow(() => mountWithParagraphs(env, ['Ela chegou. Ele saiu.']));
 });

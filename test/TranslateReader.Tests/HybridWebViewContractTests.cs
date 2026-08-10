@@ -311,4 +311,14 @@ public class HybridWebViewContractTests
 
         Assert.Contains("window.clearSnippetLoading", js);
     }
+
+    // Iter 6 fix (D-B): the C# side calls this after every page navigation/scroll-position restore
+    // as a cheap belt-and-suspenders re-measure, alongside the fonts.ready/ResizeObserver triggers.
+    [Fact]
+    public void SnippetsJs_ExposesRefreshSnippetBlobs()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.refreshSnippetBlobs", js);
+    }
 }

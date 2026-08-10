@@ -626,6 +626,7 @@ public partial class ReaderPage : ContentPage
         await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync($"goToPage({page})", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
@@ -635,6 +636,7 @@ public partial class ReaderPage : ContentPage
         await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("goToLastPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
@@ -644,6 +646,7 @@ public partial class ReaderPage : ContentPage
         await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("nextPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
@@ -653,9 +656,17 @@ public partial class ReaderPage : ContentPage
         await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("prevPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
+
+    // Cheap belt-and-suspenders re-measure after any event that can refragment the pager's CSS
+    // columns or scroll the chapter into a new position: the JS-side fonts.ready/ResizeObserver
+    // triggers already cover most reflows, but a page/chapter navigation is driven entirely from
+    // here, so this is the one call site guaranteed to run after every one of them.
+    private Task RefreshSnippetBlobsAsync() =>
+        ContentWebView.EvaluateJavaScriptAsync("refreshSnippetBlobs()");
 
     private void ApplyPageInfo(PageInfo? info)
     {
@@ -710,6 +721,7 @@ public partial class ReaderPage : ContentPage
                 $"scrollToChapter({JsStr(savedHRef)}, {savedPos})");
         }
         _pageModel.SavedScrollPosition = 0;
+        await RefreshSnippetBlobsAsync();
     }
 
     private async Task SafeInjectHtmlAsync(string functionName, string html)

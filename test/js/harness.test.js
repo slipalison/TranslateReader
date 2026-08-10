@@ -209,3 +209,47 @@ test('querySelectorAll matches an SVG element by class even though its className
     assert.strictEqual(found.length, 1);
     assert.strictEqual(found[0], svg);
 });
+
+// Iter 6 (D-B): snippets.js re-measures its glass blobs on an async font swap and on element resize,
+// both of which are absent from Node/this harness by default. These two opt-in stubs let dedicated
+// tests prove the SUPPORTED path without disturbing every other test, which keeps exercising the
+// "unsupported host" guard for free by never setting either option.
+
+test('createEnv leaves ResizeObserver undefined by default', () => {
+    const env = createEnv();
+
+    assert.strictEqual(env.window.ResizeObserver, undefined);
+    assert.deepStrictEqual(env.resizeObserverInstances, []);
+});
+
+test('createEnv with resizeObserver:true exposes a stub that records observe/unobserve/disconnect', () => {
+    const env = createEnv({ resizeObserver: true });
+    const target = env.document.createElement('p');
+    let calls = 0;
+    const observer = new env.window.ResizeObserver(() => { calls += 1; });
+
+    observer.observe(target);
+    observer.observe(target);
+    assert.deepStrictEqual(observer.targets, [target]);
+    assert.strictEqual(env.resizeObserverInstances[0], observer);
+
+    observer.callback();
+    assert.strictEqual(calls, 1);
+
+    observer.disconnect();
+    assert.deepStrictEqual(observer.targets, []);
+    assert.strictEqual(observer.disconnected, true);
+});
+
+test('createEnv leaves document.fonts undefined by default', () => {
+    const env = createEnv();
+
+    assert.strictEqual(env.document.fonts, undefined);
+});
+
+test('createEnv with fonts exposes a document.fonts.ready thenable', async () => {
+    const env = createEnv({ fonts: {} });
+
+    assert.ok(env.document.fonts);
+    await assert.doesNotReject(env.document.fonts.ready);
+});

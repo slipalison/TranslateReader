@@ -512,6 +512,39 @@ function createEnv(options = {}) {
     window.scrollTo = (x, y) => scrollCalls.push({ x, y });
     window.addEventListener = (type, handler) => addListener(listeners, type, handler);
 
+    // Absent by default, same as a real Node process: snippets.js guards every use with
+    // `typeof ResizeObserver !== 'undefined'`, so most tests exercise that "unsupported host" path
+    // for free. A test proving the SUPPORTED path opts in via `{ resizeObserver: true }`.
+    const resizeObserverInstances = [];
+    if (options.resizeObserver) {
+        window.ResizeObserver = class {
+            constructor(callback) {
+                this.callback = callback;
+                this.targets = [];
+                this.disconnected = false;
+                resizeObserverInstances.push(this);
+            }
+            observe(target) {
+                if (!this.targets.includes(target)) this.targets.push(target);
+            }
+            unobserve(target) {
+                const index = this.targets.indexOf(target);
+                if (index >= 0) this.targets.splice(index, 1);
+            }
+            disconnect() {
+                this.targets = [];
+                this.disconnected = true;
+            }
+        };
+    }
+
+    // Also absent by default: snippets.js guards every use with `if (document.fonts)`. A test
+    // proving the SUPPORTED path opts in via `{ fonts: { ready: <a promise> } }`; omitting `ready`
+    // defaults to an already-settled promise.
+    if (options.fonts) {
+        document.fonts = { ready: options.fonts.ready ?? Promise.resolve() };
+    }
+
     const env = {
         window,
         document,
@@ -519,6 +552,7 @@ function createEnv(options = {}) {
         timers,
         scrollCalls,
         listeners,
+        resizeObserverInstances,
 
         /** Compiles and runs a production script in this environment's context. */
         load(name) {

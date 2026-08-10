@@ -107,9 +107,35 @@ function _blobPath(bands, r) {
     return d + ' Z';
 }
 
+// CSS multi-column pagination can fragment a single paragraph across two columns/pages: the tail of
+// column N and the head of column N+1 sit far apart horizontally but can land at similar or even
+// overlapping heights, which used to make the height-only line grouping below merge rows from BOTH
+// columns into one band spanning the visual gap between them. Lines are read in the order they
+// arrived (see _blobFromEls: never globally sorted), so a column wrap is the one deterministic
+// signal available here: the next line's top is ABOVE the current line's, because a new column
+// restarts layout at its own top. Each group later traces its OWN contour, so no band ever bridges
+// the gap.
+function _columnGroupsOf(lines) {
+    var groups = [];
+    var previousTop = null;
+    for (var line of lines) {
+        var top = Math.min.apply(null, line.points.map(function (p) { return p.y1; }));
+        if (previousTop === null || top < previousTop) {
+            groups.push([line]);
+        } else {
+            groups[groups.length - 1].push(line);
+        }
+        previousTop = top;
+    }
+    return groups;
+}
+
 // Measures the selected period elements and turns their client rects into the band list
 // `_blobPath` needs. Rects under 1 pixel wide or tall are layout noise (a wrapped inline element
-// with no visible box), not a real line, so they are dropped before grouping.
+// with no visible box), not a real line, so they are dropped before grouping. Points are grouped in
+// the NATURAL order getClientRects()/els arrive in, never sorted by position: sorting by y would
+// reorder a column-wrapped fragment ahead of the column it continues from, hiding the exact
+// backward jump _columnGroupsOf relies on to tell two columns apart.
 function _blobFromEls(els) {
     var OFF = 8;
     var padX = 5;
@@ -131,7 +157,6 @@ function _blobFromEls(els) {
             }
         }
     }
-    points.sort(function (a, b) { return a.y1 - b.y1 || a.x1 - b.x1; });
     var lines = [];
     for (var p of points) {
         var line = lines[lines.length - 1];
@@ -141,15 +166,19 @@ function _blobFromEls(els) {
             lines.push({ cy: p.cy, points: [p] });
         }
     }
-    var bands = lines.map(function (line) {
+    var bandFor = function (line) {
         return {
             x1: Math.min.apply(null, line.points.map(function (p) { return p.x1; })) - padX,
             x2: Math.max.apply(null, line.points.map(function (p) { return p.x2; })) + padX,
             y1: Math.min.apply(null, line.points.map(function (p) { return p.y1; })) - padY,
             y2: Math.max.apply(null, line.points.map(function (p) { return p.y2; })) + padY,
         };
-    });
-    return { d: _blobPath(bands, 10), w: Math.ceil(parRect.width) + 16, h: Math.ceil(parRect.height) + 16 };
+    };
+    var d = _columnGroupsOf(lines).map(function (group) {
+        var bands = group.map(bandFor);
+        return _blobPath(bands, 10);
+    }).filter(Boolean).join(' ');
+    return { d: d, w: Math.ceil(parRect.width) + 16, h: Math.ceil(parRect.height) + 16 };
 }
 
 // The paginated view always mounts exactly one root; scroll view may have several chapters
@@ -194,6 +223,31 @@ var _hintDismissed = false;
 // declarative sweep: it decides from DOM state alone what should exist, creates what is missing,
 // re-measures what remains, and removes what fell off the desired list.
 var _blobs = new Map();
+
+// Reused across the whole session (not re-created per mount) so mountSnippetLayer can simply
+// disconnect + re-observe on every call; null on a host with no ResizeObserver support, which the
+// caller must check itself.
+var _resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(_onBlobLayoutChanged) : null;
+var _blobRefreshScheduled = false;
+
+// Re-measures every live blob after a layout change this file cannot observe synchronously: an
+// async web font swapping in (document.fonts.ready) or a size change on a wrapped paragraph
+// (ResizeObserver) both leave stale clip-path coordinates from before the reflow otherwise. Multiple
+// callbacks in the same frame collapse into one sweep via requestAnimationFrame, falling back to
+// setTimeout where rAF is not available (older WebViews, this test harness).
+function _scheduleBlobRefresh() {
+    if (_blobRefreshScheduled) return;
+    _blobRefreshScheduled = true;
+    var schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : function (cb) { return setTimeout(cb, 0); };
+    schedule(function () {
+        _blobRefreshScheduled = false;
+        _renderAllBlobs();
+    });
+}
+
+function _onBlobLayoutChanged() {
+    _scheduleBlobRefresh();
+}
 
 // WHY: ThemeEngine's body rule sets font-family with !important, so pill/hint/chip must too.
 var _SNIPPET_CSS = [
@@ -407,6 +461,11 @@ function _renderAllBlobs() {
         _blobs.delete(key);
     }
 }
+
+// Exposed so the C# side can force a re-measure after events this file never sees directly (a page
+// navigation that refragments the pager's CSS columns) - belt and suspenders alongside the
+// fonts/ResizeObserver triggers above, cheap because a sweep with nothing desired is a no-op walk.
+window.refreshSnippetBlobs = _renderAllBlobs;
 
 // Every currently-wrapped period gets its selected state reflected as a class so the desktop hover
 // rule (`:not(.tr-on):hover`) can stay pure CSS instead of tracking hover in JS too. Loading
@@ -740,10 +799,15 @@ function _unwrapParagraph(el) {
 
 window.mountSnippetLayer = function () {
     _ensureStyle();
+    // Disconnected and rebuilt on every mount (not just the first): the wrapped paragraphs are new
+    // DOM nodes every time a chapter loads, so yesterday's observations would otherwise pile up on
+    // detached elements forever.
+    if (_resizeObserver) _resizeObserver.disconnect();
     for (var rootInfo of _snippetRoots()) {
         var candidates = _translatableCandidates(rootInfo.root);
         for (var pi = 0; pi < candidates.length; pi++) {
             _wrapParagraph(candidates[pi], pi);
+            if (_resizeObserver) _resizeObserver.observe(candidates[pi]);
         }
     }
     if (!_mounted) {
@@ -753,6 +817,11 @@ window.mountSnippetLayer = function () {
         document.addEventListener('click', _onDocumentClick);
         document.addEventListener('keydown', _onKeyDown);
         window.addEventListener('resize', _onResize);
+    }
+    // The book font (and Inter, for the pill/hint/chip) loads asynchronously; every blob measured
+    // before it lands has stale coordinates once the swap reflows the text underneath it.
+    if (document.fonts) {
+        document.fonts.ready.then(_renderAllBlobs);
     }
     _renderHint();
     _renderAllBlobs();
@@ -764,6 +833,7 @@ window.unmountSnippetLayer = function () {
     _dragStart = null;
     _hidePill();
     _removeHint();
+    if (_resizeObserver) _resizeObserver.disconnect();
     // Blobs are torn down BEFORE the unwrap loop below, not after: every blob's mask+svg is a
     // direct child of the paragraph it decorates (_renderAllBlobs prepends them there), so
     // unwrapping first would hand _unwrapParagraph a node it has to specifically recognize and
