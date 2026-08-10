@@ -814,3 +814,133 @@ periods keep their glow` (1 commit atomico — a arquitetura de layer-por-raiz e
 resolve os DOIS defeitos reportados, que compartilham a MESMA causa raiz; harness + testes +
 PIXEL-SPEC entram juntos porque o codigo de producao sozinho quebraria a suite existente sem as
 capacidades novas do harness no MESMO commit).
+
+## Iter 8 (fix round pos-loop, autorizado pelo usuario — 5o feedback com screenshot do app real)
+
+Loop ja convergido (round pos-loop-2, `76e9dac`, APPROVED_WITH_WARNINGS) quando o usuario testou o
+app real de novo e reportou DOIS defeitos novos: **D-A** — paragrafo com markup inline (`<em>`/`<a>`)
+vira UM periodo unico em vez de splitar nos limites reais de sentenca ("nao consigo selecionar um
+periodo, esta selecionando o paragrafo inteiro"); essa era a derivacao D aceita no `PLAN.md` original
+("fora de escopo desta phase por decisao... a evolucao e phase futura, nao debito escondido") — o uso
+real (EPUBs tem `<em>`/`<i>`/`<a>` em quase todo paragrafo) a derrubou. **D-B** — um `.tr-loading`
+podia ficar pulsando pra sempre quando `applySnippetTranslation` recebia um item PRESENTE mas
+inaplicavel (paragrafo/range nao encontrado): o placeholder nunca era devolvido aos periodos, so em
+erro/excecao/resultado vazio. Causas ja diagnosticadas e fechadas pelo orquestrador antes desta
+iteracao. Entregue em **2 commits atomicos, um por causa-raiz** (mesmo padrao do iter 6): D-A muda
+`_wrapParagraph`/`_spliceSpanBackToPeriods`/`_originalParagraphText` + harness; D-B muda so
+`applySnippetTranslation`. 0 `.cs` tocado nos dois.
+
+### D-A — split preservando markup (derivacao D entregue)
+
+**`_wrapParagraph` (`snippets.js`) deixou de colapsar QUALQUER paragrafo com filho-elemento num
+periodo unico.** Algoritmo novo:
+- `_SENTENCE_BOUNDARY_RE`: a regex de `_splitSentences` extraida pra uma `var` no topo do arquivo,
+  lida por AMBAS `_splitSentences` (pedacos aparados) e a funcao irmã nova `_sentenceBoundaryMatches`
+  (offsets `[start,end)` da propria fronteira no texto achatado, via `.source` — nunca um segundo
+  literal; `grep -c` da regex confere 1x, re-verificado apos o diff).
+- `_wrapMarkupParagraph(el)`: calcula o texto achatado (`el.textContent`), acha toda fronteira REAL
+  via `_sentenceBoundaryMatches`, e DESCARTA qualquer fronteira cujo offset caia dentro do range de
+  um elemento de primeiro nivel (`_topLevelElementRanges`) — um elemento inline e ATOMICO, entao a
+  fronteira que cairia no meio dele simplesmente nao conta, e o periodo que a conteria continua ate a
+  proxima fronteira em texto livre (1 linha WHY no codigo). `_consumeTextNode` percorre cada text node
+  de primeiro nivel contra as fronteiras restantes, cortando com `Text.splitText` nativo (nunca
+  serializa/reparseia HTML — csharp.md §4, conteudo do livro e input NAO confiavel): o pedaco antes da
+  fronteira fecha o periodo CORRENTE (`span.tr-sent[data-si=j]`, via `appendChild` — move nodes, nao
+  reconstroi), a propria fronteira (espaco) fica como no solto entre os spans (nunca dentro de um —
+  `_unwrapParagraph` ja devolve um filho solto intocado), um span novo abre pro periodo seguinte. Um
+  elemento de primeiro nivel e sempre movido inteiro (`appendChild`) pro span CORRENTE, nunca cortado.
+  Confirmado a mao (2 casos do enunciado + 1 terceiro com `<a>` + 2 fronteiras reais, via script
+  descartavel) e via os testes dourados abaixo: o mockup `onlySentence` (1 periodo so) continua
+  alcancavel — e so o que sobra quando o paragrafo genuinamente nao tem NENHUMA fronteira real fora de
+  markup (teste pre-existente da T-4, intocado, continua verde).
+- **Undo com markup preservado.** `setSnippetLoading` agora chama `_captureRangeNodes` (via
+  `_rangeNodeIndices`, extraida de `_spliceRange` — DRY, mesmo criterio de range nos dois) ANTES de
+  substituir o range pelo placeholder, guardando os NODES originais (nao o texto) num `Map` novo,
+  `_snipOriginalNodes`, chaveado pela mesma string `chapterHRef:pi:a:b` que um snip carrega em
+  `dataset.snip`. `_spliceSpanBackToPeriods` (usada por `_restoreSnipToPeriods` — X do chip — e por
+  `clearSnippetLoading`) ganhou um 4o parametro `key`: se o Map tem os nodes originais, eles sao
+  splicados de volta VERBATIM (o `<em>` sobrevive); senao (fallback: snip vindo de `restoreSnippets`,
+  que so tem texto persistido — sem o Map nunca populado) cai no re-split de texto plano de sempre
+  (`_plainPeriodSpans`, extraida sem mudar comportamento). Toda leitura do Map deleta a entrada (uso
+  unico); `unmountSnippetLayer` limpa o Map inteiro — mesmo bound de `_blobs`, nada sobrevive troca de
+  capitulo (csharp.md §2.4).
+- **Bonus (achado revisando o mesmo trecho): W-13 fechado.** `_originalParagraphText` lia
+  `node.childNodes[0].textContent` pra um periodo — certo pra periodo/loading de 1 filho, mas
+  truncava um periodo com markup (varios filhos) no PRIMEIRO node, cortando o contexto enviado ao
+  modelo bem no meio de uma sentenca. Fix: `node.textContent` (achatado completo), 1 linha.
+- **Ancoras antigas.** Paragrafo que era 1 periodo (`data-si=0`) e agora vira N: snips/loading
+  persistidos com `[0..0]` terao hash divergente na proxima abertura — descarte silencioso JA
+  EXISTENTE em `restoreSnippets` (SEM purge, ancora invalida != registro podre, mesma logica do D-A do
+  iter 6). Documentado no `.jdi/todos/2026-08-09-snippet-translation.md` (item da derivacao D marcado
+  RESOLVIDO, texto completo da entrega).
+- `test/js/harness.js`: `FakeText.prototype.splitText(offset)` novo, espelhando `Node.splitText`
+  nativo (trunca o node, insere a cauda como PROXIMO IRMAO, ainda anexada ao mesmo pai) — sem isso o
+  algoritmo novo nao tem como cortar um text node no harness.
+
+**Testes novos (13):** `snippets.test.js` (+7) — 3 periodos com `<em>` dentro do periodo 0 e
+selecao do periodo 1 isolada; fronteira dentro de `<em>` adiada (periodo 0 engloba o elemento
+inteiro); unwrap fiel (`innerHTML` byte-identico apos mount+unmount, com markup); `_originalParagraphText`
+com periodo-markup entre um snip (W-13); traduzir periodo com markup -> chip ok -> remover -> `<em>`
+original de volta (nodes, nao texto); `clearSnippetLoading` idem para o caso de falha; `_snipOriginalNodes`
+limpo no unmount (sem leak). `harness.test.js` (+3) — `splitText` trunca e insere irmao; em node
+destacado (sem pai) so trunca; encadeado 2x carve 3 pedacos.
+
+**Verificacao pos-fix (so D-A, D-B nao commitado ainda neste ponto):**
+- JS: **194/194 passando** (era 184 antes deste iter), 0 fail, 0 skipped. Zero teste de `main`
+  perdido (`snippets.test.js`/`snippets.js` nao existem em `main` — feature inteira nova desde o
+  merge-base `02a4c6c`; os 4 arquivos que main tem — `bridge`/`paginated`/`scroll`/`translation` — nao
+  tocados por este diff, confirmado por `git diff --name-only`).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1704 valid=1714 pct=99.42 files=5`
+  (piso 85). `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97 files=26` (piso 90, **identico** ao
+  fim do round pos-loop-2 — confirma que nenhum `.cs` foi tocado). `COVERAGE_GUARD new_app_cs=0
+  waived=0`.
+- `dotnet test` (Release, prova de nao-regressao — mudanca 100% JS): **414 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 416 total** — identico ao fim do round pos-loop-2.
+- `dotnet build -c Release -f net10.0-windows10.0.19041.0`: `0 Warning(s), 0 Error(s)`.
+- Invariantes: `translation.js`/`paginated.js`/`scroll.js` diff vazio vs `BASELINE`; aspas duplas em
+  todo `querySelectorAll`; `_blobPath(bands, 10)` + `OFF=8`/`padX=5`/`padY=1.5` intactos; regex de
+  `_splitSentences` 1x (re-contada apos o diff: `grep -cF` das duas substrings-ancora = 1 cada,
+  `grep -cE '^function _splitSentences\('` = 1).
+
+Commit: `fix(snippet-translation): split a paragraph into real sentence periods even when it carries
+inline markup, preserving the element on undo` (D-A).
+
+### D-B — loading nunca-orfao
+
+`applySnippetTranslation` refatorada em `_applySnippetItem(item)` (a mesma logica de antes, agora
+retornando se a splicagem realmente aconteceu — `_replaceRangeWithSnip`/`_spliceRange` ja retornavam
+esse booleano, so ninguem lia) e `_clearOrphanedLoading(item)` (novo): quando um item NAO aplica
+(paragrafo nao encontrado OU o range especifico dentro dele sumiu), procura no DOCUMENTO INTEIRO (nao
+so onde `_findParagraph` teria olhado — e exatamente essa busca que falhou) um `.tr-loading` cuja
+`dataset.loadKey` bate com a chave do proprio item, e devolve-o aos periodos via
+`_spliceSpanBackToPeriods` (reaproveitando o `key` novo do fix D-A — se os nodes originais ainda
+estao no `_snipOriginalNodes`, a restauracao ainda preserva markup). `applySnippetTranslation`
+propriamente vira so `for (item) { if (!_applySnippetItem(item)) _clearOrphanedLoading(item); }`.
+
+**Teste novo (1):** `applySnippetTranslation: an item whose paragraph can no longer be resolved
+still clears its own loading placeholder...` — reproduz a race construindo o cenario minimo: chama
+`setSnippetLoading`, depois torna o pager irresolvivel (`_pager.id = ''`, simulando uma navegacao que
+derrubou a raiz que possuia o pedido) ANTES de `applySnippetTranslation` chegar com o MESMO
+`chapterHRef/pi/a/b` — prova que zero `.tr-loading` sobra no DOM. O caminho feliz (item aplicavel)
+continua coberto pelos testes pre-existentes `applySnippetTranslation replaces a loading
+placeholder...`/`applySnippetTranslation gives the finished snip a permanent glass blob...`/
+`applySnippetTranslation destructively replaces an overlapping existing snip`, todos intocados
+(regressao).
+
+**Verificacao pos-fix (D-A + D-B juntos, estado final):**
+- JS: **195/195 passando** (194 + 1), 0 fail, 0 skipped. `comm -23` nome a nome contra a suite do
+  commit D-A: vazio (so a 1 adicao).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1727 valid=1737 pct=99.42 files=5`
+  (piso 85). `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97 files=26` (piso 90, **identico** —
+  confirma zero `.cs` tocado nos dois commits). `COVERAGE_GUARD new_app_cs=0 waived=0`.
+- `dotnet test` (Release): **414 passed / 2 skipped (GPU-only pre-existentes) / 0 failed / 416
+  total** — identico, como esperado (D-A+D-B sao 100% JS).
+- `dotnet format whitespace --verify-no-changes`: exit 2, pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  desta iteracao (nenhum `.cs` tocado por nenhum dos dois commits).
+- `git status`/`git diff --name-only` confirmam escopo: `snippets.js`, `harness.js`,
+  `harness.test.js`, `snippets.test.js`, `.jdi/todos/2026-08-09-snippet-translation.md` (mais os
+  arquivos de estado do `.jdi/` do orquestrador, nao tocados por este specialist).
+
+Commit: `fix(snippet-translation): never leave a snippet's loading placeholder stuck when its
+translation result cannot be applied` (D-B).
