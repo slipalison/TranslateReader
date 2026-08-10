@@ -85,9 +85,28 @@ Geometria (constantes travadas — teste dourado de `_blobPath`):
 - Constantes: `OFF = 8`, `padX = 5`, `padY = 1.5`, raio `r = 10` limitado por
   `Math.min(r, (x2-x1)/2, (y2-y1)/2)`.
 - Bandas adjacentes se encontram no ponto medio: `mid = (bands[i].y2 + bands[i+1].y1) / 2`.
-- Caixa: `w = Math.ceil(parRect.width) + 16`, `h = Math.ceil(parRect.height) + 16`;
+- Caixa (mockup): `w = Math.ceil(parRect.width) + 16`, `h = Math.ceil(parRect.height) + 16`;
   posicao `left: -8px; top: -8px`.
 - Re-medir em: mudanca de selecao/snips, `resize`, e qualquer reflow do reader (fonte, espacamento).
+
+**Ancoragem no app (paginacao em colunas — divergencia estrutural do mockup):** o mockup nunca
+renderizou com o texto fragmentado entre colunas (fluxo unico, sem `_pager`), entao ancorar o blob
+no proprio `<p>` (linhas acima) sempre bateu com a geometria medida. No app, o modo paginado usa CSS
+multi-column (`#_pager`) para paginar: quando um periodo e dividido entre duas colunas/paginas, as
+proprias caixas geradas pelo `<p>` se fragmentam, mas um filho `position: absolute` do paragrafo
+ancora em UM so fragmento enquanto a geometria era calculada a partir do retangulo delimitador da
+UNIAO dos fragmentos — anchor e origem descasavam, produzindo vidro clipado ou uma bolha flutuando
+fora do texto. Fix: cada raiz de `_snippetRoots()` (`#_pager` no paginado, cada `.chapter-content`
+na rolagem) ganha UMA camada `.tr-blob-layer`, filha direta e PRIMEIRA da raiz,
+`position: absolute; left: 0; top: 0`; a raiz nunca fragmenta a SI MESMA (so o conteudo que ela
+contem), entao seu retangulo e uma origem estavel para qualquer trecho, nao importa em quantas
+colunas ele caia. Coordenadas passam a ser `rect − rootRect` em vez de `rect − parRect`; a caixa da
+mascara/svg e dimensionada de forma JUSTA ao redor do trecho medido (nao ao tamanho inteiro da
+raiz, que no paginado cobre TODAS as paginas do capitulo) — `left`/`top` posicionam essa caixa justa
+dentro da camada, deslocados dinamicamente por blob em vez do `left: -8px; top: -8px` fixo acima.
+Um periodo fragmentado em duas colunas traca um contorno por coluna (`_columnGroupsOf`), cada um com
+sua propria caixa — o vidro aparece na parte visivel de CADA pagina que o periodo ocupa, sem bolha
+fantasma numa pagina sem selecao/traducao por perto.
 
 Animacoes (keyframes literais):
 

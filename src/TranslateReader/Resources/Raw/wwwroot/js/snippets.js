@@ -130,33 +130,45 @@ function _columnGroupsOf(lines) {
     return groups;
 }
 
-// Measures the selected period elements and turns their client rects into the band list
-// `_blobPath` needs. Rects under 1 pixel wide or tall are layout noise (a wrapped inline element
-// with no visible box), not a real line, so they are dropped before grouping. Points are grouped in
-// the NATURAL order getClientRects()/els arrive in, never sorted by position: sorting by y would
-// reorder a column-wrapped fragment ahead of the column it continues from, hiding the exact
-// backward jump _columnGroupsOf relies on to tell two columns apart.
+// Measures the selected period elements and turns their client rects into the glass geometry a
+// blob's mask/svg need, in coordinates relative to the snippet ROOT rather than the paragraph
+// (D-B round 2): a CSS multi-column pager fragments a paragraph's own generated boxes across
+// columns, so an element position:absolute inside the paragraph anchors to whichever fragment box
+// the browser picked as "the" box, while the old geometry was measured off the bounding union of
+// every fragment (whose top can belong to a LATER column) - that anchor/origin mismatch is exactly
+// what produced invisible (clipped) or floating-orphan glass. The root never fragments itself (see
+// mountSnippetLayer/_ensureLayerFor), so its rect is a stable coordinate origin no matter how many
+// columns/pages the text spans. The returned box is sized TIGHTLY around the measured rects, not the
+// whole root - in paginated mode the root spans every page of the chapter at once, so anchoring the
+// mask/svg to its full size would be enormous. `left`/`top` place that tight box inside the
+// root-anchored layer; `d` is in coordinates local to the box itself, same convention as before.
+// Rects under 1 pixel wide or tall are layout noise (a wrapped inline element with no visible box),
+// not a real line, so they are dropped before grouping. Points are grouped in the NATURAL order
+// getClientRects()/els arrive in, never sorted by position: sorting by y would reorder a
+// column-wrapped fragment ahead of the column it continues from, hiding the exact backward jump
+// _columnGroupsOf relies on to tell two columns apart.
 function _blobFromEls(els) {
     var OFF = 8;
     var padX = 5;
     var padY = 1.5;
-    var par = els[0].closest("[data-pi]");
-    var parRect = par.getBoundingClientRect();
+    var root = _rootFor(els[0]);
+    var rootRect = root.getBoundingClientRect();
     var points = [];
     for (var el of els) {
         for (var r of el.getClientRects()) {
             if (r.width > 1 && r.height > 1) {
                 points.push({
-                    x1: r.left - parRect.left + OFF,
-                    y1: r.top - parRect.top + OFF,
-                    x2: r.right - parRect.left + OFF,
-                    y2: r.bottom - parRect.top + OFF,
-                    cy: (r.top + r.bottom) / 2 - parRect.top + OFF,
+                    x1: r.left - rootRect.left,
+                    y1: r.top - rootRect.top,
+                    x2: r.right - rootRect.left,
+                    y2: r.bottom - rootRect.top,
+                    cy: (r.top + r.bottom) / 2 - rootRect.top,
                     height: r.height,
                 });
             }
         }
     }
+    if (points.length === 0) return { d: '', left: 0, top: 0, w: 0, h: 0 };
     var lines = [];
     for (var p of points) {
         var line = lines[lines.length - 1];
@@ -174,11 +186,19 @@ function _blobFromEls(els) {
             y2: Math.max.apply(null, line.points.map(function (p) { return p.y2; })) + padY,
         };
     };
-    var d = _columnGroupsOf(lines).map(function (group) {
-        var bands = group.map(bandFor);
+    var groups = _columnGroupsOf(lines).map(function (group) { return group.map(bandFor); });
+    var allBands = [].concat.apply([], groups);
+    var left = Math.min.apply(null, allBands.map(function (b) { return b.x1; })) - OFF;
+    var top = Math.min.apply(null, allBands.map(function (b) { return b.y1; })) - OFF;
+    var right = Math.max.apply(null, allBands.map(function (b) { return b.x2; })) + OFF;
+    var bottom = Math.max.apply(null, allBands.map(function (b) { return b.y2; })) + OFF;
+    var d = groups.map(function (group) {
+        var bands = group.map(function (b) {
+            return { x1: b.x1 - left, y1: b.y1 - top, x2: b.x2 - left, y2: b.y2 - top };
+        });
         return _blobPath(bands, 10);
     }).filter(Boolean).join(' ');
-    return { d: d, w: Math.ceil(parRect.width) + 16, h: Math.ceil(parRect.height) + 16 };
+    return { d: d, left: left, top: top, w: Math.ceil(right - left), h: Math.ceil(bottom - top) };
 }
 
 // The paginated view always mounts exactly one root; scroll view may have several chapters
@@ -194,6 +214,16 @@ function _snippetRoots() {
         roots = [{ root: document.getElementById("_pager"), chapterHRef: null }];
     }
     return roots.filter(function (item) { return item.root; });
+}
+
+// Resolves which snippet root (the pager in paginated mode, or the owning .chapter-content in
+// scroll mode) contains a given element, walking the CURRENT root list rather than hardcoding
+// either selector string anywhere outside _snippetRoots itself (the DoD 6 gate depends on that).
+function _rootFor(el) {
+    for (var rootInfo of _snippetRoots()) {
+        if (rootInfo.root.contains(el)) return rootInfo.root;
+    }
+    return null;
 }
 
 // The app's own accent (ColorAccent, #9184d9) marks the pill/hint icons and the primary button —
@@ -223,6 +253,41 @@ var _hintDismissed = false;
 // declarative sweep: it decides from DOM state alone what should exist, creates what is missing,
 // re-measures what remains, and removes what fell off the desired list.
 var _blobs = new Map();
+
+// One glass layer per snippet root: a direct, absolutely-positioned FIRST child of the root itself
+// (never the paragraph — a paragraph fragmented across the pager's CSS columns still fragments its
+// own generated boxes, so a child anchored there lands on whichever fragment the browser picked
+// while the geometry was measured off a different one; see _blobFromEls). A WeakMap, not a Map: the
+// paginated root is a brand new #_pager element every chapter load (paginated.js's initPagination
+// tears the old one down), so a strong-keyed registry would grow one dead entry per chapter turned
+// forever - the WeakMap lets a detached root's entry go with it once nothing else references it.
+var _snippetLayers = new WeakMap();
+
+// Creates the layer for `root` the first time it is needed (mount, or on demand from a sweep) and
+// reuses it afterwards. `ownedPosition` remembers whether THIS call claimed `position: relative` on
+// a root that had none of its own, so unmount only ever undoes what it set here, never a position
+// the book's markup or another script already relied on.
+function _ensureLayerFor(root) {
+    var info = _snippetLayers.get(root);
+    if (info) return info.layer;
+    var ownedPosition = getComputedStyle(root).position === 'static';
+    if (ownedPosition) root.style.position = 'relative';
+    var layer = document.createElement('div');
+    layer.className = 'tr-blob-layer';
+    root.prepend(layer);
+    _snippetLayers.set(root, { layer: layer, ownedPosition: ownedPosition });
+    return layer;
+}
+
+// Removing the layer takes every blob mask/svg it holds down with it in one call; the registry
+// itself only needs to forget the entry, not walk its children.
+function _removeLayerFor(root) {
+    var info = _snippetLayers.get(root);
+    if (!info) return;
+    info.layer.remove();
+    if (info.ownedPosition) root.style.position = '';
+    _snippetLayers.delete(root);
+}
 
 // Reused across the whole session (not re-created per mount) so mountSnippetLayer can simply
 // disconnect + re-observe on every call; null on a host with no ResizeObserver support, which the
@@ -266,8 +331,9 @@ var _SNIPPET_CSS = [
     'html[data-idiom="desktop"] .tr-sent { transition: background 0.22s ease; }',
     'html[data-idiom="desktop"] .tr-sent:not(.tr-on):hover { background: rgba(127,127,168,0.14); }',
     '[data-snip] { position: relative; padding: 0.1em 0.24em; margin: 0 -0.24em; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; user-select: none; -webkit-user-select: none; }',
-    '.tr-blob { position: absolute; left: -8px; top: -8px; display: block; pointer-events: none; backdrop-filter: blur(9px) saturate(180%); -webkit-backdrop-filter: blur(9px) saturate(180%); animation: trGlassIn 0.25s ease; }',
-    '.tr-blob-svg { position: absolute; left: -8px; top: -8px; overflow: visible; pointer-events: none; }',
+    '.tr-blob-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }',
+    '.tr-blob { position: absolute; display: block; pointer-events: none; backdrop-filter: blur(9px) saturate(180%); -webkit-backdrop-filter: blur(9px) saturate(180%); animation: trGlassIn 0.25s ease; }',
+    '.tr-blob-svg { position: absolute; overflow: visible; pointer-events: none; }',
     '.tr-blob-pulse { animation: trPulse 1.1s ease-in-out infinite; }',
     '@keyframes trGlassIn { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }',
     '@keyframes trPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }',
@@ -369,11 +435,10 @@ function _svgEl(tag) {
     return document.createElementNS('http://www.w3.org/2000/svg', tag);
 }
 
-// className is a string on the mask <span> and every other element this file builds, but never on
-// an svg/path built by _svgEl above — reading the reflected "class" attribute instead is safe on
-// both, in every WebView engine, and keeps the exact substring semantics this file already relies
-// on (e.g. 'tr-blob-svg'.indexOf('tr-blob') === 0 covers the mask, the pulse variant and the svg
-// outline with the one check). Never call `.indexOf` on a node's `className` directly (B-2).
+// className is a string on every element this file builds via createElement, but never on an
+// svg/path built by _svgEl above — reading the reflected "class" attribute instead is safe on both,
+// in every WebView engine, and keeps the exact substring semantics this file already relies on.
+// Never call `.indexOf` on a node's `className` directly (B-2).
 function _hasClass(node, cls) {
     var value = typeof node.className === 'string' ? node.className : (node.getAttribute && node.getAttribute('class'));
     return typeof value === 'string' && value.indexOf(cls) !== -1;
@@ -392,10 +457,14 @@ function _makeBlob() {
 }
 
 function _updateBlob(blob, geometry) {
+    blob.mask.style.left = geometry.left + 'px';
+    blob.mask.style.top = geometry.top + 'px';
     blob.mask.style.width = geometry.w + 'px';
     blob.mask.style.height = geometry.h + 'px';
     blob.mask.style.clipPath = "path('" + geometry.d + "')";
     blob.mask.style.background = _blobFill();
+    blob.svg.style.left = geometry.left + 'px';
+    blob.svg.style.top = geometry.top + 'px';
     blob.svg.setAttribute('width', String(geometry.w));
     blob.svg.setAttribute('height', String(geometry.h));
     blob.path.setAttribute('d', geometry.d);
@@ -405,7 +474,8 @@ function _updateBlob(blob, geometry) {
 
 // Builds the list of blobs the current DOM/selection state wants: one per contiguous selection run
 // (never one for the whole, possibly non-contiguous, set — that would draw glass across an
-// unselected period), one per in-flight loading placeholder, one per finished snip.
+// unselected period), one per in-flight loading placeholder, one per finished snip. Which ROOT (and
+// therefore which layer) owns each entry is resolved later, in _renderAllBlobs.
 function _blobDescriptors() {
     var list = [];
     if (_sel) {
@@ -413,42 +483,39 @@ function _blobDescriptors() {
         for (var run of _runsOf(_sel.set)) {
             var els = _sentEls(_sel.p, _rangeSet(run.a, run.b));
             if (els.length > 0) {
-                list.push({ key: 'sel:' + pi + ':' + run.a, kind: 'sel', owner: _sel.p, els: els });
+                list.push({ key: 'sel:' + pi + ':' + run.a, kind: 'sel', els: els });
             }
         }
     }
     for (var loadSpan of document.querySelectorAll(".tr-loading")) {
-        list.push({
-            key: 'load:' + loadSpan.dataset.loadKey, kind: 'load',
-            owner: loadSpan.closest("[data-pi]"), els: [loadSpan],
-        });
+        list.push({ key: 'load:' + loadSpan.dataset.loadKey, kind: 'load', els: [loadSpan] });
     }
     for (var snipSpan of document.querySelectorAll("[data-snip]")) {
-        list.push({
-            key: 'snip:' + snipSpan.dataset.snip, kind: 'snip',
-            owner: snipSpan.closest("[data-pi]"), els: [snipSpan],
-        });
+        list.push({ key: 'snip:' + snipSpan.dataset.snip, kind: 'snip', els: [snipSpan] });
     }
     return list;
 }
 
 // The one place that creates, measures and retires glass blobs. Every caller that changes what
 // should be selected/loading/translated calls this once when it is done, instead of poking at a
-// single blob reference — that is what let a snip ship with no blob at all before. A brand new
-// blob's mask+svg are PREPENDED (mask first, then svg, so final order is mask, svg, ...text) to the
-// owning paragraph so the glass paints under the text, never over it.
+// single blob reference — that is what let a snip ship with no blob at all before. A blob's mask+svg
+// live in its ROOT's glass layer (_ensureLayerFor), never inside the paragraph: the layer is always
+// the first child of the root, painting before every in-flow paragraph, so the glass stays under the
+// text regardless of which paragraph(s) it decorates or how many pager columns they span.
 function _renderAllBlobs() {
     var desired = _blobDescriptors();
     var seen = new Set();
     for (var entry of desired) {
-        if (!entry.owner) continue;
+        var root = _rootFor(entry.els[0]);
+        if (!root) continue;
+        var layer = _ensureLayerFor(root);
         seen.add(entry.key);
         var blob = _blobs.get(entry.key);
         if (!blob) {
             blob = _makeBlob();
             if (entry.kind === 'load') blob.mask.className += ' tr-blob-pulse';
-            entry.owner.prepend(blob.svg);
-            entry.owner.prepend(blob.mask);
+            layer.appendChild(blob.mask);
+            layer.appendChild(blob.svg);
             _blobs.set(entry.key, blob);
         }
         _updateBlob(blob, _blobFromEls(entry.els));
@@ -746,7 +813,6 @@ function _wrapParagraph(el, pi) {
     if (el.dataset.pi !== undefined) return;
     var hasElementChild = Array.from(el.childNodes).some(function (node) { return node.tagName; });
     el.dataset.pi = String(pi);
-    el.style.position = 'relative';
     if (!hasElementChild) {
         var sentences = _splitSentences(el.textContent);
         el.textContent = '';
@@ -779,8 +845,6 @@ function _unwrapParagraph(el) {
     for (var node of Array.from(el.childNodes)) {
         if (!node.tagName) {
             ordered.push(node);
-        } else if (_hasClass(node, 'tr-blob')) {
-            continue;
         } else if (node.dataset && node.dataset.snip !== undefined) {
             ordered.push(document.createTextNode(node.dataset.orig));
         } else if (node.dataset && node.dataset.si !== undefined) {
@@ -794,7 +858,6 @@ function _unwrapParagraph(el) {
     while (el.firstChild) el.removeChild(el.firstChild);
     for (var item of ordered) el.appendChild(item);
     delete el.dataset.pi;
-    el.style.position = '';
 }
 
 window.mountSnippetLayer = function () {
@@ -804,6 +867,7 @@ window.mountSnippetLayer = function () {
     // detached elements forever.
     if (_resizeObserver) _resizeObserver.disconnect();
     for (var rootInfo of _snippetRoots()) {
+        _ensureLayerFor(rootInfo.root);
         var candidates = _translatableCandidates(rootInfo.root);
         for (var pi = 0; pi < candidates.length; pi++) {
             _wrapParagraph(candidates[pi], pi);
@@ -834,13 +898,11 @@ window.unmountSnippetLayer = function () {
     _hidePill();
     _removeHint();
     if (_resizeObserver) _resizeObserver.disconnect();
-    // Blobs are torn down BEFORE the unwrap loop below, not after: every blob's mask+svg is a
-    // direct child of the paragraph it decorates (_renderAllBlobs prepends them there), so
-    // unwrapping first would hand _unwrapParagraph a node it has to specifically recognize and
-    // skip. Removing the registry first means it never meets one at all (B-2).
-    for (var blob of _blobs.values()) {
-        blob.mask.remove();
-        blob.svg.remove();
+    // Removing each root's layer takes every blob mask/svg it holds down with it in one call - a
+    // blob is never a child of the paragraph it decorates (see _renderAllBlobs), so unwrapping a
+    // paragraph below never has to recognize or skip one (B-2 is structurally unreachable now).
+    for (var rootInfo of _snippetRoots()) {
+        _removeLayerFor(rootInfo.root);
     }
     _blobs.clear();
     for (var el of Array.from(document.querySelectorAll("[data-pi]"))) {
@@ -1129,9 +1191,9 @@ function _loadingSpanAt(p, a) {
 }
 
 // Undoes setSnippetLoading for a run that failed or was superseded by a newer selection. The
-// placeholder's own text IS its textContent now (the blob lives beside it, under the paragraph, not
-// nested inside it), so splicing it back into periods needs no server round trip and this is only
-// ever called for a range whose translation never arrived.
+// placeholder's own text IS its textContent now (the blob lives in the root's layer, never nested
+// inside it), so splicing it back into periods needs no server round trip and this is only ever
+// called for a range whose translation never arrived.
 window.clearSnippetLoading = function (keys) {
     for (var key of keys) {
         var info = _parseSnipKey(key);
@@ -1154,8 +1216,9 @@ function _chapterHRefFor(p) {
 // Reconstructs the paragraph's ORIGINAL text straight from the DOM, in document order, regardless
 // of what is currently on screen: a snip contributes the original text it stored (dataset.orig),
 // never its current display text or its language chip's label — both live inside that same span; a
-// period/loading span contributes its own sentence text; a glass blob is decoration, not text, and
-// is skipped; a plain text node (the space between spans) is used as-is. This is the only safe
+// period/loading span contributes its own sentence text; a plain text node (the space between spans)
+// is used as-is. A glass blob is never a child of the paragraph (it lives in its root's layer, see
+// _renderAllBlobs), so there is no decoration node to skip here anymore. This is the only safe
 // source for the "paragraph" context field sent to the translator: `p.textContent` leaks whichever
 // side of the toggle every existing snip in the paragraph happens to be showing, plus its chip's
 // "EN"/"PT-BR" label, straight into the prompt — which is what made a small model translate the
@@ -1165,8 +1228,6 @@ function _originalParagraphText(p) {
     for (var node of Array.from(p.childNodes)) {
         if (!node.tagName) {
             parts.push(node.textContent);
-        } else if (_hasClass(node, 'tr-blob')) {
-            continue;
         } else if (node.dataset && node.dataset.snip !== undefined) {
             parts.push(node.dataset.orig);
         } else if (node.dataset && node.dataset.si !== undefined) {

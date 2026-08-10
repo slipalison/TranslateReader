@@ -15,11 +15,24 @@ function loadSnippets(options) {
     return env;
 }
 
+// Blob geometry (iter 7) is relative to the snippet ROOT, not the paragraph, so every paragraph a
+// test builds needs a root ancestor for _rootFor to resolve - the root's own rect defaults to zero
+// (harness default), same origin every one of these tests already assumed of the paragraph before.
+function ensureRoot(env) {
+    let root = env.document.getElementById('_pager');
+    if (!root) {
+        root = env.document.createElement('div');
+        root.id = '_pager';
+        env.document.body.appendChild(root);
+    }
+    return root;
+}
+
 function makeParagraph(env, rect) {
     const paragraph = env.document.createElement('p');
     paragraph.dataset.pi = '0';
     paragraph.rect = rect;
-    env.document.body.appendChild(paragraph);
+    ensureRoot(env).appendChild(paragraph);
     return paragraph;
 }
 
@@ -245,6 +258,46 @@ test('blob geometry: two lines in the same column still trace a single contour',
     assert.strictEqual(tokens.filter((token) => token === 'Z').length, 1);
 });
 
+// Iter 7 (D-B round 2): a period fragmented across two pager columns used to be measured relative to
+// the PARAGRAPH's own (fragmented) box, whose reported rect can disagree with where an absolutely
+// positioned descendant actually anchors — the exact anchor/origin mismatch that clipped the glass
+// (negative-looking geometry) or floated it as a phantom bubble. This root has its own non-zero rect
+// and the paragraph deliberately has NONE (default zero), so a wrong left/top/w/h below would prove
+// the paragraph is still being read somewhere.
+test('blob geometry: a paragraph fragmented across two columns is measured relative to the ROOT, never the paragraph', () => {
+    const env = loadSnippets();
+    const pager = env.document.createElement('div');
+    pager.id = '_pager';
+    pager.rect = { top: 10, left: 5, right: 1205, bottom: 610, width: 1200, height: 600 };
+    env.document.body.appendChild(pager);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    // Column 1's tail sits near the root's bottom; column 2's head is further right AND higher up
+    // (a smaller y1 than the tail it continues from) — the exact shape a pager's CSS columns
+    // produce, and the one _columnGroupsOf relies on to tell the two columns apart.
+    const tail = makeSpan(env, paragraph, { top: 560, left: 13, right: 113, bottom: 590, width: 100, height: 30 });
+    const head = makeSpan(env, paragraph, { top: 26, left: 413, right: 493, bottom: 56, width: 80, height: 30 });
+
+    const result = env.window._blobFromEls([tail, head]);
+
+    // Hand-derived from the root rect above (OFF=8, padX=5, padY=1.5).
+    assert.strictEqual(result.left, -5);
+    assert.strictEqual(result.top, 6.5);
+    assert.strictEqual(result.w, 506);
+    assert.strictEqual(result.h, 583);
+    const tailBandLocal = { x1: 8, y1: 542, x2: 118, y2: 575 };
+    const headBandLocal = { x1: 408, y1: 8, x2: 498, y2: 41 };
+    assert.ok(
+        [tailBandLocal, headBandLocal].every((band) => band.y1 >= 0 && band.y2 >= 0),
+        'a band drawn above the mask box would be clipped/invisible — the exact original defect');
+    assert.strictEqual(
+        result.d,
+        env.window._blobPath([tailBandLocal], 10) + ' ' + env.window._blobPath([headBandLocal], 10));
+    const tokens = result.d.split(' ');
+    assert.strictEqual(tokens.filter((token) => token === 'M').length, 2);
+    assert.strictEqual(tokens.filter((token) => token === 'Z').length, 2);
+});
+
 test('root: paginated mode resolves the pager as the single root', () => {
     const env = loadSnippets();
     const pager = env.document.createElement('div');
@@ -256,6 +309,14 @@ test('root: paginated mode resolves the pager as the single root', () => {
     assert.strictEqual(roots.length, 1);
     assert.strictEqual(roots[0].root, pager);
     assert.strictEqual(roots[0].chapterHRef, null);
+});
+
+test('root: an element outside every snippet root resolves to no root', () => {
+    const env = loadSnippets();
+    const outside = env.document.createElement('span');
+    env.document.body.appendChild(outside);
+
+    assert.strictEqual(env.window._rootFor(outside), null);
 });
 
 test('root: scroll mode resolves one root per chapter with its own href', () => {
@@ -319,6 +380,79 @@ function tap(env, span) {
     fire(env.document, 'pointerup');
 }
 
+// Iter 7 (D-B round 2): the glass blob is anchored to a layer owned by the snippet ROOT, not the
+// paragraph — this is what makes a period fragmented across pager columns keep its glass visible on
+// every page it spans, instead of a mismatched anchor clipping it or floating a phantom bubble.
+
+test('layer: mounting creates a blob layer as the first child of the root, ignoring pointer events', () => {
+    const env = loadFull();
+    mountWithParagraphs(env, ['Ela chegou.']);
+    const pager = env.document.getElementById('_pager');
+
+    assert.strictEqual(pager.childNodes[0].className, 'tr-blob-layer');
+});
+
+test('css: the blob layer never intercepts pointer events', () => {
+    const env = loadSnippets();
+    const css = env.window._SNIPPET_CSS;
+    const rule = css.split('\n').find((line) => line.startsWith('.tr-blob-layer '));
+
+    assert.ok(rule, '.tr-blob-layer rule not found in _SNIPPET_CSS');
+    assert.ok(rule.includes('pointer-events: none'));
+});
+
+test('layer: claims position:relative on a static root and restores it on unmount', () => {
+    const env = loadFull();
+    mountWithParagraphs(env, ['Ela chegou.']);
+    const pager = env.document.getElementById('_pager');
+    assert.strictEqual(pager.style.position, 'relative');
+
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(pager.style.position, '');
+});
+
+test('layer: never touches a root that already had its own position', () => {
+    const env = loadFull();
+    const pager = env.document.createElement('div');
+    pager.id = '_pager';
+    pager.style.position = 'absolute';
+    env.document.body.appendChild(pager);
+    const paragraph = env.document.createElement('p');
+    paragraph.textContent = 'Ela chegou.';
+    pager.appendChild(paragraph);
+
+    env.window.mountSnippetLayer();
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(pager.style.position, 'absolute');
+});
+
+test('layer: scroll mode gives each chapter root its own blob layer', () => {
+    const env = loadFull();
+    env.window.setMode('scroll');
+    const first = env.document.createElement('div');
+    first.className = 'chapter-content';
+    first.dataset.chapterHref = 'ch1.xhtml';
+    const second = env.document.createElement('div');
+    second.className = 'chapter-content';
+    second.dataset.chapterHref = 'ch2.xhtml';
+    env.document.body.appendChild(first);
+    env.document.body.appendChild(second);
+    const firstParagraph = env.document.createElement('p');
+    firstParagraph.textContent = 'Um.';
+    first.appendChild(firstParagraph);
+    const secondParagraph = env.document.createElement('p');
+    secondParagraph.textContent = 'Dois.';
+    second.appendChild(secondParagraph);
+
+    env.window.mountSnippetLayer();
+
+    assert.strictEqual(first.childNodes[0].className, 'tr-blob-layer');
+    assert.strictEqual(second.childNodes[0].className, 'tr-blob-layer');
+    assert.notStrictEqual(first.childNodes[0], second.childNodes[0]);
+});
+
 test('mount: wrapping the same paragraphs twice does not double-wrap them', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
@@ -371,42 +505,45 @@ test('tap: tapping a period shows the selection blob and pill', () => {
     assert.strictEqual(spans[0].className, 'tr-sent tr-on');
 });
 
-test('z-order: the blob mask and svg become the first children of the paragraph, before any sentence span', () => {
+// Iter 7: the blob now lives in a layer that is the ROOT's first child, not the paragraph's — a
+// paragraph fragmented across pager columns still fragments its own boxes, so anchoring inside it
+// was never safe (see _blobFromEls). The layer painting before every paragraph is what keeps the
+// glass under the text now; _unwrapParagraph no longer has a blob node to recognize or skip inside
+// a paragraph at all (B-2's specific hazard is structurally unreachable, not just avoided by order).
+test('z-order: the blob layer is the first child of the root, so the glass paints before every paragraph', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    const pager = env.document.getElementById('_pager');
 
     tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
 
-    const children = paragraphs[0].childNodes;
-    const maskIndex = children.findIndex((node) => node.className === 'tr-blob');
+    const children = pager.childNodes;
+    const layerIndex = children.findIndex((node) => node.className === 'tr-blob-layer');
+    const paragraphIndex = children.indexOf(paragraphs[0]);
+    assert.strictEqual(layerIndex, 0, 'the layer must be the very first child of the root');
+    assert.ok(layerIndex < paragraphIndex, 'the blob layer must come before every paragraph');
+
+    const layer = children[layerIndex];
+    const maskIndex = layer.childNodes.findIndex((node) => node.className === 'tr-blob');
     // The blob outline is a real SVG element: its className is not a plain string (see
     // FakeSvgElement in harness.js), so this reads the reflected class attribute instead — the
     // same string-safe pattern production code uses via _hasClass (B-2).
-    const svgIndex = children.findIndex((node) => node.getAttribute && node.getAttribute('class') === 'tr-blob-svg');
-    const firstSentIndex = children.findIndex((node) => node.dataset && node.dataset.si !== undefined);
-
+    const svgIndex = layer.childNodes.findIndex((node) => node.getAttribute && node.getAttribute('class') === 'tr-blob-svg');
     assert.notStrictEqual(maskIndex, -1);
     assert.notStrictEqual(svgIndex, -1);
-    assert.notStrictEqual(firstSentIndex, -1);
-    assert.ok(maskIndex < firstSentIndex, 'the blob mask must paint under the text, not over it');
-    assert.ok(svgIndex < firstSentIndex, 'the blob outline must paint under the text, not over it');
 });
 
-test('unmount: a stray glass blob is skipped without throwing even though its outline is an SVG element (B-2 belt and suspenders)', () => {
+test('sweep: the layer holds no orphaned blob after a selection is cleared', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
+    const pager = env.document.getElementById('_pager');
     tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
-    assert.strictEqual(env.document.querySelectorAll('.tr-blob-svg').length, 1);
+    const layer = pager.childNodes[0];
+    assert.strictEqual(layer.childNodes.length, 2, 'the mask and svg pair for the active selection');
 
-    // Calls the paragraph-restore step directly, with its blob mask+svg still attached, instead of
-    // going through unmountSnippetLayer (which now removes blobs first): this is what proves the
-    // class check itself is string-safe, independent of the call-order fix around it.
-    assert.doesNotThrow(() => env.window._unwrapParagraph(paragraphs[0]));
+    env.window.clearSnippetSelection();
 
-    assert.strictEqual(paragraphs[0].textContent, 'Ela chegou. Ele saiu.');
-    assert.strictEqual(env.document.querySelectorAll('.tr-blob').length, 0);
-    assert.strictEqual(env.document.querySelectorAll('.tr-blob-svg').length, 0);
-    assert.strictEqual(paragraphs[0].dataset.pi, undefined);
+    assert.strictEqual(layer.childNodes.length, 0);
 });
 
 test('sweep: clearing the selection removes its blob from the registry and the DOM', () => {

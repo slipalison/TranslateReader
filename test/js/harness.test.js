@@ -253,3 +253,29 @@ test('createEnv with fonts exposes a document.fonts.ready thenable', async () =>
     assert.ok(env.document.fonts);
     await assert.doesNotReject(env.document.fonts.ready);
 });
+
+// Iter 7: the glass blob layer is anchored per snippet ROOT instead of per paragraph, so it needs
+// to find which root owns an arbitrary element (contains) and whether that root already has a
+// positioning context of its own before claiming one (getComputedStyle).
+
+test('contains returns true for the node itself and any descendant, false outside the tree', () => {
+    const env = withBody('<div id="root"><p><span>x</span></p></div>');
+    const root = env.document.getElementById('root');
+    const span = env.document.body.querySelectorAll('span')[0];
+    const outside = env.document.createElement('div');
+
+    assert.strictEqual(root.contains(root), true);
+    assert.strictEqual(root.contains(span), true);
+    assert.strictEqual(root.contains(outside), false);
+});
+
+test('getComputedStyle reports the inline position, defaulting to static when unset', () => {
+    const env = createEnv();
+    const element = env.document.createElement('div');
+
+    assert.strictEqual(env.window.getComputedStyle(element).position, 'static');
+
+    element.style.position = 'relative';
+
+    assert.strictEqual(env.window.getComputedStyle(element).position, 'relative');
+});

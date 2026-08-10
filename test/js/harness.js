@@ -63,6 +63,18 @@ class FakeNode {
         }
     }
 
+    // Standard Node.contains: true for the node itself or any descendant, walking up via
+    // parentNode. snippets.js uses this to find which snippet root owns an arbitrary element
+    // without hardcoding that root's own selector anywhere outside _snippetRoots itself.
+    contains(node) {
+        for (let current = node; current !== null; current = current.parentNode) {
+            if (current === this) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     #adopt(node) {
         if (node.parentNode) {
             node.parentNode.removeChild(node);
@@ -511,6 +523,11 @@ function createEnv(options = {}) {
     };
     window.scrollTo = (x, y) => scrollCalls.push({ x, y });
     window.addEventListener = (type, handler) => addListener(listeners, type, handler);
+    // Real getComputedStyle also reflects stylesheet rules; this harness has no CSS cascade engine,
+    // so it only reports what the element's own inline style set, defaulting to 'static' exactly
+    // like an unset position does in a real DOM - enough for snippets.js's one use (deciding whether
+    // a snippet root needs to claim its own positioning context for the glass layer).
+    window.getComputedStyle = (element) => ({ position: element.style.position || 'static' });
 
     // Absent by default, same as a real Node process: snippets.js guards every use with
     // `typeof ResizeObserver !== 'undefined'`, so most tests exercise that "unsupported host" path

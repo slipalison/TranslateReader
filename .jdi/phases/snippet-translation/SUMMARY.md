@@ -664,3 +664,153 @@ contra o estado final antes de cada commit).
 Commits: `044870b` — `fix(snippet-translation): guard snippet translations against implausibly long
 responses and purge poisoned rows on restore (D-A)`; `daf11a7` — `fix(snippet-translation): keep
 glass blobs measured after reflow and trace one contour per pagination column (D-B)`.
+
+## Iter 7 (post-loop fix round, autorizado pelo usuario — 4o feedback com screenshots do app real)
+
+Loop ja tinha convergido de novo (`8589c1e`, APPROVED_WITH_WARNINGS) quando o usuario testou o app
+real e reportou DOIS defeitos ligados entre si: (1) ao REDIMENSIONAR a janela, o vidro some dos
+snips justamente quando o paragrafo passa a fragmentar entre colunas/paginas; (2) ao mudar de
+pagina, uma bolha de vidro fantasma aparece flutuando numa area vazia, sem selecao/traducao valida
+por perto. Causa-raiz ja diagnosticada pelo orquestrador antes desta iteracao (confirmada na fonte).
+
+### Causa-raiz
+
+O blob (mask+svg) era `position: absolute` FILHO DO PARAGRAFO. Quando o paragrafo fragmenta entre
+colunas do `_pager` (multi-column CSS, `paginated.js` — congelado, so lido), um elemento absoluto
+ancora no PRIMEIRO box de fragmento gerado pelo navegador, mas `_blobFromEls` calculava as bandas
+relativas ao `getBoundingClientRect()` da UNIAO dos fragmentos (top = min dos tops, que pode
+pertencer ao SEGUNDO fragmento, no topo da coluna seguinte). Ancora (onde o elemento realmente
+renderiza) e origem da geometria (de onde as coordenadas do path partem) descasavam: o resultado era
+banda com Y negativo na pratica (vidro clipado/invisivel) ou deslocada (bolha fantasma numa area sem
+relacao com o texto). A particao por coluna do iter 6 (`_columnGroupsOf`) ja particionava certo, mas
+desenhava tudo no lugar errado pelo mesmo descasamento — o mockup nunca teve colunas, entao ancorar
+por paragrafo era estruturalmente invalido no paginado real e so um bug latente ate o usuario
+redimensionar a janela o suficiente para fragmentar um paragrafo.
+
+### Fix — camada de blobs ancorada na RAIZ, nao mais no paragrafo
+
+Toda a mudanca vive em `snippets.js` (mais o harness de teste e a PIXEL-SPEC); nenhum `.cs` tocado.
+
+1. **Camada por raiz** (`_ensureLayerFor`/`_removeLayerFor`, `_snippetLayers` — `WeakMap`, nao `Map`:
+   o `#_pager` paginado e um elemento NOVO a cada troca de capitulo, `paginated.js#initPagination`
+   descarta o antigo; um registro forte acumularia uma entrada morta por capitulo virado para
+   sempre). No mount (e sob demanda em `_renderAllBlobs`), cada raiz de `_snippetRoots()` ganha UM
+   `<div class="tr-blob-layer">` como PRIMEIRO filho, `position: absolute; left: 0; top: 0; width: 0;
+   height: 0; pointer-events: none`. Se `getComputedStyle(root).position === 'static'`, o codigo seta
+   `root.style.position = 'relative'` E lembra que foi ELE quem setou (`ownedPosition`), restaurando
+   `''` so nesse caso no unmount — nunca mexe numa posicao que o livro ou outro script ja tivesse.
+2. **`_blobFromEls` mede relativo a RAIZ, nao ao paragrafo**: `_rootFor(el)` (novo) resolve a raiz via
+   `root.contains(el)` percorrendo `_snippetRoots()` — sem repetir as strings `_pager`/
+   `chapter-content` fora de `_snippetRoots` (DoD 6 continua valendo). Coordenadas passam a ser
+   `rect - rootRect` em vez de `rect - parRect`. A raiz paginada cobre TODAS as paginas do capitulo
+   de uma vez (CSS columns), entao a mascara/svg NAO e dimensionada ao tamanho da raiz inteira —
+   `left`/`top`/`w`/`h` sao derivados do bounding box JUSTO em torno dos rects medidos (min/max das
+   bandas +- `OFF`), e viram estilo INLINE por blob (`_updateBlob` agora seta `.style.left`/`.style.
+   top`, que a CSS `.tr-blob`/`.tr-blob-svg` deixou de fixar em `-8px`). `_blobPath(bands, 10)` e
+   `OFF`/`padX`/`padY` continuam LITERAIS e intocados — so a origem das coordenadas mudou.
+3. **Blobs viram filhos do layer**: `_renderAllBlobs` resolve `root`/`layer` por entrada (via
+   `_rootFor` + `_ensureLayerFor`) e faz `layer.appendChild(mask); layer.appendChild(svg)` em vez de
+   `paragraph.prepend(...)`. `_blobDescriptors` perdeu o campo `owner` (paragrafo) — nao e mais
+   necessario, a raiz e resolvida depois.
+4. **Z-order**: como o layer e SEMPRE o primeiro filho da raiz (inserido antes de qualquer
+   paragrafo), e os spans de periodo (`.tr-sent`/`[data-snip]`) continuam `position: relative` na
+   propria CSS, o texto pinta por cima do vidro pela ordem do documento — sem depender do paragrafo
+   em si ser posicionado. Prova por teste (`z-order: ...`).
+5. **Fragmentacao**: com coordenadas root-relative, os grupos de `_columnGroupsOf` (iter 6, intocado)
+   caem naturalmente na coluna correta cada um — o vidro aparece na parte visivel de CADA pagina que
+   o periodo ocupa. A bolha fantasma morre: nao existe mais ancora descasada, so uma raiz que nunca
+   fragmenta a si mesma.
+6. **Limpeza**: `unmountSnippetLayer` chama `_removeLayerFor` por raiz — remover o `<div>` do layer
+   leva TODOS os seus mask/svg filhos junto num unico `.remove()`, sem precisar mais varrer `_blobs`
+   no-por-no; `_blobs.clear()` so reseta o registro. `_unwrapParagraph`/`_originalParagraphText`
+   perderam o branch morto `_hasClass(node, 'tr-blob')` (nunca mais alcancavel: um blob nunca e filho
+   do paragrafo) — sem cadaver comentado.
+7. **`_wrapParagraph`**: `el.style.position = 'relative'` removido (e o reset simetrico em
+   `_unwrapParagraph`) — a decisao literal do CONTEXT era "decida lendo": o paragrafo so precisava
+   ser posicionado para servir de ancora ao blob antigo; os spans `.tr-sent` ja sao `position:
+   relative` por si so e continuam garantindo a ordem de pintura sem ajuda do paragrafo, entao a
+   linha ficou sem funcao (confirmado: nenhuma regra CSS depende de `[data-pi]` estar posicionado).
+
+### Testes novos (11: 9 em `snippets.test.js`, 2 em `harness.test.js`) e 2 removidos
+
+`harness.test.js` (+2, capacidades novas exigidas pelo fix): `contains` (Node.contains — usado por
+`_rootFor`) prova nodo/descendente/fora-da-arvore; `getComputedStyle` prova o default `static` e o
+reflexo do `style.position` inline (harness nao tem cascata CSS real, so reflete o inline, suficiente
+para o unico uso que `snippets.js` faz dele).
+
+`snippets.test.js` (+9, -2 renomeado/removido):
+- `layer:` (5): camada criada como primeiro filho da raiz; CSS da `.tr-blob-layer` tem `pointer-events:
+  none`; raiz `static` ganha `position: relative` e restaura no unmount; raiz que JA tinha posicao
+  propria nunca e tocada; modo rolagem da UM layer por `.chapter-content`, layers distintos.
+- `blob geometry: a paragraph fragmented across two columns is measured relative to the ROOT, never
+  the paragraph` (1): raiz com rect NAO-zero e paragrafo SEM rect proprio (default zero) — prova por
+  construcao que o paragrafo deixou de ser lido; `left`/`top`/`w`/`h` calculados a mao E validados
+  contra `_blobPath` chamado independentemente com as bandas locais esperadas; asserta que nenhuma
+  banda tem Y negativo (o defeito original) e que ha exatamente 2 contornos (`M`/`Z`) para as 2
+  colunas simuladas.
+- `sweep: the layer holds no orphaned blob after a selection is cleared` (1): prova "nenhum mask/svg
+  orfao no layer" diretamente pelo `childNodes.length` do layer, nao so pela contagem global do
+  documento (que as suites de sweep pre-existentes ja cobriam).
+- `root: an element outside every snippet root resolves to no root` (1): cobre o branch defensivo de
+  `_rootFor` (retorno `null`), unico trecho novo que ficou descoberto na 1a rodada de
+  `--experimental-test-coverage` (os outros 4 gaps reportados sao pre-existentes, mesmas linhas
+  relativas antes e depois do diff, confirmado com `git stash`).
+- **Renomeado**: `z-order: the blob mask and svg become the first children of the paragraph...` vira
+  `z-order: the blob layer is the first child of the root, so the glass paints before every
+  paragraph` — comportamento mudou de fato (layer, nao paragrafo), nome atualizado para descrever a
+  garantia real.
+- **Removido** (1, documentado — nao e perda de cobertura): `unmount: a stray glass blob is skipped
+  without throwing even though its outline is an SVG element (B-2 belt and suspenders)`. O cenario
+  que o teste simulava (blob ainda anexado ao paragrafo quando `_unwrapParagraph` roda) ficou
+  estruturalmente IMPOSSIVEL apos este fix — um blob nunca mais e filho de paragrafo, entao nao ha
+  "orfao" para o unwrap encontrar. A garantia mais ampla que B-2 protegia (unmount nunca lanca mesmo
+  com blobs vivos coexistindo com selecao/snip) continua coberta pelo teste holistico
+  `unmount: completes without throwing and remains re-mountable with a snip blob and an active
+  selection present (B-2 regression)`, inalterado por este diff e ainda verde.
+
+### Invariantes re-conferidos (nao regrediram)
+
+`translation.js`/`paginated.js`/`scroll.js`: diff VAZIO vs `BASELINE` (`02a4c6c`). Zero
+`querySelectorAll('...')` com aspas simples contendo p/h1/li/div em `snippets.js`.
+`_blobPath(bands, 10)` literal no call site (a variavel local do mapeamento foi deliberadamente
+chamada `bands`, nao `local`, para preservar o grep do DoD 4); `OFF=8`/`padX=5`/`padY=1.5` intactos;
+`_splitSentences` com fonte e regex unicas (1x cada); `_snippetRoots` como fonte unica de `_pager`/
+`chapter-content` (contagem no arquivo inteiro == contagem dentro da propria funcao). Golden geometry
+(DoD 4): os 4 testes de nome exato passam, `_blobPath` em si NAO foi tocado (so quem a chama mudou a
+origem das coordenadas que passa pra ela). PIXEL-SPEC: os 14 literais do DoD 1 continuam presentes;
+nova sub-nota "Ancoragem no app" adicionada apos a secao "Blob de vidro" documentando a divergencia
+estrutural, sem remover nenhum literal medido do mockup.
+
+### Verificacao pos-fix
+
+- JS: **184/184 passando** (era 175 antes deste iter — 11 adicoes brutas, 2 remocoes, liquido +9),
+  0 fail, 0 skipped. `comm -23` nome a nome contra a suite anterior a esta iteracao, nos 2 arquivos
+  tocados (`snippets.test.js`, `harness.test.js`): so as 2 remocoes documentadas (`unmount: a stray
+  glass blob...` e o nome antigo do z-order, substituido pelo novo). `comm -23` contra `main` (so
+  `bridge`/`paginated`/`scroll`/`translation`, escopo do DoD 9): vazio.
+- Cobertura de `snippets.js` isolada (`node --test --experimental-test-coverage
+  --test-coverage-include=".../snippets.js"`): **99.20% linhas / 88.99% branches** — o UNICO gap novo
+  introduzido pelo diff (`_rootFor` linha do `return null`) foi fechado pelo teste dedicado; os 4
+  gaps remanescentes (`719-724`, `855-856`, `967`, `1213`) sao PRE-EXISTENTES, confirmados
+  comparando com `git stash` antes do diff (mesmos branches defensivos, so deslocados pelas
+  insercoes).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1573 valid=1583 pct=99.37 files=5`
+  (piso 85, subiu de 99.34% no fim do iter 6). `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97
+  files=26` (piso 90, **identico** ao fim do iter 6 — confirma que nenhum `.cs` foi tocado).
+  `COVERAGE_GUARD new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet build -c Release -f net10.0-windows10.0.19041.0`: `0 Warning(s), 0 Error(s)`.
+- `dotnet test` (Release, prova de nao-regressao — iteracao 100% JS): **414 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 416 total** — identico ao fim do iter 6, como esperado
+  (mudanca 100% JS + doc, nenhum `.cs` no diff).
+- `dotnet format whitespace --verify-no-changes`: exit 2, pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  desta iteracao (nenhum `.cs` tocado).
+- `git status`/`git diff --name-only` confirmam escopo: `snippets.js`, `harness.js`,
+  `harness.test.js`, `snippets.test.js`, `design/v0.2.0/PIXEL-SPEC.md` (mais os arquivos de estado do
+  `.jdi/` do orquestrador do loop, nao tocados por este specialist).
+
+Commit: `fix(snippet-translation): anchor glass blobs to a per-root layer so column-fragmented
+periods keep their glow` (1 commit atomico — a arquitetura de layer-por-raiz e o unico fix que
+resolve os DOIS defeitos reportados, que compartilham a MESMA causa raiz; harness + testes +
+PIXEL-SPEC entram juntos porque o codigo de producao sozinho quebraria a suite existente sem as
+capacidades novas do harness no MESMO commit).
