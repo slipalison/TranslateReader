@@ -944,3 +944,36 @@ placeholder...`/`applySnippetTranslation gives the finished snip a permanent gla
 
 Commit: `fix(snippet-translation): never leave a snippet's loading placeholder stuck when its
 translation result cannot be applied` (D-B).
+
+### D-B follow-up — matching por chave exata perdia o caso real (`chapterHRef` divergente)
+
+Reprovado pelo orquestrador em Chrome real logo apos a entrega acima: `_clearOrphanedLoading`
+comparava `span.dataset.loadKey === key` (string EXATA). No modo paginado `setSnippetLoading` sempre
+chaveia com `chapterHRef=null` (`'null:pi:a:b'`), mas o item que volta de uma traducao em voo pode
+carregar o `chapterHRef` CONCRETO do capitulo corrente no momento em que o resultado chega — as duas
+strings nunca batiam mesmo nomeando o MESMO pedido, entao o orfao sobrevivia exatamente no caso real.
+
+**Fix:** `_clearOrphanedLoading` passou a comparar ANCORAS PARSEADAS (`_parseSnipKey` no
+`dataset.loadKey` de cada `.tr-loading`), nunca a string crua. `_anchorMatches(itemAnchor,
+spanAnchor)` nova: `paragraphIndex` e `sentenceStart` (`a`) exigem igualdade EXATA (`a` e o que
+distingue duas traducoes em voo dentro do MESMO paragrafo — o proprio `data-si` do placeholder E o
+proprio `dataset.si`); `chapterHRef` usa a MESMA semantica tolerante de `_findParagraph` para a raiz
+paginada, mas SIMETRICA (null de QUALQUER lado casa com qualquer valor, dois nao-nulos exigem
+igualdade) — o lado com `null` pode ser tanto o placeholder (paginado) quanto, em tese, o item.
+
+**Testes novos (3):** paragraphIndex divergente (99 vs 0) NAO limpa (ancoras nem batem, mesmo com
+`a` igual); `chapterHRef` divergente com o placeholder em `null` LIMPA (match frouxo); DUAS
+traducoes em voo no MESMO paragrafo (`a=0` e `a=2`) — limpar a inaplicavel de `a=0` NAO toca a de
+`a=2` (`sentenceStart` desambigua). Sanity check: os 2 ultimos falham deterministicamente ao
+reverter `_clearOrphanedLoading` pra comparacao de string exata (confirmado rodando a suite contra a
+versao antiga antes de restaurar o fix).
+
+**Verificacao:** JS **198/198** (era 195), 0 fail, 0 skipped. `bash scripts/coverage-gate.sh`: exit
+0, `COVERAGE_JS covered=1747 valid=1757 pct=99.43 files=5` (subiu de 99.42), `COVERAGE_SCOPE
+covered=1340 valid=1411 pct=94.97 files=26` (identico — zero `.cs` tocado), `COVERAGE_GUARD
+new_app_cs=0 waived=0`. `dotnet test`: 414 passed / 2 skipped / 0 failed / 416 total (identico).
+Frozen files (`translation.js`/`paginated.js`/`scroll.js`) diff vazio vs `BASELINE`; regex de
+`_splitSentences` continua 1x; aspas duplas em todo `querySelectorAll`.
+
+Commit: `fix(snippet-translation): match an orphaned loading placeholder by parsed anchor instead of
+exact key string, tolerating a divergent chapterHRef` (D-2026-08-09-snippet-translation-2).
