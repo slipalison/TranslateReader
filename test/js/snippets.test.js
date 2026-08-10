@@ -660,6 +660,72 @@ test('applySnippetTranslation: an item whose paragraph can no longer be resolved
     assert.strictEqual(env.window._blobs.size, 0);
 });
 
+// Iter 8 follow-up: exact-string key matching missed the real-world case where a paginated-mode
+// placeholder is keyed with chapterHRef=null (setSnippetLoading always does this) but the item that
+// comes back off an in-flight translation carries the concrete chapterHRef of whatever chapter was
+// current by the time the result landed — the two strings never matched even though they name the
+// SAME request. _clearOrphanedLoading must match by parsed anchor with the same tolerant chapterHRef
+// semantics _findParagraph uses (null on either side matches anything), while still requiring
+// paragraphIndex AND sentenceStart to agree exactly so it never clears an unrelated placeholder.
+
+test('applySnippetTranslation: an inapplicable item whose paragraphIndex does not match any loading placeholder clears nothing (anchors do not match)', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.setSnippetLoading(['null:0:0:0']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'OUTRO-CAPITULO', paragraphIndex: 99, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(
+        env.document.querySelectorAll('.tr-loading').length, 1,
+        'paragraphIndex 99 vs 0 must never match — the unrelated placeholder stays put');
+    assert.strictEqual(
+        env.document.querySelectorAll('.tr-loading')[0].dataset.loadKey, 'null:0:0:0');
+});
+
+test('applySnippetTranslation: an inapplicable item whose chapterHRef differs from the placeholder\'s null still clears it (loose chapterHRef match)', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['P0.', 'P1.', 'P2.', 'P3.', 'P4.', 'Five A. Five B.']);
+    env.window.setSnippetLoading(['null:5:0:1']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    // Same race as the test above, but this time the item comes back with the CONCRETE chapterHRef
+    // of the chapter that was current when the result landed, instead of the null the placeholder
+    // was keyed with — the exact-string match this fix replaces would have missed this.
+    env.document.getElementById('_pager').id = '';
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'cap3.html', paragraphIndex: 5, sentenceStart: 0, sentenceEnd: 1,
+        translatedText: 'Five A. Five B, translated.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(
+        env.document.querySelectorAll('.tr-loading').length, 0,
+        'null on the placeholder side must match the item\'s concrete chapterHRef');
+});
+
+test('applySnippetTranslation: an inapplicable item never clears a DIFFERENT in-flight loading in the same paragraph (sentenceStart disambiguates)', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['P0.', 'P1.', 'Alpha. Beta. Gamma.']);
+    env.window.setSnippetLoading(['null:2:0:0', 'null:2:2:2']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 2);
+    env.document.getElementById('_pager').id = '';
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: 'cap.html', paragraphIndex: 2, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'Alpha, translated.', showingOriginal: false,
+    }]);
+
+    const remaining = env.document.querySelectorAll('.tr-loading');
+    assert.strictEqual(remaining.length, 1, 'only the matching (pi=2, a=0) placeholder is cleared');
+    assert.strictEqual(
+        remaining[0].dataset.loadKey, 'null:2:2:2',
+        'the OTHER in-flight run in the same paragraph (a=2) must survive untouched');
+});
+
 test('tap: tapping a period shows the selection blob and pill', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);

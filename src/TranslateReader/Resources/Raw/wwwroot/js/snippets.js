@@ -1291,16 +1291,36 @@ function _applySnippetItem(item) {
         original, item.translatedText, item.showingOriginal);
 }
 
+// The SAME tolerant chapterHRef semantics _findParagraph uses for the paginated root — null on
+// EITHER side matches anything, two non-null values must be equal — applied symmetrically here
+// because the side carrying null can be either one: setSnippetLoading always keys a paginated-mode
+// placeholder with null, but the item that comes back off an in-flight translation can carry the
+// concrete chapterHRef of whatever chapter was current when the result landed. paragraphIndex and
+// sentenceStart (`a`) must still agree exactly — `a` is what actually distinguishes two different
+// runs translating inside the SAME paragraph at once (a loading placeholder's own data-si IS its
+// `a`, see _loadingSpanAt), so a coincidental pi match alone must never clear the wrong one.
+function _anchorMatches(itemAnchor, spanAnchor) {
+    if (itemAnchor.paragraphIndex !== spanAnchor.paragraphIndex) return false;
+    if (itemAnchor.a !== spanAnchor.a) return false;
+    return itemAnchor.chapterHRef === null || spanAnchor.chapterHRef === null ||
+        itemAnchor.chapterHRef === spanAnchor.chapterHRef;
+}
+
 // Undoes a loading placeholder an apply item could not land on (its own paragraph/range vanished
 // between setSnippetLoading and the response arriving — e.g. a navigation tore down the root that
 // owned the request). Searches the WHOLE document, not just whatever _findParagraph could resolve,
 // since that is exactly the lookup that just failed: a translation result that IS present but
-// inapplicable must never leave its own `.tr-loading` pulsing forever (D-B).
+// inapplicable must never leave its own `.tr-loading` pulsing forever (D-B). Matches by parsed
+// anchor (_anchorMatches), never by exact key string — the item's own chapterHRef and the
+// placeholder's stored one can legitimately disagree (see _anchorMatches).
 function _clearOrphanedLoading(item) {
-    var key = _snipKey(item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd);
+    var itemAnchor = {
+        chapterHRef: item.chapterHRef, paragraphIndex: item.paragraphIndex, a: item.sentenceStart,
+    };
     for (var span of document.querySelectorAll(".tr-loading")) {
-        if (span.dataset.loadKey === key) {
-            _spliceSpanBackToPeriods(span, span.textContent, item.sentenceStart, key);
+        var spanAnchor = _parseSnipKey(span.dataset.loadKey);
+        if (_anchorMatches(itemAnchor, spanAnchor)) {
+            _spliceSpanBackToPeriods(span, span.textContent, spanAnchor.a, span.dataset.loadKey);
             return;
         }
     }
