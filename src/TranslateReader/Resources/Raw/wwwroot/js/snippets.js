@@ -1238,7 +1238,7 @@ function _captureRangeNodes(p, a, b) {
 
 function _replaceRangeWithSnip(p, chapterHRef, pi, a, b, original, translated, showingOriginal) {
     var span = _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOriginal);
-    _spliceRange(p, a, b, [span]);
+    return _spliceRange(p, a, b, [span]);
 }
 
 // D-2026-08-09-snippet-translation-5: overlap is destructive. Any existing snip in the same
@@ -1277,15 +1277,38 @@ window.restoreSnippets = function (list) {
     _renderAllBlobs();
 };
 
+// Applies one item: finds its paragraph, drops any overlapping snip, and splices the finished snip
+// in over the range setSnippetLoading placeholder-ed earlier. Returns whether it actually landed —
+// false either means the paragraph itself could not be resolved, or the specific range inside it no
+// longer exists (both count as "did not apply" for the orphan cleanup in applySnippetTranslation).
+function _applySnippetItem(item) {
+    var p = _findParagraph(item.chapterHRef, item.paragraphIndex);
+    if (!p) return false;
+    _removeOverlappingSnips(p, item.sentenceStart, item.sentenceEnd);
+    var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
+    return _replaceRangeWithSnip(
+        p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
+        original, item.translatedText, item.showingOriginal);
+}
+
+// Undoes a loading placeholder an apply item could not land on (its own paragraph/range vanished
+// between setSnippetLoading and the response arriving — e.g. a navigation tore down the root that
+// owned the request). Searches the WHOLE document, not just whatever _findParagraph could resolve,
+// since that is exactly the lookup that just failed: a translation result that IS present but
+// inapplicable must never leave its own `.tr-loading` pulsing forever (D-B).
+function _clearOrphanedLoading(item) {
+    var key = _snipKey(item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd);
+    for (var span of document.querySelectorAll(".tr-loading")) {
+        if (span.dataset.loadKey === key) {
+            _spliceSpanBackToPeriods(span, span.textContent, item.sentenceStart, key);
+            return;
+        }
+    }
+}
+
 window.applySnippetTranslation = function (items) {
     for (var item of items) {
-        var p = _findParagraph(item.chapterHRef, item.paragraphIndex);
-        if (!p) continue;
-        _removeOverlappingSnips(p, item.sentenceStart, item.sentenceEnd);
-        var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
-        _replaceRangeWithSnip(
-            p, item.chapterHRef, item.paragraphIndex, item.sentenceStart, item.sentenceEnd,
-            original, item.translatedText, item.showingOriginal);
+        if (!_applySnippetItem(item)) _clearOrphanedLoading(item);
     }
     _renderAllBlobs();
 };

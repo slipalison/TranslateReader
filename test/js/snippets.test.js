@@ -633,6 +633,33 @@ test('unmount: clears every stashed original-node entry, never leaking a detache
     assert.strictEqual(env.window._snipOriginalNodes.size, 0);
 });
 
+// Iter 8 (D-B): applySnippetTranslation must never leave a `.tr-loading` placeholder stuck pulsing
+// forever for an item whose paragraph/range can no longer be resolved by the time the translation
+// comes back (a result that IS present but inapplicable).
+
+test('applySnippetTranslation: an item whose paragraph can no longer be resolved still clears its own loading placeholder instead of leaving it stuck pulsing forever (D-B)', () => {
+    const env = loadWithLabels();
+    mountWithParagraphs(env, ['Ela disse que sim.']);
+    env.window.setSnippetLoading(['null:0:0:0']);
+    assert.strictEqual(env.document.querySelectorAll('.tr-loading').length, 1);
+
+    // Simulates the exact race reproduced against the real app: by the time the translation comes
+    // back, _snippetRoots can no longer resolve the pager that owned the request (torn down by a
+    // navigation), so _findParagraph resolves nothing for the key still pulsing in the DOM.
+    env.document.getElementById('_pager').id = '';
+
+    env.window.applySnippetTranslation([{
+        chapterHRef: null, paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        translatedText: 'She said yes.', showingOriginal: false,
+    }]);
+
+    assert.strictEqual(
+        env.document.querySelectorAll('.tr-loading').length, 0,
+        'an item that could not be applied must not leave its own loading placeholder stuck forever');
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(env.window._blobs.size, 0);
+});
+
 test('tap: tapping a period shows the selection blob and pill', () => {
     const env = loadFull();
     const paragraphs = mountWithParagraphs(env, ['Ela chegou. Ele saiu.']);
