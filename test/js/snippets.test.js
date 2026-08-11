@@ -531,21 +531,29 @@ test('mount: inline markup between two real sentence boundaries stays inside its
     assert.strictEqual(spans[2].className, 'tr-sent', 'selecting period 1 must not select period 2');
 });
 
-test('mount: a sentence boundary that would fall inside an inline element is deferred to after it, never cutting the element', () => {
+// 6th user feedback (real-app screenshot): a boundary fully INSIDE an inline element used to be
+// deferred just like one that crosses an element's border — degenerating into a single, unselectable
+// period whenever a whole paragraph body lived inside one <span> (routine in real EPUBs: Wardley Maps,
+// Calibre/web exports). Fully contained (not crossing) now divides the element instead, recursively.
+test('mount: a sentence boundary fully inside an inline element divides it into two shallow clones, recursively', () => {
     const env = loadFull();
     const paragraph = pagerWithMarkup(
         env, 'Intro text <em>ends here. And continues</em> after. Final sentence.');
-    const em = paragraph.querySelectorAll('em')[0];
 
     env.window.mountSnippetLayer();
 
     const spans = paragraph.querySelectorAll('[data-si]');
-    assert.strictEqual(spans.length, 2);
-    assert.ok(
-        Array.from(spans[0].childNodes).includes(em),
-        'the whole <em> stays inside period 0, including the boundary that would have cut through it');
-    assert.strictEqual(spans[0].textContent, 'Intro text ends here. And continues after.');
-    assert.strictEqual(spans[1].textContent, 'Final sentence.');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans[0].textContent, 'Intro text ends here.');
+    assert.strictEqual(spans[1].textContent, 'And continues after.');
+    assert.strictEqual(spans[2].textContent, 'Final sentence.');
+    const ems = paragraph.querySelectorAll('em');
+    assert.strictEqual(
+        ems.length, 2, 'the <em> is divided into two shallow clones, never left spanning both periods');
+    assert.strictEqual(ems[0].textContent, 'ends here.');
+    assert.strictEqual(ems[1].textContent, 'And continues');
+    assert.ok(Array.from(spans[0].childNodes).includes(ems[0]));
+    assert.ok(Array.from(spans[1].childNodes).includes(ems[1]));
 });
 
 // Reviewer BLOCKED B-1: a boundary's whitespace run can START in free text and continue PAST an
@@ -626,6 +634,182 @@ test('mount: a comment right after an element never shifts a later boundary out 
     assert.strictEqual(spans[1].textContent, 'Second half here.');
 });
 
+// Iter 9 (6th user feedback, real-app screenshot): a whole paragraph BODY living inside one inline
+// element is routine in real EPUBs (Wardley Maps, Calibre/web exports:
+// `<span class="t">Title</span><span>Body one. Body two.</span>`), and it used to degenerate into a
+// single, unselectable period — ANY boundary fully inside an element was deferred just like one that
+// crosses an element's border, so the "atomic element" rule that correctly protects `<em>word</em>`
+// swallowed the entire paragraph whenever the element happened to contain the whole sentence run. A
+// boundary fully CONTAINED in an element (never one that crosses its border — B-1 stays as-is) is now
+// a real split point: the element is divided there, recursively, via shallow clones
+// (_distributeNodes/_wrapMarkupParagraph).
+
+// The period wrapper spans this file creates (_emptyPeriodSpan) are ALSO plain <span> tags, so a
+// bare `span` selector would also match them — this filters those out to isolate the CONTENT clones
+// a test wants to inspect.
+function contentSpans(root) {
+    return Array.from(root.querySelectorAll('span')).filter(function (s) {
+        return !s.className.includes('tr-sent');
+    });
+}
+
+test('mount: a paragraph whose whole body lives inside one span (probe case B, exact) splits into real periods, preserving the divided span\'s own attributes on every clone', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    const title = env.document.createElement('span');
+    title.setAttribute('class', 't');
+    title.appendChild(env.document.createTextNode('Titulo'));
+    paragraph.appendChild(title);
+    const body = env.document.createElement('span');
+    body.setAttribute('class', 'body');
+    body.setAttribute('data-x', '1');
+    body.appendChild(env.document.createTextNode('Frase um. Frase dois. Frase tres.'));
+    paragraph.appendChild(body);
+    const originalText = paragraph.textContent;
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans[0].textContent, 'TituloFrase um.');
+    assert.strictEqual(spans[1].textContent, 'Frase dois.');
+    assert.strictEqual(spans[2].textContent, 'Frase tres.');
+    assert.strictEqual(
+        paragraph.textContent, originalText, 'no character is lost or added by the split');
+
+    const bodyClones = contentSpans(paragraph).filter(function (s) { return s !== title; });
+    assert.strictEqual(bodyClones.length, 3, 'the divided body span produces one clone per period');
+    for (const clone of bodyClones) {
+        assert.strictEqual(clone.getAttribute('class'), 'body', 'every clone keeps the class attribute');
+        assert.strictEqual(clone.dataset.x, '1', 'every clone keeps the data-x attribute too');
+    }
+    assert.ok(
+        Array.from(spans[0].childNodes).includes(title),
+        'the atomic title span (no boundary of its own) is moved in unchanged, not cloned');
+
+    tap(env, spans[1]);
+
+    assert.strictEqual(spans[0].className, 'tr-sent');
+    assert.strictEqual(spans[1].className, 'tr-sent tr-on', 'selecting period 2 selects it');
+    assert.strictEqual(spans[2].className, 'tr-sent', 'and only it — period 3 stays unselected');
+});
+
+test('mount: a boundary inside a doubly-nested element divides BOTH ancestors, recursively', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    const span = env.document.createElement('span');
+    span.appendChild(env.document.createTextNode('Outer start '));
+    const em = env.document.createElement('em');
+    em.appendChild(env.document.createTextNode('inner one. Inner two'));
+    span.appendChild(em);
+    span.appendChild(env.document.createTextNode(' outer end. Final free sentence.'));
+    paragraph.appendChild(span);
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans[0].textContent, 'Outer start inner one.');
+    assert.strictEqual(spans[1].textContent, 'Inner two outer end.');
+    assert.strictEqual(spans[2].textContent, 'Final free sentence.');
+
+    const outerSpans = contentSpans(paragraph);
+    assert.strictEqual(
+        outerSpans.length, 3,
+        'the OUTER span is divided into 3 clones too — 2 boundaries: one inside the <em>, one in its own free text after it');
+    const ems = paragraph.querySelectorAll('em');
+    assert.strictEqual(ems.length, 2, 'the <em> is divided into 2 — the recursion descends into it as well');
+    assert.ok(Array.from(spans[0].childNodes).includes(outerSpans[0]));
+    assert.ok(Array.from(outerSpans[0].childNodes).includes(ems[0]));
+    assert.ok(Array.from(spans[1].childNodes).includes(outerSpans[1]));
+    assert.ok(Array.from(outerSpans[1].childNodes).includes(ems[1]));
+    assert.ok(
+        Array.from(spans[2].childNodes).includes(outerSpans[2]),
+        'the 3rd outer clone (free text after the <em>, past the 2nd boundary) has no <em> of its own');
+});
+
+test('mount: <br> between a title and a real sentence run splits normally, unaffected by the recursive-split fix (probe case A, regression)', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    paragraph.appendChild(env.document.createTextNode('Titulo'));
+    paragraph.appendChild(env.document.createElement('br'));
+    paragraph.appendChild(env.document.createTextNode('Frase um. Frase dois. Frase tres.'));
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans[0].textContent, 'TituloFrase um.');
+    assert.strictEqual(spans[1].textContent, 'Frase dois.');
+    assert.strictEqual(spans[2].textContent, 'Frase tres.');
+});
+
+test('mount: a title span followed directly by free-text sentences splits normally, unaffected by the recursive-split fix (probe case C, regression)', () => {
+    const env = loadFull();
+    const paragraph = pagerWithMarkup(
+        env, '<span class="t">Titulo</span>Frase um. Frase dois. Frase tres.');
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 3);
+    assert.strictEqual(spans[0].textContent, 'TituloFrase um.');
+    assert.strictEqual(spans[1].textContent, 'Frase dois.');
+    assert.strictEqual(spans[2].textContent, 'Frase tres.');
+});
+
+test('mount: a comment inside an element that itself gets divided moves whole with whichever half it landed in, no crash (capability gate)', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    const span = env.document.createElement('span');
+    span.appendChild(env.document.createTextNode('Note '));
+    const comment = env.document.createComment('x');
+    span.appendChild(comment);
+    span.appendChild(env.document.createTextNode(' here. Second one.'));
+    paragraph.appendChild(span);
+
+    assert.doesNotThrow(() => env.window.mountSnippetLayer());
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 2);
+    assert.strictEqual(spans[0].textContent, 'Note  here.');
+    assert.strictEqual(spans[1].textContent, 'Second one.');
+    const spanClones = contentSpans(paragraph);
+    assert.strictEqual(spanClones.length, 2);
+    assert.ok(
+        Array.from(spanClones[0].childNodes).includes(comment),
+        'the comment moves whole into whichever half it landed in — never split, never dropped');
+});
+
+test('unmount: a paragraph whose element got recursively divided restores byte-identical textContent (1-element-became-N-clones is accepted structurally, never required to merge back)', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    const title = env.document.createElement('span');
+    title.setAttribute('class', 't');
+    title.appendChild(env.document.createTextNode('Titulo'));
+    paragraph.appendChild(title);
+    const body = env.document.createElement('span');
+    body.appendChild(env.document.createTextNode('Frase um. Frase dois. Frase tres.'));
+    paragraph.appendChild(body);
+    const originalText = paragraph.textContent;
+
+    env.window.mountSnippetLayer();
+    env.window.unmountSnippetLayer();
+
+    assert.strictEqual(paragraph.textContent, originalText);
+    assert.strictEqual(paragraph.dataset.pi, undefined);
+});
+
 test('unmount: a paragraph with inline markup between real sentence boundaries restores the exact original DOM structure', () => {
     const env = loadFull();
     const paragraph = pagerWithMarkup(
@@ -687,17 +871,18 @@ test('snip: translating a period that carries inline markup works normally, and 
 // populates _snipOriginalNodes, since setSnippetLoading — the only thing that stashes nodes — was
 // never called this session) only ever carries plain text in dataset.orig. Removing it falls back to
 // _plainPeriodSpans, which used to re-split that flat text with the raw regex — rediscovering the
-// very boundary _wrapMarkupParagraph had deferred past the <em> at wrap time (no element left to
-// protect it once flattened) and manufacturing an extra period. That extra period reused whatever
-// data-si the FOLLOWING, untouched period already had (0, 1, 1 instead of 0, 1), corrupting every
-// range lookup in the paragraph from then on.
+// very boundary _wrapMarkupParagraph had deferred (a CROSSING boundary — B-1 — still defers, unlike a
+// boundary fully inside an element, which now splits instead) once flattened and manufacturing an
+// extra period. That extra period reused whatever data-si the FOLLOWING, untouched period already had
+// (0, 1, 1 instead of 0, 1), corrupting every range lookup in the paragraph from then on.
 test('remove-snip: a snip restored from a persisted session never over-splits into a colliding data-si when its deferred boundary reappears in the flattened text (B-2)', () => {
     const env = loadWithLabels();
     const paragraph = pagerWithMarkup(
-        env, 'Intro text <em>ends here. And continues</em> after. Final sentence.');
+        env, 'One. <em> Two words are here</em> and more. Second sentence.');
     env.window.mountSnippetLayer();
-    // Wrap-time periods: 0 = "Intro text <em>...</em> after." (the deferred boundary lives here),
-    // 1 = "Final sentence.".
+    // Wrap-time periods: 0 = "One.  Two words are here and more." (the boundary CROSSING the <em>'s
+    // own border keeps this whole, per B-1 — never split, unlike a fully-contained one), 1 = "Second
+    // sentence.".
     const originalText = env.window._rangeText(paragraph, 0, 0);
 
     env.window.restoreSnippets([{
@@ -715,8 +900,12 @@ test('remove-snip: a snip restored from a persisted session never over-splits in
     assert.deepStrictEqual(
         spans.map((s) => s.dataset.si), ['0', '1'],
         'data-si must stay unique and sequential, never 0, 1, 1');
-    assert.strictEqual(spans[0].textContent, originalText);
-    assert.strictEqual(env.window._rangeText(paragraph, 1, 1), 'Final sentence.');
+    // The fallback re-splits with _splitSentences, whose own .trim() normalizes the double space the
+    // crossing boundary straddled (node0's trailing space + the <em>'s leading one) down to a single
+    // one when the capped pieces are rejoined — a pre-existing, accepted lossiness of the plain-text
+    // fallback path (same one that already drops markup), not a regression this fix introduces.
+    assert.strictEqual(spans[0].textContent, 'One. Two words are here and more.');
+    assert.strictEqual(env.window._rangeText(paragraph, 1, 1), 'Second sentence.');
 });
 
 test('clearSnippetLoading: restores the ORIGINAL <em> node (not a re-serialized copy) when a markup period was loading and its translation never arrived', () => {

@@ -122,6 +122,10 @@ class FakeText extends FakeNode {
         }
         return tail;
     }
+
+    cloneNode() {
+        return new FakeText(this.ownerDocument, this.data);
+    }
 }
 
 // Mirrors Comment: has `.data` like a Text node, but deliberately no `tagName` (so production code's
@@ -143,6 +147,10 @@ class FakeComment extends FakeNode {
 
     set textContent(value) {
         this.data = String(value);
+    }
+
+    cloneNode() {
+        return new FakeComment(this.ownerDocument, this.data);
     }
 }
 
@@ -238,6 +246,26 @@ class FakeElement extends FakeNode {
     querySelector(selector) {
         const found = this.querySelectorAll(selector);
         return found.length > 0 ? found[0] : null;
+    }
+
+    // Mirrors Node.cloneNode: a NEW element of the same tag carrying the same attributes (real ones
+    // via setAttribute, `data-*` ones via dataset directly — setAttribute never populates
+    // `.attributes` for those) but never the original's event listeners, exactly like a real DOM
+    // clone. snippets.js only ever clones shallow (`deep` falsy) to divide a book-content element
+    // that turned out to contain a sentence boundary (untrusted HTML, csharp.md §4) — `this.constructor`
+    // keeps this correct for the FakeSvgElement subclass too, should a caller ever clone one of those.
+    cloneNode(deep) {
+        const clone = new this.constructor(this.ownerDocument, this.tagName);
+        for (const [name, value] of this.attributes) {
+            clone.setAttribute(name, value);
+        }
+        Object.assign(clone.dataset, this.dataset);
+        if (deep) {
+            for (const child of this.childNodes) {
+                clone.appendChild(child.cloneNode(true));
+            }
+        }
+        return clone;
     }
 }
 

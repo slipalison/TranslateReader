@@ -871,82 +871,132 @@ function _emptyPeriodSpan(index) {
 
 // Splits a paragraph that has element children on the SAME sentence boundaries _splitSentences
 // finds (via _sentenceBoundaryMatches, the shared regex — never a second literal), located as
-// offsets in the flattened text rather than re-parsed from the trimmed strings _splitSentences
-// returns. An inline element is atomic: any boundary whose matched whitespace OVERLAPS one AT ALL —
-// not just a boundary that starts inside it, but one that starts in free text and runs on into the
-// element too (EPUB markup routinely opens an inline tag with a leading space, e.g.
-// `<em> continues</em>`) — is dropped before the walk even starts, so the period that would have
-// ended there simply keeps going until the next boundary that actually lands entirely in free text.
-// A boundary only PARTIALLY excluded here would hand _consumeTextNode an offset measured against the
-// wrong node's length once the split runs, past that node's own text (B-1) — spec `Text.splitText`
-// throws IndexSizeError on that, aborting the mount mid-paragraph and losing whatever was already
-// moved. The element itself is never cut, and no node is ever serialized/reparsed (csharp.md §4:
-// book HTML is untrusted input).
+// offsets in the flattened text. A boundary that only PARTIALLY overlaps an element anywhere in the
+// tree (crosses its border — B-1) is dropped before the walk even starts: the element's own content
+// and whatever sits past that border are structurally inseparable there, so the period that would
+// have ended on it simply keeps going. A boundary fully CONTAINED inside an element, at any nesting
+// depth, IS a real split point: the element is divided there, recursively, by _distributeNodes below
+// — never serialized/reparsed HTML (csharp.md §4: book HTML is untrusted input), always shallow
+// clones (cloneNode(false): tag + attributes only) receiving the moved child nodes/fractions of their
+// own slice. An element with no boundary inside it at all stays exactly the single node it always
+// was — this is what real EPUBs need: a whole paragraph body routinely lives inside ONE inline
+// element (`<span>Sentence one. Sentence two.</span>`), and treating that element as unsplittable
+// degenerated the entire paragraph into a single, unselectable period.
 function _wrapMarkupParagraph(el) {
-    var elementRanges = _topLevelElementRanges(el);
+    var elementRanges = _allElementRanges(el);
     var matches = _sentenceBoundaryMatches(el.textContent).filter(function (m) {
-        return !elementRanges.some(function (r) { return m.end > r.start && m.start < r.end; });
+        return !elementRanges.some(function (r) { return _crossesElement(m, r); });
     });
-    var state = { ordered: [], si: 0, span: _emptyPeriodSpan(0), matchIdx: 0, pos: 0 };
-    for (var node of Array.from(el.childNodes)) {
-        if (node.tagName) {
-            state.span.appendChild(node);
-            state.pos += node.textContent.length;
-        } else if (_isSplittableText(node)) {
-            _consumeTextNode(node, state, matches);
-        } else {
-            // Element/Text/splittable-Text exhaust the two "real content" node types; anything else
-            // that still lacks a tagName here (a Comment, per spec, and the only one this file has
-            // actually seen — B-3) contributes NOTHING to el.textContent and has no splitText to cut
-            // it with, so it moves whole into whichever period is currently open, at ZERO offset cost
-            // — mirroring exactly what el.textContent already does when it walks straight past it.
-            state.span.appendChild(node);
-        }
-    }
-    state.ordered.push(state.span);
+    var state = { matchIdx: 0 };
+    var result = _distributeNodes(Array.from(el.childNodes), 0, matches, state);
+    var ordered = [];
+    result.pieces.forEach(function (piece, index) {
+        var span = _emptyPeriodSpan(index);
+        for (var node of piece) span.appendChild(node);
+        ordered.push(span);
+        if (index < result.separators.length) ordered.push(result.separators[index]);
+    });
     while (el.firstChild) el.removeChild(el.firstChild);
-    for (var item of state.ordered) el.appendChild(item);
+    for (var item of ordered) el.appendChild(item);
 }
 
-// A genuine Text node is the only child type _wrapMarkupParagraph ever cuts; anything else without
-// a tagName (a Comment) is moved whole instead (see _wrapMarkupParagraph/_topLevelElementRanges).
+// A genuine Text node is the only child type this file ever cuts; anything else without a tagName (a
+// Comment) is moved whole instead (see _distributeNodes/_allElementRanges).
 function _isSplittableText(node) {
     return typeof node.splitText === 'function';
 }
 
-// Flattened-text [start, end) range of every node that is a DIRECT child of `el` and an element —
-// the only nodes _wrapMarkupParagraph ever moves whole other than a Comment. A Comment contributes
-// no length here either, for the same reason _wrapMarkupParagraph never advances its own offset for
-// one: el.textContent skips it entirely (DOM spec), so counting it would desync every position after
-// it from the flattened text _sentenceBoundaryMatches actually searched (B-3).
-function _topLevelElementRanges(el) {
+// Flattened-text [start, end) range of EVERY element anywhere in `el`'s subtree, at ANY nesting
+// depth — not just direct children — since a boundary fully inside a deeply nested element (an <em>
+// inside a <span>, say) still needs to be found here to decide whether it may split anything. A
+// Comment contributes no length, mirroring exactly what el.textContent already does when it walks
+// straight past one (B-3): counting it here would desync every position after it from the flattened
+// text _sentenceBoundaryMatches actually searched.
+function _allElementRanges(el) {
     var ranges = [];
-    var pos = 0;
-    for (var node of Array.from(el.childNodes)) {
+    _gatherElementRanges(Array.from(el.childNodes), 0, ranges);
+    return ranges;
+}
+
+function _gatherElementRanges(nodes, start, ranges) {
+    var pos = start;
+    for (var node of nodes) {
         if (node.tagName) {
             var len = node.textContent.length;
             ranges.push({ start: pos, end: pos + len });
+            _gatherElementRanges(Array.from(node.childNodes), pos, ranges);
             pos += len;
         } else if (_isSplittableText(node)) {
             pos += node.data.length;
         }
     }
-    return ranges;
 }
 
-// Walks one top-level text node against every remaining boundary that starts before it ends,
-// cutting it with the native Text.splitText at each one: the piece before a match closes the
-// CURRENT period span, the matched whitespace itself is left in `state.ordered` as its own loose
-// node (never inside a span — _unwrapParagraph already restores a plain child untouched), and a
-// fresh span opens for the period that follows. Whatever is left after the last boundary stays in
-// the still-open span, since a later sibling node may continue the same period. Both splitText
-// offsets are clamped to what THIS node actually still holds (defense in depth, B-3): a boundary's
-// whitespace can legitimately straddle two sibling Text nodes with nothing but a zero-width Comment
-// between them (`<p>End. <!-- c --> Next</p>` splits into two Text nodes either side of the comment,
-// even though el.textContent reads through it as one run) — an un-clamped offset there would again
-// hand splitText a number past this node's own (already shrunk) length.
-function _consumeTextNode(node, state, matches) {
-    var nodeStart = state.pos;
+// A match "crosses" element range `r` when it overlaps it at all but is not entirely inside it — the
+// one relationship _wrapMarkupParagraph must never resolve into a split, at any level (B-1): the
+// element's own content and whatever sits past its border are structurally inseparable there.
+function _crossesElement(m, r) {
+    var overlaps = m.end > r.start && m.start < r.end;
+    var fullyContained = m.start >= r.start && m.end <= r.end;
+    return overlaps && !fullyContained;
+}
+
+// Recursively distributes `nodes` (siblings starting at flattened offset `nodesStart`) into pieces
+// separated by every boundary in `matches` that legitimately falls within them — `matches` has
+// already been purged of anything that crosses an element's border (_crossesElement), so every
+// boundary reached here is either in `nodes`' own free text or fully inside one of them, at any
+// depth. An element with no boundary of its own moves in whole, unchanged; one that DOES contain a
+// boundary is divided into as many shallow clones (cloneNode(false) — tag + attributes only, zero
+// serialization) as the recursive call on its own children produced pieces, and those clones take
+// the element's place in THIS level's own pieces exactly the way any other split would: the first
+// clone joins whichever piece is already open here, each following one starts a fresh piece of its
+// own — so a boundary inside a doubly-nested element (an <em> inside a <span>) correctly divides
+// BOTH ancestors, not just the innermost one. Returns { pieces, separators }: `pieces` is one
+// node-array per resulting period/slice, `separators[i]` is the loose node (never inside a
+// span/clone — _unwrapParagraph already restores a plain child untouched) that belongs between
+// pieces[i] and pieces[i + 1].
+function _distributeNodes(nodes, nodesStart, matches, state) {
+    var pieces = [[]];
+    var separators = [];
+    var pos = nodesStart;
+    for (var node of nodes) {
+        if (node.tagName) {
+            var len = node.textContent.length;
+            var sub = _distributeNodes(Array.from(node.childNodes), pos, matches, state);
+            if (sub.pieces.length > 1) {
+                var clones = sub.pieces.map(function (piece) {
+                    var clone = node.cloneNode(false);
+                    for (var child of piece) clone.appendChild(child);
+                    return clone;
+                });
+                pieces[pieces.length - 1].push(clones[0]);
+                for (var k = 1; k < clones.length; k++) {
+                    separators.push(sub.separators[k - 1]);
+                    pieces.push([clones[k]]);
+                }
+            } else {
+                pieces[pieces.length - 1].push(node);
+            }
+            pos += len;
+        } else if (_isSplittableText(node)) {
+            pos = _consumeIntoPieces(node, pos, matches, state, pieces, separators);
+        } else {
+            pieces[pieces.length - 1].push(node);
+        }
+    }
+    return { pieces: pieces, separators: separators };
+}
+
+// Walks one text node against every remaining boundary that starts before it ends, cutting it with
+// the native Text.splitText at each one, and feeding the result into `pieces`/`separators` instead of
+// directly building spans — the SAME function works whether `nodes` in _distributeNodes is the
+// paragraph's own children or a nested element's. Both splitText offsets are clamped to what THIS
+// node actually still holds (defense in depth, B-3): a boundary's whitespace can legitimately
+// straddle two sibling Text nodes with nothing but a zero-width Comment between them (which
+// `matches` was never filtered against, since a Comment carries no element range to cross) — an
+// un-clamped offset there would hand splitText a number past this node's own (already shrunk)
+// length. Returns this node's own end offset, for the caller's running position.
+function _consumeIntoPieces(node, nodeStart, matches, state, pieces, separators) {
     var nodeEnd = nodeStart + node.data.length;
     var remaining = node;
     var remainingStart = nodeStart;
@@ -955,21 +1005,19 @@ function _consumeTextNode(node, state, matches) {
         if (m.start > remainingStart) {
             var periodCut = Math.min(m.start - remainingStart, remaining.data.length);
             var beforeSep = remaining.splitText(periodCut);
-            state.span.appendChild(remaining);
+            pieces[pieces.length - 1].push(remaining);
             remaining = beforeSep;
         }
-        state.ordered.push(state.span);
-        state.si++;
-        state.span = _emptyPeriodSpan(state.si);
         var sepCut = Math.min(m.end - m.start, remaining.data.length);
         var afterSep = remaining.splitText(sepCut);
-        state.ordered.push(remaining);
+        separators.push(remaining);
+        pieces.push([]);
         remaining = afterSep;
         remainingStart = m.end;
         state.matchIdx++;
     }
-    state.span.appendChild(remaining);
-    state.pos = nodeEnd;
+    pieces[pieces.length - 1].push(remaining);
+    return nodeEnd;
 }
 
 // The inverse of _wrapParagraph: a plain period span gives back its own text, a snip gives back
