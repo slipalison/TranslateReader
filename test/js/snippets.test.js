@@ -626,6 +626,42 @@ test('snip: translating a period that carries inline markup works normally, and 
     assert.strictEqual(env.window._snipOriginalNodes.size, 0, 'consumed on restore, no leak');
 });
 
+// Reviewer BLOCKED B-2: a snip restored straight from a PERSISTED session (restoreSnippets never
+// populates _snipOriginalNodes, since setSnippetLoading — the only thing that stashes nodes — was
+// never called this session) only ever carries plain text in dataset.orig. Removing it falls back to
+// _plainPeriodSpans, which used to re-split that flat text with the raw regex — rediscovering the
+// very boundary _wrapMarkupParagraph had deferred past the <em> at wrap time (no element left to
+// protect it once flattened) and manufacturing an extra period. That extra period reused whatever
+// data-si the FOLLOWING, untouched period already had (0, 1, 1 instead of 0, 1), corrupting every
+// range lookup in the paragraph from then on.
+test('remove-snip: a snip restored from a persisted session never over-splits into a colliding data-si when its deferred boundary reappears in the flattened text (B-2)', () => {
+    const env = loadWithLabels();
+    const paragraph = pagerWithMarkup(
+        env, 'Intro text <em>ends here. And continues</em> after. Final sentence.');
+    env.window.mountSnippetLayer();
+    // Wrap-time periods: 0 = "Intro text <em>...</em> after." (the deferred boundary lives here),
+    // 1 = "Final sentence.".
+    const originalText = env.window._rangeText(paragraph, 0, 0);
+
+    env.window.restoreSnippets([{
+        chapterHRef: null, paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: env.window._snipHash(originalText), translatedText: 'Traduzido.',
+        showingOriginal: false,
+    }]);
+    const snip = env.document.querySelectorAll('[data-snip]')[0];
+    assert.ok(snip, 'the restored snip must exist');
+
+    const closeIcon = snip.querySelector('.tr-snip-chip').querySelectorAll('.ph-x')[0];
+    fire(closeIcon, 'click', { target: closeIcon });
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.deepStrictEqual(
+        spans.map((s) => s.dataset.si), ['0', '1'],
+        'data-si must stay unique and sequential, never 0, 1, 1');
+    assert.strictEqual(spans[0].textContent, originalText);
+    assert.strictEqual(env.window._rangeText(paragraph, 1, 1), 'Final sentence.');
+});
+
 test('clearSnippetLoading: restores the ORIGINAL <em> node (not a re-serialized copy) when a markup period was loading and its translation never arrived', () => {
     const env = loadWithLabels();
     const paragraph = pagerWithMarkup(env, 'A <em>bold</em> claim here.');

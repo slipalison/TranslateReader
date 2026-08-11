@@ -1151,14 +1151,16 @@ function _buildSnipSpan(chapterHRef, pi, a, b, original, translated, showingOrig
 // setSnippetLoading before it first replaced them — see _snipOriginalNodes), those nodes are
 // spliced back verbatim so inline markup like <em> survives; otherwise (a snip restored straight
 // from a persisted session, which only ever carries plain text server-side) the text is re-split
-// into fresh plain-text spans, losing any markup until the chapter is re-injected.
-function _spliceSpanBackToPeriods(span, originalText, startIndex, key) {
+// into fresh plain-text spans, losing any markup until the chapter is re-injected. `endIndex` is the
+// range's own `b` (span's last covered sentence index) — the fallback needs it to never manufacture
+// more periods than the range originally covered.
+function _spliceSpanBackToPeriods(span, originalText, startIndex, endIndex, key) {
     var parent = span.parentNode;
     var nodes = Array.from(parent.childNodes);
     var idx = nodes.indexOf(span);
     if (idx === -1) return;
     var stashed = key ? _snipOriginalNodes.get(key) : null;
-    var replacement = stashed || _plainPeriodSpans(originalText, startIndex);
+    var replacement = stashed || _plainPeriodSpans(originalText, startIndex, endIndex - startIndex + 1);
     if (key) _snipOriginalNodes.delete(key);
     var ordered = nodes.slice(0, idx).concat(replacement, nodes.slice(idx + 1));
     while (parent.firstChild) parent.removeChild(parent.firstChild);
@@ -1166,10 +1168,19 @@ function _spliceSpanBackToPeriods(span, originalText, startIndex, key) {
 }
 
 // Fallback for _spliceSpanBackToPeriods when no original nodes were stashed: re-splits plain text
-// into fresh period spans, indexed from startIndex so later selections stay consistent with the
-// rest of the paragraph.
-function _plainPeriodSpans(originalText, startIndex) {
+// into fresh period spans, indexed from startIndex, NEVER emitting more than `count` of them. A
+// boundary _wrapMarkupParagraph deferred past an inline element (see there) has no element left to
+// protect it once the range's text was already flattened to a plain string (dataset.orig/textContent
+// keep text only, never markup) — re-splitting that flat string with the raw regex can rediscover
+// the very boundary the original wrap skipped, over-splitting the range into more periods than it
+// ever had and colliding with whatever data-si already follows it in the paragraph (B-2). Any piece
+// past the (count - 1)th is folded into the LAST span instead of becoming its own, since a range can
+// only ever give back as many periods as it originally covered.
+function _plainPeriodSpans(originalText, startIndex, count) {
     var sentences = _splitSentences(originalText);
+    if (sentences.length > count) {
+        sentences = sentences.slice(0, count - 1).concat([sentences.slice(count - 1).join(' ')]);
+    }
     var replacement = [];
     sentences.forEach(function (sentence, offset) {
         if (offset > 0) replacement.push(document.createTextNode(' '));
@@ -1181,7 +1192,7 @@ function _plainPeriodSpans(originalText, startIndex) {
 // The inverse of _buildSnipSpan: turns a snip back into individual, re-selectable periods,
 // discarding the translation.
 function _restoreSnipToPeriods(span, info) {
-    _spliceSpanBackToPeriods(span, span.dataset.orig, info.a, span.dataset.snip);
+    _spliceSpanBackToPeriods(span, span.dataset.orig, info.a, info.b, span.dataset.snip);
 }
 
 // A root with a null chapterHRef is the single paginated pager, which always represents whichever
@@ -1326,7 +1337,8 @@ function _clearOrphanedLoading(item) {
     for (var span of document.querySelectorAll(".tr-loading")) {
         var spanAnchor = _parseSnipKey(span.dataset.loadKey);
         if (_anchorMatches(itemAnchor, spanAnchor)) {
-            _spliceSpanBackToPeriods(span, span.textContent, spanAnchor.a, span.dataset.loadKey);
+            _spliceSpanBackToPeriods(
+                span, span.textContent, spanAnchor.a, spanAnchor.b, span.dataset.loadKey);
             return;
         }
     }
@@ -1378,7 +1390,7 @@ window.clearSnippetLoading = function (keys) {
         if (!p) continue;
         var span = _loadingSpanAt(p, info.a);
         if (!span) continue;
-        _spliceSpanBackToPeriods(span, span.textContent, info.a, key);
+        _spliceSpanBackToPeriods(span, span.textContent, info.a, info.b, key);
     }
     _renderAllBlobs();
 };
