@@ -1393,3 +1393,65 @@ co-ocorre com "translation"/"text"/"provide".
 
 Commit: `0feaafc` — `fix(snippet-translation): stop flagging fiction dialogue as a refusal, and
 never purge persisted rows by language ratio (B-4)`.
+
+### Iter 10 fix — B-5 (reviewer blocked de novo + ressalva de processo)
+
+Reviewer bloqueou o `0feaafc` acima com **B-5**, provado mecanicamente: o fixture #3 verbatim
+(`"I can't breathe," she whispered, afraid of everything around her.`) seguia REJEITADO no caminho
+FRESH — nao pela blocklist (ja passava no persisted), mas pelo RATIO: a tabela EN tinha 15 palavras
+sem pronomes/auxiliares, entao esse texto rendia 1 hit (`"of"`) dos 2 exigidos. Dialogo/narracao EN
+comum de 40-90 chars falhava em massa (`"He nodded slowly and walked away without a word."` -> 1
+hit -> reprovado): com destino English/Spanish, um trecho legitimo virava intraduzivel
+DETERMINISTICO (2 inferencias queimadas -> `InvalidOperationException`).
+
+**Ressalva de processo, endereçada:** o reviewer provou que os `InlineData` entregues como "fixtures
+verbatim do reviewer" no `0feaafc` eram, na verdade, versoes ALONGADAS com enchimento de function
+words que contornava exatamente essa falha (o fixture EN #3 usado la era `"...she whispered as the
+walls of the small room seemed to close in around her."`, nao o texto real do reviewer) — segunda
+ocorrencia do padrao. Corrigido: o fixture #3 agora e uma `const string ReviewerFixtureThree` com o
+texto EXATO fornecido, byte a byte, reusada em AMBOS os testes (fresh e persisted) que o citam; o
+`InlineData` alongado foi REMOVIDO das duas `Theory` que o continham (nao editado — removido e
+substituido por um `Fact` dedicado). Os outros 3 fixtures do B-4 (2 PT, 1 EN) foram deixados como
+estavam e reverificados — o reviewer nao os reprovou.
+
+**Fix, em `SnippetValidationUtility.cs`:** as 3 tabelas de stopword (`TargetLanguageStopwords`)
+ganharam pronomes/auxiliares de alta frequencia:
+- **English** (+27): i, you, he, she, we, they, was, were, had, have, has, not, no, but, at, by,
+  from, his, her, my, me, him, them, what, all, so, said.
+- **Spanish** (+13, excluindo `pero`/`más` ja existentes): yo, él, ella, era, fue, había, su, le,
+  lo, mi, me, dijo, todo.
+- **Brazilian Portuguese (PT-BR)** (+15, pela MESMA lente, mesmo o fixture PT do reviewer ja
+  passando sem elas): eu, você, nós, eles, elas, era, tinha, tenho, tem, meu, minha, disse, tudo,
+  muito, à.
+
+Limiar `max(2, tokens*0.08)` **NAO precisou mudar** — reavaliado programaticamente contra TODOS os
+fixtures (deste round e do B-4) antes de codificar, o enriquecimento sozinho basta. Verificacao
+critica de nao-regressao de recall: a recusa exata do screenshot continua reprovada nos DOIS entry
+points — pela blocklist (meta-vocabulario denso, inalterado) em ambos, E pelo ratio no caminho
+fresh (0 hits mesmo com as tabelas enriquecidas, pois e texto ingles puro sem NENHUMA das palavras
+adicionadas ao PT-BR).
+
+**5 mudancas de teste:** os 2 `InlineData` do fixture alongado removidos (um de cada `Theory`,
+fresh e persisted); 4 `Fact` novos — fresh-path fixture #3 verbatim; narracao EN comum
+(`"He nodded..."`) aprovada pelo ratio enriquecido; dialogo curto PT-BR (`"— Não sei — disse ele,
+olhando para o chão."`) aprovado; persisted-path fixture #3 verbatim. O teste de purga no Manager
+(`FetchSnippetsAsync_DoesNotPurgeFictionDialogueOpeningWithARefusalPhrase`) trocou seu texto para o
+fixture #3 verbatim tambem.
+
+**Verificacao pos-fix:**
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **443 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 445 total** — +2 vs o `0feaafc` anterior (443: -2 InlineData
+  removidos, +4 Fact novos). `~Snippet`: 69 passed / 0 failed.
+- JS: **215/215** — fix 100% C#, suite JS intocada e identica.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1419 valid=1490 pct=95.23
+  files=27` (subiu de 95.21 — `SnippetValidationUtility.cs` 69/69 = 100% coberto, era 62/62).
+  `COVERAGE_JS covered=1887 valid=1901 pct=99.26 files=5` (inalterado). `COVERAGE_GUARD
+  new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes` nos arquivos tocados: exit 0, limpo.
+- `git status`/`git diff --name-only` confirmam escopo: `SnippetValidationUtility.cs`,
+  `SnippetTranslationManagerTests.cs`, `SnippetValidationUtilityTests.cs` (mais
+  `.jdi/phases/snippet-translation/REVIEW.md`, escrito pelo proprio reviewer/orquestrador, nao
+  tocado por este specialist).
+
+Commit: `371e7af` — `fix(snippet-translation): enrich EN/ES/PT-BR stopword tables with pronouns and
+auxiliaries (B-5)`.
