@@ -977,3 +977,48 @@ Frozen files (`translation.js`/`paginated.js`/`scroll.js`) diff vazio vs `BASELI
 
 Commit: `fix(snippet-translation): match an orphaned loading placeholder by parsed anchor instead of
 exact key string, tolerating a divergent chapterHRef` (D-2026-08-09-snippet-translation-2).
+
+### Reviewer iter 8 BLOCKED — 2 blockers reproduzidos mecanicamente, ambos no markup split
+
+**B-1 — crash real-DOM + perda de texto em `_wrapMarkupParagraph`.** O filtro de fronteiras
+descartava so as que COMECAM dentro de um elemento (`m.start >= r.start && m.start < r.end`) — nao
+um `\s+` que comeca em texto livre e continua PRA DENTRO do elemento inline seguinte (markup EPUB
+comum, `<em> continua</em>` com espaco a esquerda). Caso `<p>One. <em> Two words</em></p>`:
+`remaining.splitText(2)` num text node de 1 char apos o split anterior — `IndexSizeError` num DOM
+real (Chrome/WebView2), abortando o mount no meio ("One." fica destacado, paragrafos seguintes sem
+wrap). O harness shipped MASCARAVA a classe inteira (`FakeText.splitText` nao validava offset).
+**Fix:** filtro trocado para OVERLAP (`m.end > r.start && m.start < r.end` — qualquer toque no
+elemento adia a fronteira, nao so o inicio); `FakeText.splitText` (harness) virou spec-faithful
+(lanca `DOMException('IndexSizeError')` se `offset > data.length`). Testes novos (3): mount com o
+caso exato do reviewer (nao lanca, `<em>` intacto, texto integro "One.  Two words"); harness
+`splitText` lanca IndexSizeError no offset excedente; harness `splitText` no offset EXATO da length e
+valido (tail vazio). Sanity check: revertendo so o filtro (mantendo o harness novo) faz o teste de
+mount falhar com `IndexSizeError` real, confirmado rodando antes de restaurar.
+
+**B-2 — `data-si` duplicado apos restore->remove de periodo com boundary adiado.**
+`_plainPeriodSpans` (fallback sem nodes originais stashados — caminho de `restoreSnippets`, sessao
+persistida) re-splitava o texto achatado com a regex CRUA, que redescobria a fronteira que o wrap
+tinha ADIADO por estar em elemento (sem o `<em>` para proteger, ja que o texto ja esta achatado em
+`dataset.orig`). Fluxo: traduzir periodo0 de
+`'Intro text <em>ends here. And continues</em> after. Final sentence.'` -> reiniciar sessao (restore)
+-> remover pelo X -> spans viram `0, 1, 1` (colidindo com o periodo1 ja existente) -> `_rangeText`
+corrompido para toda selecao subsequente. **Fix:** `_spliceSpanBackToPeriods` ganhou o `endIndex`
+(`b`) do range e repassa `count = b - a + 1` para `_plainPeriodSpans`, que agora NUNCA emite mais que
+`count` spans — excedentes fundem no ULTIMO span. Teste novo (1): fluxo exato do reviewer
+(restore->remove->`data-si` unico e sequencial `['0','1']`, nunca `['0','1','1']`;
+`_rangeText(p,1,1)` correto). Sanity check: revertendo so o cap faz o teste falhar com
+`['0','1','1']` real, confirmado antes de restaurar.
+
+**Verificacao final (B-1 + B-2 juntos):** JS **202/202 passando** (era 200 no round anterior), 0
+fail, 0 skipped. `bash scripts/coverage-gate.sh`: exit 0, `COVERAGE_JS covered=1765 valid=1775
+pct=99.44 files=5` (subiu de 99.42), `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97 files=26`
+(identico — zero `.cs` tocado). `COVERAGE_GUARD new_app_cs=0 waived=0`. `dotnet test`: 414 passed / 2
+skipped / 0 failed / 416 total (identico). Frozen files diff vazio vs `BASELINE`; regex 1x; aspas
+duplas em todo `querySelectorAll`; goldens de blob geometry intactos (9 testes `blob geometry:`
+inalterados).
+
+Commits: `fix(snippet-translation): defer a sentence boundary that only partially overlaps an inline
+element, and make the JS test harness spec-faithful about it` (B-1, harness+producao juntos — a
+regra de atomicidade ja usada nesta phase: o fix de producao sozinho nao teria como ser provado sem
+o harness spec-faithful no MESMO commit); `fix(snippet-translation): cap the fallback plain-text
+re-split at the range's own period count, never colliding data-si with the next period` (B-2).
