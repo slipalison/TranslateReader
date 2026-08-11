@@ -1323,3 +1323,73 @@ VIZINHO (nao o texto atualmente exibido, mesmo com o snip mostrando a traducao).
 Commits: `1b89bb3` — `fix(snippet-translation): reject model refusals and wrong-language snippet
 responses (D-A, iter 10)`; `2b84504` — `fix(snippet-translation): send only the immediate sentence
 window as context, not the whole paragraph (D-B, iter 10)`.
+
+### Iter 10 fix — B-4 (reviewer blocked mecanicamente, mesmo round)
+
+Reviewer bloqueou o `1b89bb3` acima com **B-4**, provado compilando um probe contra o Core real: o
+blocklist de recusa (camada 1 do D-A) reprovava a MERA presenca da frase — e essas mesmas frases
+("i can't", "desculpe, ", "não posso", "i'm sorry", "lo siento") sao aberturas de dialogo de ficcao
+de altissima frequencia, o proprio dominio do app (prosa de EPUB). Fixtures do reviewer, todos
+REJECTED antes deste fix: `"Desculpe, eu não quis te magoar..."`, `"Não posso acreditar que isso
+está acontecendo..."`, `"I can't breathe," she whispered...`, `"I'm sorry for your loss,"...`
+(ambas direcoes EN<->PT-BR). Consequencias: trecho legitimo ficava permanentemente intraduzivel (2
+inferencias queimadas -> `InvalidOperationException`); `FetchSnippetsAsync` deletava linhas
+legitimas ja salvas na proxima abertura; e como as linhas nao tem coluna de idioma, a purga julgava
+com o par ATUAL das settings — trocar destino PT-BR->Spanish reprovava acervo PT legitimo no ratio e
+deletava em massa.
+
+**Fix (`0feaafc`), duas mudancas em `SnippetValidationUtility.cs`:**
+
+1. **Blocklist vira co-ocorrencia frase+meta-vocabulario.** Janela ampliada de 80 -> 160 chars (a
+   frase pode estar perto do inicio, o meta-termo qualificador um pouco mais adiante — a recusa do
+   screenshot tem "safety guidelines" apos o char 80). Uma frase de recusa so reprova se, na MESMA
+   janela, co-ocorrer uma palavra de `RefusalMetaVocabulary` (`FrozenSet<string>`,
+   `OrdinalIgnoreCase`): {translation, translate, text, content, guidelines, safety, ai, assist,
+   language, apologize, request, provide, tradução, traduzir, texto, conteúdo, diretrizes, idioma,
+   solicitação, fornecer, traducción, contenido}. Casado por PALAVRA INTEIRA (tokenizado pelo mesmo
+   `NonLetterRegex` do ratio check), nunca por substring cru: `"ai"` como substring colide com
+   `"against"`/`"explain"`/`"maintain"` quase tao frequentemente quanto as frases que deveria filtrar
+   — exatamente a MESMA classe de falso positivo que este fix fecha, so que deslocada para outro
+   gatilho (verificado explicitamente antes de escrever o codigo: o fixture EN de dialogo continha
+   `"against"`, que teria acionado um match espúrio de `"ai"` via substring).
+2. **Assimetria de precisao na purga da carga.** `SnippetValidationUtility` ganhou um segundo metodo
+   publico, `IsPlausiblePersistedSnippetTranslation(string translated)` — SEM parametro de idioma
+   algum, roda SOMENTE o blocklist de co-ocorrencia (preciso e independente de idioma). Usado
+   EXCLUSIVAMENTE por `TranslationManager.FetchSnippetsAsync`, que deixou de chamar
+   `settingsAccess.FetchSettingsAsync()` (a causa raiz do bug de troca de idioma some por
+   construcao, nao so por um `if` a mais). `IsPlausibleSnippetTranslation` (cache hit / inferencia
+   fresca, par de idiomas conhecido, nada persistido ainda) continua com as 3 camadas completas —
+   um falso positivo ali custa um retry, nunca uma delecao silenciosa.
+
+**13 testes novos:** `SnippetValidationUtilityTests.cs` (+10): os 4 fixtures do reviewer aprovados
+via `IsPlausibleSnippetTranslation` (Theory, ambas direcoes) E via `IsPlausiblePersistedSnippetTranslation`
+(Theory); a recusa classica do screenshot continua reprovada nos dois metodos; teste dedicado
+provando que `IsPlausiblePersistedSnippetTranslation` nunca aplica o ratio (resposta fora do idioma
+mas sem frase de recusa -> aprovada). Teste existente do "meio da traducao" (`desculpe,` fora da
+janela) reajustado: texto alongado para manter `desculpe,` alem dos NOVOS 160 chars (era 80) sem
+estourar a guarda de proporcao (o original tambem precisou crescer proporcionalmente). `SnippetTranslationManagerTests.cs`
+(+3): `FetchSnippetsAsync_NeverReadsSettings` (prova estrutural — `DidNotReceive()` mesmo com linhas
+presentes); `FetchSnippetsAsync_DoesNotPurgeALegitimateRowWhenTheSettingsTargetLanguageHasChanged`
+(linha PT valida + settings destino Spanish -> NAO deletada, retornada normal — a regressao exata
+exigida); `FetchSnippetsAsync_DoesNotPurgeFictionDialogueOpeningWithARefusalPhrase`. O teste de purga
+existente (`FetchSnippetsAsync_PurgesARowThatFailsPlausibility_AndDoesNotReturnIt`) permanece verde
+sem alteracao de asserts — a recusa poison ("I cannot provide a translation of this text.") ainda
+co-ocorre com "translation"/"text"/"provide".
+
+**Verificacao pos-fix:**
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **441 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 443 total** — +13 vs o `1b89bb3` original (430).
+  `~Snippet`: 67 passed / 0 failed.
+- JS: **215/215** — este fix e 100% C#, suite JS intocada e identica ao commit anterior.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1412 valid=1483 pct=95.21
+  files=27` (subiu de 95.17 — `SnippetValidationUtility.cs` agora 62/62 = 100% coberto, era 47/47).
+  `COVERAGE_JS covered=1887 valid=1901 pct=99.26 files=5` (inalterado). `COVERAGE_GUARD
+  new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes` nos arquivos tocados: exit 0, limpo.
+- `git status`/`git diff --name-only` confirmam escopo: `SnippetValidationUtility.cs`,
+  `TranslationManager.cs`, `SnippetTranslationManagerTests.cs`, `SnippetValidationUtilityTests.cs`
+  (mais `.jdi/phases/snippet-translation/REVIEW.md`, escrito pelo proprio reviewer/orquestrador, nao
+  tocado por este specialist).
+
+Commit: `0feaafc` — `fix(snippet-translation): stop flagging fiction dialogue as a refusal, and
+never purge persisted rows by language ratio (B-4)`.
