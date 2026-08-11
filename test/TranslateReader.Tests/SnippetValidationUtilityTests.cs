@@ -11,6 +11,13 @@ public class SnippetValidationUtilityTests
         "No, I cannot provide a translation of this text. It contains explicit sexual content, " +
         "which violates my safety guidelines.";
 
+    // B-5: the reviewer's fixture #3, kept BYTE FOR BYTE (never padded/lengthened) after the
+    // reviewer mechanically proved a lengthened stand-in was used in a previous round to dodge this
+    // exact ratio failure. If this literal string ever fails again, the code is wrong - not the
+    // fixture.
+    private const string ReviewerFixtureThree =
+        "\"I can't breathe,\" she whispered, afraid of everything around her.";
+
     [Fact]
     public void IsPlausibleSnippetTranslation_ClassicRefusalTextFromTheModel_IsRejected()
     {
@@ -113,9 +120,6 @@ public class SnippetValidationUtilityTests
         "Não posso acreditar que isso está acontecendo bem diante dos meus próprios olhos incrédulos.",
         "English", "Brazilian Portuguese (PT-BR)")]
     [InlineData(
-        "\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.",
-        "Brazilian Portuguese (PT-BR)", "English")]
-    [InlineData(
         "\"I'm sorry for your loss,\" he said quietly, taking a seat beside her at the wooden table.",
         "Brazilian Portuguese (PT-BR)", "English")]
     public void IsPlausibleSnippetTranslation_FictionDialogueOpeningWithARefusalPhraseButNoMetaVocabulary_IsAccepted(
@@ -123,6 +127,45 @@ public class SnippetValidationUtilityTests
     {
         var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
             "Alguma frase original qualquer.", dialogue, sourceLanguage, targetLanguage);
+
+        Assert.True(result);
+    }
+
+    // B-5 (blocking, mechanically proven by the reviewer): this exact fixture was rejected in the
+    // fresh path - not by the blocklist (it already passed there), but by the ratio, because the
+    // English stopword table had no pronouns/auxiliaries and this dialogue leans entirely on them.
+    [Fact]
+    public void IsPlausibleSnippetTranslation_ReviewerFixtureThreeVerbatim_IsAcceptedInTheFreshPath()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Alguma frase original qualquer.", ReviewerFixtureThree, "Brazilian Portuguese (PT-BR)", "English");
+
+        Assert.True(result);
+    }
+
+    // B-5: ordinary short EN narration with no dialogue punctuation at all, failing the SAME
+    // enriched-table gap fixture #3 exposed - proves the fix is the table, not something specific to
+    // quoted dialogue.
+    [Fact]
+    public void IsPlausibleSnippetTranslation_OrdinaryEnglishNarration_IsAcceptedByTheEnrichedRatio()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Alguma frase original qualquer.",
+            "He nodded slowly and walked away without a word.",
+            "Brazilian Portuguese (PT-BR)", "English");
+
+        Assert.True(result);
+    }
+
+    // B-5: short PT-BR dialogue, target PT-BR - the reviewer's example of the same failure mode in
+    // the other direction.
+    [Fact]
+    public void IsPlausibleSnippetTranslation_ShortPortugueseDialogue_IsAccepted()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Alguma frase original qualquer.",
+            "— Não sei — disse ele, olhando para o chão.",
+            "English", "Brazilian Portuguese (PT-BR)");
 
         Assert.True(result);
     }
@@ -163,11 +206,20 @@ public class SnippetValidationUtilityTests
     [Theory]
     [InlineData("Desculpe, eu não quis te magoar com essas palavras tão duras naquela noite fria de inverno.")]
     [InlineData("Não posso acreditar que isso está acontecendo bem diante dos meus próprios olhos incrédulos.")]
-    [InlineData("\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.")]
     [InlineData("\"I'm sorry for your loss,\" he said quietly, taking a seat beside her at the wooden table.")]
     public void IsPlausiblePersistedSnippetTranslation_FictionDialogue_IsAccepted(string dialogue)
     {
         var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(dialogue);
+
+        Assert.True(result);
+    }
+
+    // B-5: fixture #3, byte for byte - the reviewer already noted this one passes the persisted
+    // (blocklist-only) path; pinned explicitly so it never silently regresses alongside the fresh-path fix.
+    [Fact]
+    public void IsPlausiblePersistedSnippetTranslation_ReviewerFixtureThreeVerbatim_IsAccepted()
+    {
+        var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(ReviewerFixtureThree);
 
         Assert.True(result);
     }

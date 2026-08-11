@@ -354,9 +354,10 @@ public class SnippetTranslationManagerTests
     [Fact]
     public async Task FetchSnippetsAsync_DoesNotPurgeFictionDialogueOpeningWithARefusalPhrase()
     {
+        // B-5: the reviewer's fixture #3, byte for byte (never padded/lengthened).
         var dialogue = new SnippetTranslation(
             1, 1, "ch1.html", 0, 0, 0, "hash",
-            "\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.",
+            "\"I can't breathe,\" she whispered, afraid of everything around her.",
             false, DateTime.UtcNow);
         _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
             .Returns(new List<SnippetTranslation> { dialogue });

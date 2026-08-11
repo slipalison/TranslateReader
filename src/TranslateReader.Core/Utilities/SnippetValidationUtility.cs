@@ -51,28 +51,40 @@ public static partial class SnippetValidationUtility
     private const int MinStopwordHits = 2;
     private const double MinStopwordRatio = 0.08;
 
-    // Minimal, hand-picked stopword sets for the languages the settings UI actually offers
+    // Hand-picked stopword sets for the languages the settings UI actually offers
     // (SettingsOverlay/TranslateBookPopup). A real translation of >= 40 chars into one of these
     // languages is overwhelmingly likely to contain several of its most common function words; a
     // response that fails this ratio is far more likely to be an English refusal, an echo of the
     // source, or another language entirely than a genuine, on-target translation.
+    // B-5: the original sets only had articles/conjunctions/prepositions, no pronouns or auxiliary
+    // verbs - ordinary short dialogue ("\"I can't breathe,\" she whispered, afraid of everything
+    // around her.", "He nodded slowly and walked away without a word.") leans on exactly those and
+    // was failing the ratio in bulk, burning both inference attempts into a thrown exception for
+    // completely legitimate excerpts. Enriched with high-frequency pronouns/auxiliaries per language.
     private static readonly FrozenDictionary<string, FrozenSet<string>> TargetLanguageStopwords =
         new Dictionary<string, FrozenSet<string>>(StringComparer.Ordinal)
         {
             ["Brazilian Portuguese (PT-BR)"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "de", "que", "não", "uma", "um", "para", "com", "os", "as", "do", "da", "em", "é",
-                "se", "mais", "como", "mas", "foi", "ser", "são", "por", "isso", "ele", "ela"
+                "se", "mais", "como", "mas", "foi", "ser", "são", "por", "isso", "ele", "ela",
+                "eu", "você", "nós", "eles", "elas", "era", "tinha", "tenho", "tem", "meu", "minha",
+                "disse", "tudo", "muito", "à"
             }.ToFrozenSet(StringComparer.Ordinal),
             ["English"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "the", "of", "and", "to", "in", "is", "that", "it", "for", "on", "with", "as",
-                "this", "are", "be"
+                "this", "are", "be",
+                "i", "you", "he", "she", "we", "they", "was", "were", "had", "have", "has", "not",
+                "no", "but", "at", "by", "from", "his", "her", "my", "me", "him", "them", "what",
+                "all", "so", "said"
             }.ToFrozenSet(StringComparer.Ordinal),
             ["Spanish"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "de", "que", "no", "una", "un", "para", "con", "los", "las", "del", "en", "es",
-                "se", "más", "como", "pero"
+                "se", "más", "como", "pero",
+                "yo", "él", "ella", "era", "fue", "había", "su", "le", "lo", "mi", "me", "dijo",
+                "todo"
             }.ToFrozenSet(StringComparer.Ordinal)
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
