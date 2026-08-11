@@ -268,7 +268,6 @@ public class SnippetTranslationManagerTests
             new(1, 1, "ch1.html", 0, 0, 0, "hash", "text", false, DateTime.UtcNow),
         };
         _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html").Returns(expected);
-        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
 
         var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
 
@@ -276,7 +275,7 @@ public class SnippetTranslationManagerTests
     }
 
     [Fact]
-    public async Task FetchSnippetsAsync_WhenEmpty_DoesNotCallSettingsOrRemove()
+    public async Task FetchSnippetsAsync_WhenEmpty_DoesNotCallRemove()
     {
         _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
             .Returns(new List<SnippetTranslation>());
@@ -284,6 +283,23 @@ public class SnippetTranslationManagerTests
         var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
 
         Assert.Empty(result);
+        await _snippetTranslationAccess.DidNotReceive().RemoveSnippetAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>());
+    }
+
+    // B-4: purge at load never reads the app's current settings at all - the row's own language pair
+    // is unknown and the settings language can have changed since the row was saved, so the
+    // language-agnostic blocklist (SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation)
+    // is the only thing deciding a row's fate here.
+    [Fact]
+    public async Task FetchSnippetsAsync_NeverReadsSettings()
+    {
+        var legit = new SnippetTranslation(1, 1, "ch1.html", 0, 0, 0, "hash", "text", false, DateTime.UtcNow);
+        _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
+            .Returns(new List<SnippetTranslation> { legit });
+
+        await _sut.FetchSnippetsAsync(1, "ch1.html");
+
         await _settingsAccess.DidNotReceive().FetchSettingsAsync();
     }
 
@@ -299,7 +315,6 @@ public class SnippetTranslationManagerTests
             2, 1, "ch1.html", 1, 0, 0, "hash2", "text", false, DateTime.UtcNow);
         _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
             .Returns(new List<SnippetTranslation> { poisoned, legit });
-        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
 
         var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
 
@@ -307,6 +322,50 @@ public class SnippetTranslationManagerTests
         Assert.Same(legit, result[0]);
         await _snippetTranslationAccess.Received(1).RemoveSnippetAsync(1, "ch1.html", 0, 0, 0);
         await _snippetTranslationAccess.DidNotReceive().RemoveSnippetAsync(1, "ch1.html", 1, 0, 0);
+    }
+
+    // B-4 (mechanically proven by the reviewer): a legitimate row must survive purge even when the
+    // app's CURRENT settings target language has since changed away from the one the row was
+    // actually translated into - proves the fix does not merely skip the ratio by accident, it never
+    // even looks at settings (see FetchSnippetsAsync_NeverReadsSettings).
+    [Fact]
+    public async Task FetchSnippetsAsync_DoesNotPurgeALegitimateRowWhenTheSettingsTargetLanguageHasChanged()
+    {
+        var legitPortuguese = new SnippetTranslation(
+            1, 1, "ch1.html", 0, 0, 0, "hash",
+            "Ela concordou rapidamente com a proposta apresentada durante a reunião.",
+            false, DateTime.UtcNow);
+        _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
+            .Returns(new List<SnippetTranslation> { legitPortuguese });
+        _settingsAccess.FetchSettingsAsync().Returns(
+            new ReadingSettings { SourceLanguage = "English", TargetLanguage = "Spanish" });
+
+        var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
+
+        Assert.Single(result);
+        Assert.Same(legitPortuguese, result[0]);
+        await _snippetTranslationAccess.DidNotReceive().RemoveSnippetAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>());
+    }
+
+    // B-4: fiction dialogue opening with a refusal phrase ("I can't...", "Desculpe, ...") but no
+    // meta-vocabulary about translating must never be purged - the exact false positive the reviewer
+    // proved mechanically against the pre-fix blocklist.
+    [Fact]
+    public async Task FetchSnippetsAsync_DoesNotPurgeFictionDialogueOpeningWithARefusalPhrase()
+    {
+        var dialogue = new SnippetTranslation(
+            1, 1, "ch1.html", 0, 0, 0, "hash",
+            "\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.",
+            false, DateTime.UtcNow);
+        _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
+            .Returns(new List<SnippetTranslation> { dialogue });
+
+        var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
+
+        Assert.Single(result);
+        await _snippetTranslationAccess.DidNotReceive().RemoveSnippetAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>());
     }
 
     // Cache-hit path (iter 10, D-A): a cached row that fails the unified plausibility predicate is

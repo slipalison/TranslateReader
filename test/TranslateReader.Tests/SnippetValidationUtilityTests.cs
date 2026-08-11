@@ -90,11 +90,39 @@ public class SnippetValidationUtilityTests
     {
         const string legit =
             "Ela disse que não podia ajudar com isso agora, mas prometeu que voltaria mais tarde " +
-            "para explicar tudo direitinho a todos os presentes na sala. No final, desculpe, mas " +
-            "era tarde demais.";
+            "para explicar tudo direitinho a todos os presentes que estavam ali reunidos naquela " +
+            "sala. No final, desculpe, mas era tarde demais para qualquer mudança.";
 
         var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
-            "Alguma frase original longa o suficiente.", legit, "English", "Brazilian Portuguese (PT-BR)");
+            "Alguma frase original razoavelmente longa o suficiente para este teste especifico.",
+            legit, "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.True(result);
+    }
+
+    // B-4: these SAME opening phrases are extremely common in fiction dialogue - the app's own
+    // domain (EPUB prose) - and must never be flagged just because they appear, only when they
+    // co-occur with meta-vocabulary about the act of translating (see ClassicRefusal above, which
+    // still IS flagged for exactly that reason). Both translation directions the reviewer's fixtures
+    // covered, verbatim.
+    [Theory]
+    [InlineData(
+        "Desculpe, eu não quis te magoar com essas palavras tão duras naquela noite fria de inverno.",
+        "English", "Brazilian Portuguese (PT-BR)")]
+    [InlineData(
+        "Não posso acreditar que isso está acontecendo bem diante dos meus próprios olhos incrédulos.",
+        "English", "Brazilian Portuguese (PT-BR)")]
+    [InlineData(
+        "\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.",
+        "Brazilian Portuguese (PT-BR)", "English")]
+    [InlineData(
+        "\"I'm sorry for your loss,\" he said quietly, taking a seat beside her at the wooden table.",
+        "Brazilian Portuguese (PT-BR)", "English")]
+    public void IsPlausibleSnippetTranslation_FictionDialogueOpeningWithARefusalPhraseButNoMetaVocabulary_IsAccepted(
+        string dialogue, string sourceLanguage, string targetLanguage)
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Alguma frase original qualquer.", dialogue, sourceLanguage, targetLanguage);
 
         Assert.True(result);
     }
@@ -111,11 +139,50 @@ public class SnippetValidationUtilityTests
     [Fact]
     public void IsPlausibleSnippetTranslation_OriginalTextNull_SkipsTheLengthRatioCheck()
     {
-        // At load-time purge the original excerpt was never persisted (only its hash) - an
-        // arbitrarily long legitimate-looking response must not be rejected just for that reason.
+        // The excerpt is not always available to a caller of this overload - an arbitrarily long,
+        // legitimate-looking response must not be rejected just because the length ratio has
+        // nothing to compare against.
         var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
             null, "Ela concordou rapidamente com a proposta apresentada durante a reunião.",
             "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsPlausiblePersistedSnippetTranslation_ClassicRefusalTextFromTheModel_IsRejected()
+    {
+        var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(ClassicRefusal);
+
+        Assert.False(result);
+    }
+
+    // B-4: the exact false positive the reviewer proved mechanically - a legitimate row is judged
+    // purely by the language-agnostic blocklist at load time, never by the stopword ratio, so it
+    // survives regardless of what the CURRENT app settings' language pair happens to be.
+    [Theory]
+    [InlineData("Desculpe, eu não quis te magoar com essas palavras tão duras naquela noite fria de inverno.")]
+    [InlineData("Não posso acreditar que isso está acontecendo bem diante dos meus próprios olhos incrédulos.")]
+    [InlineData("\"I can't breathe,\" she whispered as the walls of the small room seemed to close in around her.")]
+    [InlineData("\"I'm sorry for your loss,\" he said quietly, taking a seat beside her at the wooden table.")]
+    public void IsPlausiblePersistedSnippetTranslation_FictionDialogue_IsAccepted(string dialogue)
+    {
+        var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(dialogue);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsPlausiblePersistedSnippetTranslation_NeverAppliesTheStopwordRatio()
+    {
+        // A row this short, or in a language with no stopword table at all, would still pass the
+        // ratio check anyway - the point proven here is structural: an implausibly foreign-looking
+        // but non-refusing long response is NEVER rejected at load time, because the ratio check is
+        // never called at all (only ContainsRefusalOpening is).
+        const string wrongLanguageNoRefusal =
+            "The committee reviewed the proposal and decided to postpone the final vote until next week.";
+
+        var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(wrongLanguageNoRefusal);
 
         Assert.True(result);
     }

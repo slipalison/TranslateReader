@@ -20,14 +20,32 @@ public static partial class SnippetValidationUtility
 
     // A refusal always opens the response ("No, I cannot...", "Desculpe, ..."), so only the opening
     // window is checked - a legitimate translation that merely discusses apologies or AI further in
-    // is never flagged.
-    private const int RefusalWindowChars = 80;
+    // is never flagged. Widened from 80 (B-4): the meta-vocabulary co-occurrence check below needs
+    // room for a phrase near the very start plus its qualifying context a little further out (the
+    // screenshot refusal's "safety guidelines" sits past char 80).
+    private const int RefusalWindowChars = 160;
 
     private static readonly string[] RefusalPhrases =
     [
         "i cannot", "i can't", "i'm sorry", "i am sorry", "as an ai",
         "não posso", "desculpe, ", "lo siento"
     ];
+
+    // B-4: these SAME phrases open fiction dialogue ("\"I can't breathe,\" she whispered...",
+    // "Desculpe, eu não quis te magoar...") at extremely high frequency - this IS the app's domain
+    // (EPUB prose), not an edge case. A phrase alone is never enough; it only means "the model
+    // refused" when the SAME opening window also talks about the act of translating itself. Matched
+    // as whole words, never as a raw substring: "ai" as a substring collides with ordinary words
+    // ("against", "explain", "maintain") almost as often as the phrases it exists to gate - exactly
+    // the false-positive class this fix closes, just moved to a different trigger.
+    private static readonly FrozenSet<string> RefusalMetaVocabulary =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "translation", "translate", "text", "content", "guidelines", "safety", "ai", "assist",
+            "language", "apologize", "request", "provide",
+            "tradução", "traduzir", "texto", "conteúdo", "diretrizes", "idioma", "solicitação",
+            "fornecer", "traducción", "contenido"
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private const int MinLengthForLanguageCheck = 40;
     private const int MinStopwordHits = 2;
@@ -59,13 +77,15 @@ public static partial class SnippetValidationUtility
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
-    /// True when a snippet translation response is plausible enough to trust: not implausibly
-    /// longer than the excerpt it translates (when the excerpt is known), does not open with a
-    /// model refusal, and - when long enough and a stopword table exists for the target language -
-    /// contains a plausible share of that language's most common words.
-    /// <paramref name="originalText"/> is null at load-time purge, where only the persisted
-    /// translation (never the original excerpt) is available; the length-ratio check is skipped in
-    /// that case and the other two still apply.
+    /// True when a FRESH snippet translation response (a cache hit or a new inference result, where
+    /// the source/target language pair is known and nothing has been persisted yet) is plausible
+    /// enough to trust: not implausibly longer than the excerpt it translates (when the excerpt is
+    /// known), does not open with a model refusal, and - when long enough and a stopword table
+    /// exists for the target language - contains a plausible share of that language's most common
+    /// words. <paramref name="originalText"/> may be null when the original excerpt is not available
+    /// to the caller; the length-ratio check is skipped in that case and the other two still apply.
+    /// Never use this overload to judge an already-persisted row at load time - see
+    /// <see cref="IsPlausiblePersistedSnippetTranslation"/>.
     /// </summary>
     public static bool IsPlausibleSnippetTranslation(
         string? originalText, string translated, string sourceLanguage, string targetLanguage)
@@ -77,6 +97,16 @@ public static partial class SnippetValidationUtility
             HasPlausibleTargetLanguageRatio(translated, sourceLanguage, targetLanguage);
     }
 
+    // At load-time purge (B-4) the row's own source/target language pair is NOT known - only the
+    // persisted translation is, and the app's CURRENT settings can have changed since the row was
+    // saved (e.g. target switched PT-BR -> Spanish). The stopword ratio would then judge a
+    // perfectly legitimate PT-BR row against Spanish and delete it; the refusal blocklist is
+    // language-agnostic and precise (phrase + meta-vocabulary co-occurrence), so it is the ONLY
+    // check safe to run here. A refusal that slips through simply resurfaces next load (cheap); a
+    // ratio false positive here would silently destroy a legitimate translation forever (expensive).
+    public static bool IsPlausiblePersistedSnippetTranslation(string translated) =>
+        !ContainsRefusalOpening(translated);
+
     private static bool IsImplausiblyLong(string text, string translated) =>
         translated.Length > (text.Length * LengthRatioMultiplier) + LengthRatioSlack;
 
@@ -84,9 +114,21 @@ public static partial class SnippetValidationUtility
     {
         var windowLength = Math.Min(RefusalWindowChars, translated.Length);
         var window = translated.AsSpan(0, windowLength).Trim();
+
+        var hasRefusalPhrase = false;
         foreach (var phrase in RefusalPhrases)
         {
             if (window.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                hasRefusalPhrase = true;
+                break;
+            }
+        }
+        if (!hasRefusalPhrase) return false;
+
+        foreach (var word in NonLetterRegex().Split(window.ToString()))
+        {
+            if (word.Length > 0 && RefusalMetaVocabulary.Contains(word))
                 return true;
         }
         return false;

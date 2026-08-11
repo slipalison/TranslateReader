@@ -455,24 +455,24 @@ public class TranslationManager(
         return CleanTranslationOutput(translated);
     }
 
-    // A row already sitting in SnippetTranslations never stores the original excerpt (only its
-    // hash), so the length-ratio check is skipped here (IsPlausibleSnippetTranslation's originalText
-    // is null) — the refusal and target-language checks alone still catch a poisoned row saved
-    // before this guard existed, and a failing row is deleted rather than handed back to the reader,
-    // so it quietly disappears the next time its chapter opens instead of resurfacing forever.
+    // B-4: a row already sitting in SnippetTranslations carries neither its original excerpt nor its
+    // own language pair (only its hash), and the CURRENT settings can have changed since it was
+    // saved - so only IsPlausiblePersistedSnippetTranslation's language-agnostic refusal blocklist
+    // runs here (never the length-ratio or stopword checks, which would misjudge a legitimate row
+    // under a settings language that has since changed). A failing row is deleted rather than handed
+    // back to the reader, so it quietly disappears the next time its chapter opens instead of
+    // resurfacing forever.
     public async Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef)
     {
         var snippets = await snippetTranslationAccess.FetchSnippetsAsync(bookId, chapterHRef);
         if (snippets.Count == 0)
             return snippets;
 
-        var settings = await settingsAccess.FetchSettingsAsync();
         var valid = new List<SnippetTranslation>(snippets.Count);
 
         foreach (var snippet in snippets)
         {
-            if (SnippetValidationUtility.IsPlausibleSnippetTranslation(
-                null, snippet.TranslatedText, settings.SourceLanguage, settings.TargetLanguage))
+            if (SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(snippet.TranslatedText))
             {
                 valid.Add(snippet);
             }
