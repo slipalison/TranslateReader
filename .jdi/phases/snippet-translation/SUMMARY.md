@@ -1206,3 +1206,120 @@ pos-wrap-com-clones -> `textContent` byte-identico.
 
 Commit: `fix(snippet-translation): a boundary fully inside an inline element now splits it via
 shallow clones, recursively — only crossing its border still defers`.
+
+## Iter 10 (fix round pos-loop, autorizado pelo usuario — 7o feedback com screenshots do app real)
+
+Loop ja convergido (iter 9, `e67be75`, APPROVED_WITH_WARNINGS) quando o usuario testou o app real de
+novo e reportou DOIS defeitos novos com screenshots: **D-A** — um snip exibia literalmente a recusa
+de seguranca do modelo em ingles ("No, I cannot provide a translation of this text. It contains
+explicit sexual content...") sobre texto de negocios inocuo (falso positivo do modelo local), curta
+o bastante para passar pela guarda de proporcao existente e ser salva/renderizada como se fosse a
+traducao; **D-B** — um trecho longo em PT continha a traducao de periodos ALEM do range pedido
+(conteudo repetido entre dois snips adjacentes) — vazamento parcial que `text.Length * 3 + 120` nao
+pega quando o excesso ainda cabe dentro do teto de proporcao. Correcao prescrita em 4 camadas,
+entregue em 2 commits atomicos (C# guards = camadas 1-3; JS janela de contexto = camada 4 — arquivos
+tocados inteiramente disjuntos entre os dois).
+
+### D-A — validacao de idioma + blocklist de recusa + purga na carga (`1b89bb3`)
+
+**`SnippetValidationUtility.cs`** (novo, `src/TranslateReader.Core/Utilities/`) reune as 3
+validacoes num UNICO predicado `IsPlausibleSnippetTranslation(originalText, translated,
+sourceLanguage, targetLanguage)`:
+- **Proporcao (existente, movida sem mudanca de formula):** `translated.Length > text.Length * 3 +
+  120` continua invalidando quando `originalText` e conhecido; `null` (unico caso: purga na carga,
+  onde o excerto original nunca foi persistido — so o hash) pula esta checagem e as outras duas ainda
+  se aplicam.
+- **Blocklist de recusa (nova):** os primeiros 80 chars da resposta (trim, case-insensitive)
+  verificados por substring (nao prefixo — o screenshot real comeca com "No, I cannot...", nao "I
+  cannot...") contra `{i cannot, i can't, i'm sorry, i am sorry, as an ai, não posso, desculpe, , lo
+  siento}`. Janela de 80 chars deliberada: pega a recusa quando ela abre a resposta, nunca quando a
+  mesma frase aparece no MEIO de uma traducao legitima e longa.
+- **Idioma alvo por stopwords (nova):** quando a resposta tem >= 40 chars, `sourceLanguage !=
+  targetLanguage`, e existe tabela para o idioma DESTINO (`FrozenDictionary<string,
+  FrozenSet<string>>` com os 3 idiomas que a UI realmente oferece — English/Brazilian Portuguese
+  (PT-BR)/Spanish, strings identicas as usadas em `SettingsOverlay`/`ReadingSettings`), invalida se
+  `hits < max(2, tokens * 0.08)` (tokenizacao por `[^\p{L}]+`, comparacao lowercase-invariant).
+  Destino sem tabela (ex.: French) pula so esta checagem — as outras duas continuam.
+
+`TranslationManager.TranslateSnippetAsync` e `GenerateValidSnippetTranslationAsync` trocaram a
+chamada privada `IsSnippetTranslationTooLong` pelo predicado unificado, no MESMO fluxo ja existente
+(cache hit invalido -> tratado como miss; inferencia 1 invalida -> retry sem paragrafo de contexto;
+inferencia 2 ainda invalida -> `InvalidOperationException`, nada persistido). `FetchSnippetsAsync`
+(purga na carga, requisito novo): busca no Access, busca `ReadingSettings` (fonte/destino atuais —
+`ISettingsAccess` ja e dependencia do Manager), aplica o predicado com `originalText: null` a CADA
+linha; reprovada -> `RemoveSnippetAsync` no Access e NAO entra na lista devolvida; aprovada -> entra.
+Uma recusa ja salva desaparece sozinha na proxima abertura do capitulo, sem exigir wipe manual.
+
+**Escolha de camada registrada** (resolve W-16, "predicado vive no Manager", flag do proprio review
+do iter 9): `Utility` estatica sem interface, no mesmo molde de `HtmlUtility` — funcao pura, sem I/O,
+chamada diretamente (`SnippetValidationUtility.IsPlausibleSnippetTranslation(...)`), nao um Manager-
+private nem um novo Engine (fora do escopo da correcao prescrita).
+
+**14 testes novos:** `SnippetValidationUtilityTests.cs` (10, novo) cobre cada bullet do predicado
+isoladamente, incluindo o texto EXATO do screenshot como fixture (`ClassicRefusal`, comentado como
+model output — nunca dado real de usuario) e o caso de blocklist "no meio, nao pega" com uma
+traducao PT legitima e longa que so menciona "desculpe, " apos o char 80. `SnippetTranslationManagerTests.cs`
+(+4): `FetchSnippetsAsync_DelegatesToAccess` atualizado (precisava do stub de
+`_settingsAccess.FetchSettingsAsync()` que a purga agora sempre chama; `Assert.Same` virou
+`Assert.Equal`, ja que o Manager monta uma lista nova — comportamento mudou por desenho, nome do
+teste preservado); `FetchSnippetsAsync_WhenEmpty_DoesNotCallSettingsOrRemove`;
+`FetchSnippetsAsync_PurgesARowThatFailsPlausibility_AndDoesNotReturnIt` (NSubstitute `Received(1)`
+no `RemoveSnippetAsync` da linha envenenada, `DidNotReceive()` na legitima, linha legitima presente
+no retorno); `TranslateSnippetAsync_WhenCachedTranslationIsARefusal_TreatsItAsAMissAndOverwritesTheCache`
+(cache hit); `TranslateSnippetAsync_WhenInferenceReturnsTheWrongLanguage_RetriesWithoutParagraphContext`
+(inferencia, mesmo mecanismo de retry do too-long).
+
+### D-B — janela de contexto (anterior + trecho + seguinte) em vez do paragrafo inteiro (`2b84504`)
+
+`snippets.js`: nova `_originalSentenceTexts(p)` — contraparte por-periodo de `_originalParagraphText`
+(que fica INTOCADA, com seus proprios 2 testes preservados — vira uma fonte a mais, nao uma
+substituicao): devolve um array indexado por `data-si` com o texto ORIGINAL de cada periodo, seja ele
+hoje um `[data-si]` puro, um snip (`dataset.orig`) ou um placeholder de loading (`textContent`, que a
+propria `setSnippetLoading` documenta como sempre-original). Os dois ramos multi-periodo (snip,
+loading) re-splitam via `_splitSentences` e capam no proprio numero de periodos do range
+(`_fillCappedSentences`, mesma logica de clamp de `_plainPeriodSpans`/B-2 — duplicada localmente,
+COM comentario cruzado, em vez de refatorar `_plainPeriodSpans` para reusar: reduz o raio de risco
+desta correcao, que nao precisa tocar codigo ja congelado por 3 fix rounds anteriores).
+
+Nova `_windowParagraphText(p, a, b)`: monta `texts[a-1] + texts[a..b] + texts[b+1]`, pulando qualquer
+lado que nao exista (borda do paragrafo) — degrada para so o trecho num paragrafo de 1 periodo.
+`_onTranslateClick` passou a chamar `_windowParagraphText(_sel.p, run.a, run.b)` em vez de
+`_originalParagraphText(_sel.p)` (o campo `paragraph` do payload nao muda de contrato — C#/prompt
+intocados). Efeito colateral esperado e verificado: em paragrafos curtos (2-3 periodos) a janela
+COINCIDE com o paragrafo inteiro (os 2 testes pre-existentes que fixavam esse campo continuaram
+passando SEM alteracao, ja que so tem vizinho de um ou dos dois lados); a diferenca so aparece em
+paragrafos mais longos, cobertos pelos testes novos.
+
+**5 testes novos** em `snippets.test.js`: janela no meio de um paragrafo de 6 periodos exclui as
+pontas distantes; janela no primeiro periodo (sem lado esquerdo); janela no ultimo periodo (sem lado
+direito); paragrafo de 1 periodo -> janela = so o trecho; janela puxa o `dataset.orig` de um snip
+VIZINHO (nao o texto atualmente exibido, mesmo com o snip mostrando a traducao).
+
+### Verificacao pos-fix
+
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **428 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 430 total** — +14 vs o fim do iter 9 (416: os 14 testes
+  novos deste iter, `SnippetValidationUtilityTests` + `SnippetTranslationManagerTests`).
+  `~Snippet`: 54 passed / 0 failed.
+- JS: **215/215 passando** (era 210 no fim do iter 9), 0 fail, 0 skipped. `comm -23` nome a nome
+  contra a suite anterior a este iter: vazio (so as 5 adicoes listadas acima).
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1399 valid=1470 pct=95.17
+  files=27` (subiu de 94.97/26 — `SnippetValidationUtility.cs` novo, 47/47 = 100% coberto).
+  `COVERAGE_JS covered=1887 valid=1901 pct=99.26 files=5` (piso 85). `COVERAGE_GUARD new_app_cs=0
+  waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes` restrito aos arquivos tocados: exit 0, limpo. A
+  nivel de solucao segue exit 2 pelas MESMAS 2 violacoes FINALNEWLINE legadas de sempre
+  (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff deste iter.
+- Invariantes re-conferidos: `translation.js`/`paginated.js`/`scroll.js` diff VAZIO vs `BASELINE`;
+  regex de `_splitSentences` continua 1x; `_blobPath(bands, 10)` literal +
+  `OFF=8`/`padX=5`/`padY=1.5` intactos; zero `querySelectorAll('...')` com aspas simples contendo
+  p/h1/li/div; zero string pt-BR nova em `snippets.js`; goldens `blob geometry:` intactos (diff nao
+  toca esse bloco).
+- `git status`/`git diff --name-only` confirmam escopo: `SnippetValidationUtility.cs` (novo),
+  `TranslationManager.cs`, `SnippetTranslationManagerTests.cs`, `SnippetValidationUtilityTests.cs`
+  (novo), `snippets.js`, `snippets.test.js` (mais `.jdi/` do orquestrador, nao tocado por este
+  specialist).
+
+Commits: `1b89bb3` — `fix(snippet-translation): reject model refusals and wrong-language snippet
+responses (D-A, iter 10)`; `2b84504` — `fix(snippet-translation): send only the immediate sentence
+window as context, not the whole paragraph (D-B, iter 10)`.
