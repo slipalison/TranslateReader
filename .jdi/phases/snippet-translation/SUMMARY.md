@@ -1081,3 +1081,128 @@ Frozen files diff vazio vs `BASELINE`; regex 1x; aspas duplas; 9 goldens `blob g
 
 Commit: `fix(snippet-translation): a Comment node contributes zero to the flattened offset and moves
 whole, closing the walk's node-type coverage by exhaustion (B-3)`.
+
+## Iter 9 (fix round pos-loop, autorizado pelo usuario — 6o feedback com screenshot do app real)
+
+Loop ja convergido novamente apos o iter 8 quando o usuario testou o app real e reportou: paragrafo
+"titulo + corpo" onde o CORPO INTEIRO vive dentro de UM elemento inline vira periodo unico de novo.
+Orquestrador reproduziu no Chrome real contra o wwwroot com um probe de 3 casos:
+
+- `<p>Titulo<br>Frase um. Frase dois. Frase tres.</p>` -> 3 periodos (funciona)
+- `<p><span class="t">Titulo</span><span>Frase um. Frase dois. Frase tres.</span></p>` -> **1
+  periodo** (sintoma exato — todos os boundaries dentro do segundo `<span>` sao adiados pela regra
+  "elemento e atomico")
+- `<p><span class="t">Titulo</span>Frase um. Frase dois. Frase tres.</p>` -> 3 periodos (funciona)
+
+EPUBs reais (Wardley Maps, exports de web/Calibre) usam a estrutura do caso B extensivamente. A regra
+"elemento e atomico", correta para `<em>palavra</em>` (nenhum boundary dentro), degenera exatamente
+quando o elemento CONTEM boundaries — era a mesma causa-raiz do B-1/B-3 (elemento tratado como caixa
+preta), so que agora o proprio requisito de produto mudou: um boundary TOTALMENTE DENTRO de um
+elemento deve DIVIDIR o elemento (recursivamente), nao mais adiar. Um boundary que CRUZA a borda de
+um elemento continua adiado (B-1 preservado, intocado).
+
+### Redesenho: split recursivo com clonagem rasa
+
+`_wrapMarkupParagraph`/`_topLevelElementRanges`/`_consumeTextNode` (todo o algoritmo de wrap com
+markup, introduzido no iter 8) foram substituidos por um design recursivo:
+
+- **`_allElementRanges(el)`** (nova, via `_gatherElementRanges`): coleta o range `[start,end)` de
+  TODO elemento na subarvore do paragrafo, em QUALQUER profundidade — nao so filhos diretos — porque
+  um boundary pode estar totalmente dentro de um elemento aninhado (`<em>` dentro de `<span>`).
+  Comment continua contribuindo ZERO (B-3 preservado).
+- **`_crossesElement(m, r)`** (nova): um boundary "cruza" um elemento quando SE SOBREPOE a ele mas
+  NAO esta totalmente contido (`overlaps && !fullyContained`). So boundaries que cruzam sao
+  descartados do `matches` antes do walk comecar — a MESMA regra do B-1, agora explicitamente
+  restrita a "cruza", nao mais "qualquer sobreposicao" (a mudanca central desta correcao: sobreposicao
+  TOTAL deixou de ser motivo de descarte).
+- **`_distributeNodes(nodes, nodesStart, matches, state)`** (nova, recursiva): distribui os filhos de
+  QUALQUER container (o paragrafo OU um elemento aninhado, mesma funcao para os dois) em "pieces"
+  (arrays de nodes) separados pelos boundaries que caem dentro deles. Um elemento SEM boundary interno
+  e movido inteiro, intocado (comportamento atual preservado — `<em>palavra</em>`, `<br>`, comments).
+  Um elemento COM boundary interno e dividido: chama a si mesma recursivamente sobre os proprios
+  filhos do elemento; se a recursao devolve mais de 1 "piece", cria K clones RASOS
+  (`element.cloneNode(false)` — so tag + atributos, zero serializacao) e os distribui na lista de
+  pieces do NIVEL DE FORA exatamente como qualquer outro split faria (o 1o clone junta ao piece ja
+  aberto, cada clone seguinte abre um piece novo) — e assim um boundary dentro de um elemento
+  duplamente aninhado divide AMBOS os ancestrais, nao so o mais interno.
+- **`_consumeIntoPieces`** (renomeada de `_consumeTextNode`): mesma mecanica de sempre (offsets
+  clampados, defesa em profundidade do B-3), agora alimentando `pieces`/`separators` em vez de
+  construir spans diretamente — a MESMA funcao serve tanto para os filhos do paragrafo quanto para os
+  de um elemento aninhado.
+- `_wrapMarkupParagraph` (ponto de entrada, intocado em assinatura) monta os `span.tr-sent[data-si]`
+  do NIVEL TOPO a partir dos `pieces` devolvidos pela chamada recursiva; os separadores voltam a
+  ficar soltos entre os spans, exatamente como antes (`_unwrapParagraph` continua fiel sem mudanca).
+- `test/js/harness.js`: `FakeElement.cloneNode(deep)` novo (copia atributos reais via
+  `setAttribute` + `dataset` via `Object.assign` — `data-*` nunca populava `.attributes` — nunca
+  copia `listeners`, espelhando o DOM real); `FakeText.cloneNode()`/`FakeComment.cloneNode()`
+  triviais, para robustez do `deep=true` (nao exercitado pela producao hoje, que so clona raso).
+
+### Consequencia documentada (aceita pela prescricao)
+
+O DOM do capitulo fica com N clones no lugar do elemento original ate a proxima reinjecao do
+capitulo. `_snipOriginalNodes`/`_unwrapParagraph` continuam fieis ao estado WRAPPED (operam sobre
+QUAISQUER nodes presentes, clones ou nao) — a estrutura exata "1 elemento virou N clones" e
+derivacao aceita, so o `textContent` byte-a-byte e exigido (verificado por teste dedicado de
+unwrap).
+
+### Efeito colateral necessario: 2 testes pre-existentes tiveram a PREMISSA mudada, nao quebrada
+
+- `mount: a sentence boundary that would fall inside an inline element is deferred to after it, never
+  cutting the element` (iter 8): usava um boundary TOTALMENTE dentro do `<em>` — sob a regra antiga
+  isso era "adiado" (2 periodos); sob a regra nova e exatamente o caso que DEVE dividir (3 periodos,
+  `<em>` dividido em 2 clones). Renomeado para `mount: a sentence boundary fully inside an inline
+  element divides it into two shallow clones, recursively` e reescrito para a saida correta nova
+  (`spans.length===3`, 2 `<em>` no DOM, cada um dentro do periodo certo).
+- `remove-snip: ... (B-2)` (iter 8): usava a MESMA frase de teste acima como cenario, que deixou de
+  ter um boundary ADIADO (o unico boundary dentro do `<em>` agora divide, nao esconde mais nada). O
+  proprio proposito do teste B-2 (`_plainPeriodSpans` redescobrindo um boundary escondido por um
+  elemento atomico) exige um boundary que CRUZA a borda de um elemento (unico caso que ainda adia,
+  B-1) — trocado para `<p>One. <em> Two words are here</em> and more. Second sentence.</p>`
+  (fronteira `One.` + espaco-duplo + `Two` cruza o `<em>`, mantendo TODO
+  `"One.  Two words are here and more."` como periodo0, escondendo o boundary "more. Second" real
+  que so aparece quando o texto plano e re-splitado sem o `<em>` por perto). O fallback normaliza o
+  espaco duplo (`_splitSentences` faz `.trim()` em cada pedaco antes do rejoin do cap) — a asercao de
+  igualdade byte-a-byte contra `originalText` foi trocada pelo literal normalizado esperado (`'One.
+  Two words are here and more.'`), documentado como perda pre-existente e aceita do fallback em texto
+  plano (o MESMO fallback ja perde markup).
+
+Confirmado via sanity check: rodando a suite JS inteira contra o algoritmo ANTIGO (backup pre-fix) —
+`git stash`-like swap do arquivo — exatamente os 4 testes ligados ao split recursivo falham (o
+renomeado acima, caso B, aninhado, comment-dentro-de-elemento-dividido); casos A/C e a suite inteira
+restante permanecem verdes, confirmando que a mudanca e cirurgica.
+
+### Testes novos (6, `snippets.test.js`)
+
+`contentSpans(root)` helper novo (filtra fora os proprios wrapper `span.tr-sent` — sao `<span>`
+tambem, entao um seletor `span` cru pega os dois). Caso B exato (com atributos tambem no `<span>`
+dividido, `class="body" data-x="1"`, para o teste de preservacao ser significativo — o `<span>`
+literal do probe nao tem atributo nenhum): 3 periodos, `textContent` byte-a-byte igual ao original,
+3 clones do body span TODOS com `class="body"`/`data-x="1"`, titulo atomico movido intocado, selecionar
+o periodo 2 seleciona SO ele. Aninhado (`<span>` > `<em>`): 3 periodos, `<em>` dividido em 2, `<span>`
+externo dividido em 3 (2 boundaries: 1 dentro do `<em>`, 1 na propria area livre do `<span>` apos o
+`<em>` fechar) — o 3o clone do span (so texto livre) nao tem `<em>` proprio. Casos A e C do probe,
+literais, como regressao. Comment dentro de um elemento que E dividido — capability gate segue valendo
+(offset zero, move inteiro, sem crash), verificado que o comment vive no clone certo. Unwrap
+pos-wrap-com-clones -> `textContent` byte-identico.
+
+### Verificacao
+
+- JS: **210/210 passando** (era 204 antes deste iter — 6 adicoes brutas, 0 remocoes reais, so 2
+  testes RENOMEADOS/reescritos por mudanca de premissa, documentado acima), 0 fail, 0 skipped.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_JS covered=1840 valid=1850 pct=99.46 files=5`
+  (subiu de 99.45). `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97 files=26` (identico — zero
+  `.cs` tocado). `COVERAGE_GUARD new_app_cs=0 waived=0`.
+- `dotnet test` (Release, prova de nao-regressao — mudanca 100% JS): **414 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 416 total** — identico ao fim do B-3.
+- `dotnet format whitespace --verify-no-changes`: exit 2, pelas MESMAS 2 violacoes FINALNEWLINE
+  legadas de sempre (`Platforms/Android/MainActivity.cs`, `MainApplication.cs`, W-7) — fora do diff
+  (nenhum `.cs` tocado por este iter).
+- Frozen files diff vazio vs `BASELINE`; regex de `_splitSentences` continua 1x; aspas duplas em todo
+  `querySelectorAll`; 9 goldens `blob geometry:` intactos; `_blobPath(bands, 10)` +
+  `OFF=8`/`padX=5`/`padY=1.5` intactos.
+- `git status`/`git diff --name-only` confirmam escopo: `snippets.js`, `harness.js`,
+  `snippets.test.js` (mais os arquivos de estado do `.jdi/` do orquestrador, nao tocados por este
+  specialist).
+
+Commit: `fix(snippet-translation): a boundary fully inside an inline element now splits it via
+shallow clones, recursively — only crossing its border still defers`.
