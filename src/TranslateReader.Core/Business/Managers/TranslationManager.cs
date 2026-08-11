@@ -403,7 +403,8 @@ public class TranslationManager(
 
         var hash = ComputeHash(SnippetCacheKeySalt + request.Text, sourceLanguage, targetLanguage);
         var cached = await translationCacheAccess.FetchTranslationAsync(bookId, request.ChapterHRef, hash);
-        var translated = cached is not null && !IsSnippetTranslationTooLong(request.Text, cached)
+        var translated = cached is not null &&
+            SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, cached, sourceLanguage, targetLanguage)
             ? cached
             : await GenerateValidSnippetTranslationAsync(bookId, request, sourceLanguage, targetLanguage, ct);
 
@@ -417,12 +418,6 @@ public class TranslationManager(
         return snippet;
     }
 
-    // EN->PT rarely expands past ~1.6x; 3x the excerpt's own length plus slack for very short
-    // excerpts is a conservative ceiling that still catches a model echoing the whole surrounding
-    // paragraph (or a stale, pre-hardening cache/DB row) back instead of just the delimited excerpt.
-    private static bool IsSnippetTranslationTooLong(string text, string translated) =>
-        translated.Length > (text.Length * 3) + 120;
-
     // A cache hit that fails the guard is treated exactly like a miss (regenerated and overwritten);
     // a fresh generation gets one deterministic retry with the paragraph dropped entirely before the
     // whole use case fails — nothing is ever persisted or applied from a response that never passed.
@@ -433,16 +428,16 @@ public class TranslationManager(
 
         var withContext = await GenerateSnippetTranslationAsync(
             request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: true, ct);
-        if (!IsSnippetTranslationTooLong(request.Text, withContext))
+        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withContext, sourceLanguage, targetLanguage))
             return withContext;
 
         var withoutContext = await GenerateSnippetTranslationAsync(
             request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: false, ct);
-        if (!IsSnippetTranslationTooLong(request.Text, withoutContext))
+        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withoutContext, sourceLanguage, targetLanguage))
             return withoutContext;
 
         throw new InvalidOperationException(
-            "The translation model returned an implausibly long response for this excerpt, both with and without paragraph context.");
+            "The translation model returned an implausible response for this excerpt, both with and without paragraph context.");
     }
 
     private async Task<string> GenerateSnippetTranslationAsync(
@@ -460,8 +455,36 @@ public class TranslationManager(
         return CleanTranslationOutput(translated);
     }
 
-    public Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef) =>
-        snippetTranslationAccess.FetchSnippetsAsync(bookId, chapterHRef);
+    // A row already sitting in SnippetTranslations never stores the original excerpt (only its
+    // hash), so the length-ratio check is skipped here (IsPlausibleSnippetTranslation's originalText
+    // is null) — the refusal and target-language checks alone still catch a poisoned row saved
+    // before this guard existed, and a failing row is deleted rather than handed back to the reader,
+    // so it quietly disappears the next time its chapter opens instead of resurfacing forever.
+    public async Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef)
+    {
+        var snippets = await snippetTranslationAccess.FetchSnippetsAsync(bookId, chapterHRef);
+        if (snippets.Count == 0)
+            return snippets;
+
+        var settings = await settingsAccess.FetchSettingsAsync();
+        var valid = new List<SnippetTranslation>(snippets.Count);
+
+        foreach (var snippet in snippets)
+        {
+            if (SnippetValidationUtility.IsPlausibleSnippetTranslation(
+                null, snippet.TranslatedText, settings.SourceLanguage, settings.TargetLanguage))
+            {
+                valid.Add(snippet);
+            }
+            else
+            {
+                await snippetTranslationAccess.RemoveSnippetAsync(
+                    bookId, snippet.ChapterHRef, snippet.ParagraphIndex, snippet.SentenceStart, snippet.SentenceEnd);
+            }
+        }
+
+        return valid;
+    }
 
     public Task SetShowingOriginalAsync(int bookId, SnippetToggleRequest request) =>
         snippetTranslationAccess.SetShowingOriginalAsync(

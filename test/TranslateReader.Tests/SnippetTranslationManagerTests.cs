@@ -268,9 +268,98 @@ public class SnippetTranslationManagerTests
             new(1, 1, "ch1.html", 0, 0, 0, "hash", "text", false, DateTime.UtcNow),
         };
         _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html").Returns(expected);
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
 
         var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
 
-        Assert.Same(expected, result);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public async Task FetchSnippetsAsync_WhenEmpty_DoesNotCallSettingsOrRemove()
+    {
+        _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
+            .Returns(new List<SnippetTranslation>());
+
+        var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
+
+        Assert.Empty(result);
+        await _settingsAccess.DidNotReceive().FetchSettingsAsync();
+    }
+
+    // Purge on load (iter 10, D-A): a row a small model poisoned with a refusal before this guard
+    // existed must not resurface forever just because it made it into the database once.
+    [Fact]
+    public async Task FetchSnippetsAsync_PurgesARowThatFailsPlausibility_AndDoesNotReturnIt()
+    {
+        var poisoned = new SnippetTranslation(
+            1, 1, "ch1.html", 0, 0, 0, "hash", "I cannot provide a translation of this text.",
+            false, DateTime.UtcNow);
+        var legit = new SnippetTranslation(
+            2, 1, "ch1.html", 1, 0, 0, "hash2", "text", false, DateTime.UtcNow);
+        _snippetTranslationAccess.FetchSnippetsAsync(1, "ch1.html")
+            .Returns(new List<SnippetTranslation> { poisoned, legit });
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
+
+        var result = await _sut.FetchSnippetsAsync(1, "ch1.html");
+
+        Assert.Single(result);
+        Assert.Same(legit, result[0]);
+        await _snippetTranslationAccess.Received(1).RemoveSnippetAsync(1, "ch1.html", 0, 0, 0);
+        await _snippetTranslationAccess.DidNotReceive().RemoveSnippetAsync(1, "ch1.html", 1, 0, 0);
+    }
+
+    // Cache-hit path (iter 10, D-A): a cached row that fails the unified plausibility predicate is
+    // treated exactly like a miss - the exact refusal text observed in production, verbatim from the
+    // screenshot (this is model output, never real user data).
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenCachedTranslationIsARefusal_TreatsItAsAMissAndOverwritesTheCache()
+    {
+        const string refusal = "No, I cannot provide a translation of this text. It contains " +
+            "explicit sexual content, which violates my safety guidelines.";
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(refusal);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("Ela concordou rapidamente com a proposta apresentada durante a reunião.");
+
+        var result = await _sut.TranslateSnippetAsync(
+            1, MakeRequest(), "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None);
+
+        Assert.NotEqual(refusal, result.TranslatedText);
+        await _translationEngine.Received(1).GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    // Inference path (iter 10, D-A): a fresh response that reads as the wrong language retries
+    // without paragraph context exactly like the too-long guard already did.
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenInferenceReturnsTheWrongLanguage_RetriesWithoutParagraphContext()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-with-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        const string wrongLanguage =
+            "The committee reviewed the proposal and decided to postpone the final vote until next week.";
+        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(wrongLanguage);
+        _translationEngine.GenerateAsync("system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("Ela concordou rapidamente com a proposta apresentada durante a reunião.");
+
+        var result = await _sut.TranslateSnippetAsync(
+            1, MakeRequest(), "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None);
+
+        Assert.Equal("Ela concordou rapidamente com a proposta apresentada durante a reunião.", result.TranslatedText);
+        await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), result.TranslatedText);
     }
 }
