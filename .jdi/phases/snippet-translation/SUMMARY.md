@@ -1022,3 +1022,62 @@ element, and make the JS test harness spec-faithful about it` (B-1, harness+prod
 regra de atomicidade ja usada nesta phase: o fix de producao sozinho nao teria como ser provado sem
 o harness spec-faithful no MESMO commit); `fix(snippet-translation): cap the fallback plain-text
 re-split at the range's own period count, never colliding data-si with the next period` (B-2).
+
+### Re-verify achou B-3 — segunda porta da mesma classe: nos de COMENTARIO HTML
+
+O walk de `_wrapMarkupParagraph` tratava qualquer filho SEM `tagName` como Text node splitavel — mas
+um `Comment` tem `.data` (parece texto), NAO tem `splitText`, e contribui ZERO ao `textContent` do
+pai (spec DOM, `el.textContent` pula comentarios por completo). Comentarios sobrevivem ao DOM real do
+leitor (`ExtractBodyContent`/`loadChapter` nao os removem). Dois efeitos distintos, ambos reproduzidos
+mecanicamente pelo reviewer: (1) contar `node.textContent.length` de um comentario em
+`_topLevelElementRanges`/no walk DESALINHA todo offset posterior do texto achatado real que
+`_sentenceBoundaryMatches` buscou — fronteira aplicada no lugar errado (mis-grouping silencioso); (2)
+uma fronteira cujo separador fica FISICAMENTE dividido entre dois text nodes irmaos, com um
+comentario de contribuicao zero entre eles (`<p>End. <!-- c --> Next</p>` vira DOIS text nodes reais
+apesar do `textContent` ler como um so) faz `_consumeTextNode` tentar `splitText` com offset MAIOR
+que o node (ja encolhido) realmente tem — `IndexSizeError`, mesma severidade do B-1.
+
+**Fix (fecha a classe por exaustao — Element/Text-splitavel/Comment esgotam os filhos de HTML
+parseado):**
+- `_isSplittableText(node)` nova (`typeof node.splitText === 'function'`), usada em 2 lugares:
+  `_topLevelElementRanges` so avanca `pos` para elemento (empurra range) ou Text splitavel (soma
+  `data.length`) — um Comment e pulado por inteiro, contribuindo ZERO, espelhando o que `textContent`
+  ja faz. O loop principal de `_wrapMarkupParagraph` ganhou um 3o ramo: filho sem tagName E sem
+  `splitText` (Comment) e movido INTEIRO para o span do periodo CORRENTE, tambem sem avancar `pos`.
+- **Defesa em profundidade (sugestao do reviewer, avaliada e adotada):** os dois `splitText` de
+  `_consumeTextNode` (o do fim de periodo e o do proprio separador) ganharam
+  `Math.min(comprimentoNecessario, remaining.data.length)` — clamp de 1 linha cada. Necessario de
+  verdade, nao so cosmetico: confirmado via sanity check que o cenario 1 (separador fisicamente
+  dividido entre dois text nodes) AINDA lanca `IndexSizeError` mesmo com o roteamento de Comment
+  corrigido, SE o clamp for removido — o clamp e o roteamento cobrem duas metades distintas da mesma
+  classe.
+- `test/js/harness.js`: `FakeComment` nova (`.data`, `.nodeType=8`, deliberadamente SEM `tagName` nem
+  `splitText` — spec-faithful) + `document.createComment(data)`. `descendantElements`/`collectText` ja
+  funcionavam corretamente sem alteracao (comment cai fora de `ELEMENT_NODE`/`TEXT_NODE`, e um
+  `childNodes` vazio ja faz `collectText` contribuir `''` para ele — igual a um DOM real).
+
+**Testes novos (2, `snippets.test.js`), construidos com chamadas DOM diretas (NAO `innerHTML` — o
+parser HTML do harness nao entende sintaxe de comentario, entao uma string `<!-- -->` via `innerHTML`
+viraria texto literal, sem exercitar o Comment de verdade):**
+1. `<p>End. <!-- note --> Next sentence <em>y</em>.</p>`: mount nao lanca, `spans.length===2`,
+   `spans[0].textContent==='End.'` (nao perdido), `<em>` dentro do periodo1, texto integro
+   `'End.  Next sentence y.'`.
+2. `<p><em>Intro</em><!--0123456789--> word one. Second half here.</p>`: `spans.length===2`,
+   `spans[0].textContent==='Intro word one.'` (prova que os 10 chars do comentario NAO desviam a
+   fronteira), `<em>` E o proprio no `Comment` vivos dentro do span0, `spans[1].textContent==='Second
+   half here.'`.
+
+Sanity check (mesma metodologia dos rounds anteriores): revertendo so o roteamento (Comment tratado
+como texto splitavel de novo, mantendo o clamp) faz SOMENTE o teste 2 falhar (`'Intro'` em vez de
+`'Intro word one.'` — prova que o roteamento e quem impede o mis-grouping); revertendo so o clamp
+(mantendo o roteamento correto) faz SOMENTE o teste 1 falhar com `IndexSizeError` real — prova que as
+duas metades do fix sao ambas necessarias e cada teste cobre a sua.
+
+**Verificacao:** JS **204/204 passando** (era 202), 0 fail, 0 skipped. `bash scripts/coverage-gate.sh`:
+exit 0, `COVERAGE_JS covered=1792 valid=1802 pct=99.45 files=5` (subiu de 99.44), `COVERAGE_SCOPE
+covered=1340 valid=1411 pct=94.97 files=26` (identico — zero `.cs` tocado). `COVERAGE_GUARD
+new_app_cs=0 waived=0`. `dotnet test`: 414 passed / 2 skipped / 0 failed / 416 total (identico).
+Frozen files diff vazio vs `BASELINE`; regex 1x; aspas duplas; 9 goldens `blob geometry:` intactos.
+
+Commit: `fix(snippet-translation): a Comment node contributes zero to the flattened offset and moves
+whole, closing the walk's node-type coverage by exhaustion (B-3)`.
