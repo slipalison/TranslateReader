@@ -1504,6 +1504,57 @@ function _originalParagraphText(p) {
     return parts.join('');
 }
 
+// Per-sentence counterpart of _originalParagraphText, indexed by data-si instead of flattened into
+// one string: a snip re-splits its own dataset.orig, a loading placeholder re-splits its own
+// textContent (both hold exactly the original text, never a translation - same sources
+// _originalParagraphText already trusts), and a plain period contributes its own textContent under
+// its own index. Either multi-period branch is capped at the range's own period count, exactly like
+// _plainPeriodSpans, so a boundary a markup-aware split deferred earlier can never resurface here as
+// extra periods colliding with the next real data-si (B-2). Feeds _windowParagraphText.
+function _originalSentenceTexts(p) {
+    var texts = [];
+    for (var node of Array.from(p.childNodes)) {
+        if (!node.tagName) continue;
+        if (node.dataset.snip !== undefined) {
+            var snipInfo = _parseSnipKey(node.dataset.snip);
+            _fillCappedSentences(texts, node.dataset.orig, snipInfo.a, snipInfo.b);
+        } else if (node.dataset.loadKey !== undefined) {
+            var loadInfo = _parseSnipKey(node.dataset.loadKey);
+            _fillCappedSentences(texts, node.textContent, loadInfo.a, loadInfo.b);
+        } else if (node.dataset.si !== undefined) {
+            texts[Number(node.dataset.si)] = node.textContent;
+        }
+    }
+    return texts;
+}
+
+function _fillCappedSentences(texts, text, a, b) {
+    var count = b - a + 1;
+    var sentences = _splitSentences(text);
+    if (sentences.length > count) {
+        sentences = sentences.slice(0, count - 1).concat([sentences.slice(count - 1).join(' ')]);
+    }
+    sentences.forEach(function (sentence, offset) {
+        texts[a + offset] = sentence;
+    });
+}
+
+// The context sent for a new translation request: the immediately preceding original sentence, the
+// run itself, and the immediately following original sentence - never the whole paragraph (D-B,
+// iter 10). Less material for the model to leak back while still giving it the same local
+// disambiguation a full paragraph gave; degrades to just the run at a paragraph boundary or in a
+// single-sentence paragraph, where there is no neighbor to add.
+function _windowParagraphText(p, a, b) {
+    var texts = _originalSentenceTexts(p);
+    var parts = [];
+    if (texts[a - 1] !== undefined) parts.push(texts[a - 1]);
+    for (var i = a; i <= b; i++) {
+        if (texts[i] !== undefined) parts.push(texts[i]);
+    }
+    if (texts[b + 1] !== undefined) parts.push(texts[b + 1]);
+    return parts.join(' ');
+}
+
 // The C# side drives the loading placeholder (ReaderPage calls setSnippetLoading as soon as the
 // message arrives, before starting inference) rather than this handler doing it eagerly, so there
 // is exactly one place that decides a run is "in flight".
@@ -1511,12 +1562,12 @@ function _onTranslateClick() {
     if (!_sel) return;
     var chapterHRef = _chapterHRefFor(_sel.p);
     var pi = Number(_sel.p.dataset.pi);
-    var paragraph = _originalParagraphText(_sel.p);
     var payload = _runsOf(_sel.set).map(function (run) {
         return {
             chapterHRef: chapterHRef, paragraphIndex: pi,
             sentenceStart: run.a, sentenceEnd: run.b,
-            text: _rangeText(_sel.p, run.a, run.b), paragraph: paragraph,
+            text: _rangeText(_sel.p, run.a, run.b),
+            paragraph: _windowParagraphText(_sel.p, run.a, run.b),
         };
     });
     _clearSelection();

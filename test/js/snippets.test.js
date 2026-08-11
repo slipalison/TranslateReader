@@ -1670,6 +1670,87 @@ test('translate: the snip| payload carries the clean original paragraph even wit
     assert.ok(!runs[0].paragraph.includes('PT-BR'));
 });
 
+// Iter 10 (D-B): a long excerpt could leak translated text beyond the requested range because the
+// old "paragraph" field sent the WHOLE paragraph as context. These pin the narrower window - one
+// original sentence before and after the run, never the whole paragraph - _onTranslateClick now
+// sends instead, giving the model far less material to leak while keeping local disambiguation.
+
+test('translate: the snip| payload window covers only the immediate neighbors, not the whole paragraph, for a run in the middle', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres. Quatro. Cinco. Seis.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[2]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Tres.');
+    assert.strictEqual(runs[0].paragraph, 'Dois. Tres. Quatro.');
+});
+
+test('translate: the snip| payload window drops the missing side at the start of the paragraph', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres. Quatro. Cinco. Seis.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Um.');
+    assert.strictEqual(runs[0].paragraph, 'Um. Dois.');
+});
+
+test('translate: the snip| payload window drops the missing side at the end of the paragraph', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres. Quatro. Cinco. Seis.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[5]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Seis.');
+    assert.strictEqual(runs[0].paragraph, 'Cinco. Seis.');
+});
+
+test('translate: the snip| payload window is just the run itself in a single-sentence paragraph', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Somente um periodo aqui.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Somente um periodo aqui.');
+    assert.strictEqual(runs[0].paragraph, 'Somente um periodo aqui.');
+});
+
+test('translate: the snip| payload window pulls a neighboring snip\'s ORIGINAL text, never its currently shown translation', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Um. Dois. Tres. Quatro.']);
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: env.window._snipHash('Um.'), translatedText: 'One.', showingOriginal: false,
+    }]);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    // Index 0 in the paragraph is now the snip; the first remaining [data-si] span is 'Dois.' (si=1).
+    tap(env, paragraphs[0].querySelectorAll('[data-si]')[0]);
+
+    fire(env.document.querySelectorAll('.tr-pill-primary')[0], 'click');
+
+    const runs = JSON.parse(sent[0].slice('snip|'.length));
+    assert.strictEqual(runs[0].text, 'Dois.');
+    assert.strictEqual(runs[0].paragraph, 'Um. Dois. Tres.');
+    assert.ok(!runs[0].paragraph.includes('One.'));
+});
+
 // Iteration 5 fix: a real app window is not the mockup's 1280px capture frame — `data-idiom` names
 // a device class, not a window width, so a resized Windows desktop can be narrower than the pill's
 // full desktop content. These pin the measure-then-degrade behavior _fitPill/_renderHint add.
