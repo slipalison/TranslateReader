@@ -569,6 +569,63 @@ test('mount: a sentence boundary whose whitespace starts in free text and contin
     assert.strictEqual(paragraph.textContent, 'One.  Two words', 'no character is lost');
 });
 
+// Reviewer BLOCKED B-3: the walk treated any non-element child as a genuine, splittable Text node.
+// A Comment has its own `.data` (so it looked like text) but contributes NOTHING to el.textContent
+// (DOM spec) and has no splitText at all — a book's HTML comments survive into the reader's real DOM
+// (ExtractBodyContent/loadChapter never strip them), so this is reachable with real EPUB content.
+// Built via direct DOM calls (appendChild/createComment), not innerHTML: the harness's HTML parser
+// never claimed to understand comment syntax, so a `<!-- -->` string set through innerHTML would
+// just become literal text here, never exercising the code path this fix touches.
+
+test('mount: a comment between two text runs never crashes the mount and does not lose the text before it (B-3)', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    paragraph.appendChild(env.document.createTextNode('End. '));
+    paragraph.appendChild(env.document.createComment(' note '));
+    const em = env.document.createElement('em');
+    em.appendChild(env.document.createTextNode('y'));
+    paragraph.appendChild(env.document.createTextNode(' Next sentence '));
+    paragraph.appendChild(em);
+    paragraph.appendChild(env.document.createTextNode('.'));
+
+    assert.doesNotThrow(() => env.window.mountSnippetLayer());
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 2);
+    assert.strictEqual(spans[0].textContent, 'End.', '"End." must not be lost, unlike the pre-fix abort');
+    assert.ok(
+        Array.from(spans[1].childNodes).includes(em), 'the <em> after the comment still lands in period 1');
+    assert.strictEqual(paragraph.textContent, 'End.  Next sentence y.', 'no character is lost');
+});
+
+test('mount: a comment right after an element never shifts a later boundary out of place (B-3)', () => {
+    const env = loadFull();
+    const pager = ensureRoot(env);
+    const paragraph = env.document.createElement('p');
+    pager.appendChild(paragraph);
+    const em = env.document.createElement('em');
+    em.appendChild(env.document.createTextNode('Intro'));
+    paragraph.appendChild(em);
+    const comment = env.document.createComment('0123456789');
+    paragraph.appendChild(comment);
+    paragraph.appendChild(env.document.createTextNode(' word one. Second half here.'));
+
+    env.window.mountSnippetLayer();
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 2);
+    assert.strictEqual(
+        spans[0].textContent, 'Intro word one.',
+        'the comment must contribute ZERO to the offset — counting its own data length shifted the boundary 10 chars too early');
+    assert.ok(Array.from(spans[0].childNodes).includes(em), 'the <em> stays in period 0');
+    assert.ok(
+        Array.from(spans[0].childNodes).includes(comment),
+        'the comment lives inside whichever period it landed in, moved whole rather than split');
+    assert.strictEqual(spans[1].textContent, 'Second half here.');
+});
+
 test('unmount: a paragraph with inline markup between real sentence boundaries restores the exact original DOM structure', () => {
     const env = loadFull();
     const paragraph = pagerWithMarkup(

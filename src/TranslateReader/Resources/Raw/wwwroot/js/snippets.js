@@ -892,8 +892,15 @@ function _wrapMarkupParagraph(el) {
         if (node.tagName) {
             state.span.appendChild(node);
             state.pos += node.textContent.length;
-        } else {
+        } else if (_isSplittableText(node)) {
             _consumeTextNode(node, state, matches);
+        } else {
+            // Element/Text/splittable-Text exhaust the two "real content" node types; anything else
+            // that still lacks a tagName here (a Comment, per spec, and the only one this file has
+            // actually seen — B-3) contributes NOTHING to el.textContent and has no splitText to cut
+            // it with, so it moves whole into whichever period is currently open, at ZERO offset cost
+            // — mirroring exactly what el.textContent already does when it walks straight past it.
+            state.span.appendChild(node);
         }
     }
     state.ordered.push(state.span);
@@ -901,15 +908,28 @@ function _wrapMarkupParagraph(el) {
     for (var item of state.ordered) el.appendChild(item);
 }
 
+// A genuine Text node is the only child type _wrapMarkupParagraph ever cuts; anything else without
+// a tagName (a Comment) is moved whole instead (see _wrapMarkupParagraph/_topLevelElementRanges).
+function _isSplittableText(node) {
+    return typeof node.splitText === 'function';
+}
+
 // Flattened-text [start, end) range of every node that is a DIRECT child of `el` and an element —
-// the only nodes _wrapMarkupParagraph ever moves whole, so the only ranges a boundary must avoid.
+// the only nodes _wrapMarkupParagraph ever moves whole other than a Comment. A Comment contributes
+// no length here either, for the same reason _wrapMarkupParagraph never advances its own offset for
+// one: el.textContent skips it entirely (DOM spec), so counting it would desync every position after
+// it from the flattened text _sentenceBoundaryMatches actually searched (B-3).
 function _topLevelElementRanges(el) {
     var ranges = [];
     var pos = 0;
     for (var node of Array.from(el.childNodes)) {
-        var len = node.textContent.length;
-        if (node.tagName) ranges.push({ start: pos, end: pos + len });
-        pos += len;
+        if (node.tagName) {
+            var len = node.textContent.length;
+            ranges.push({ start: pos, end: pos + len });
+            pos += len;
+        } else if (_isSplittableText(node)) {
+            pos += node.data.length;
+        }
     }
     return ranges;
 }
@@ -919,7 +939,12 @@ function _topLevelElementRanges(el) {
 // CURRENT period span, the matched whitespace itself is left in `state.ordered` as its own loose
 // node (never inside a span — _unwrapParagraph already restores a plain child untouched), and a
 // fresh span opens for the period that follows. Whatever is left after the last boundary stays in
-// the still-open span, since a later sibling node may continue the same period.
+// the still-open span, since a later sibling node may continue the same period. Both splitText
+// offsets are clamped to what THIS node actually still holds (defense in depth, B-3): a boundary's
+// whitespace can legitimately straddle two sibling Text nodes with nothing but a zero-width Comment
+// between them (`<p>End. <!-- c --> Next</p>` splits into two Text nodes either side of the comment,
+// even though el.textContent reads through it as one run) — an un-clamped offset there would again
+// hand splitText a number past this node's own (already shrunk) length.
 function _consumeTextNode(node, state, matches) {
     var nodeStart = state.pos;
     var nodeEnd = nodeStart + node.data.length;
@@ -928,14 +953,16 @@ function _consumeTextNode(node, state, matches) {
     while (state.matchIdx < matches.length && matches[state.matchIdx].start < nodeEnd) {
         var m = matches[state.matchIdx];
         if (m.start > remainingStart) {
-            var beforeSep = remaining.splitText(m.start - remainingStart);
+            var periodCut = Math.min(m.start - remainingStart, remaining.data.length);
+            var beforeSep = remaining.splitText(periodCut);
             state.span.appendChild(remaining);
             remaining = beforeSep;
         }
         state.ordered.push(state.span);
         state.si++;
         state.span = _emptyPeriodSpan(state.si);
-        var afterSep = remaining.splitText(m.end - m.start);
+        var sepCut = Math.min(m.end - m.start, remaining.data.length);
+        var afterSep = remaining.splitText(sepCut);
         state.ordered.push(remaining);
         remaining = afterSep;
         remainingStart = m.end;

@@ -19,6 +19,7 @@ const ATTR_RE = /([a-zA-Z-][a-zA-Z0-9-]*)(?:="([^"]*)")?/g;
 const SELECTOR_PART_RE = /\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/g;
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
+const COMMENT_NODE = 8;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function toCamelCase(name) {
@@ -120,6 +121,28 @@ class FakeText extends FakeNode {
             tail.parentNode = this.parentNode;
         }
         return tail;
+    }
+}
+
+// Mirrors Comment: has `.data` like a Text node, but deliberately no `tagName` (so production code's
+// `node.tagName` check still treats it as "not an element") and no `splitText` (so
+// `_isSplittableText` in snippets.js correctly tells it apart from a genuine Text node — B-3). No
+// `textContent` getter on `collectText`'s traversal path is needed to make a parent skip it: an
+// empty `childNodes` array already makes the recursive collectText below contribute nothing for it,
+// exactly like a real DOM comment contributes nothing to its parent's textContent.
+class FakeComment extends FakeNode {
+    constructor(ownerDocument, data) {
+        super(ownerDocument);
+        this.nodeType = COMMENT_NODE;
+        this.data = String(data);
+    }
+
+    get textContent() {
+        return this.data;
+    }
+
+    set textContent(value) {
+        this.data = String(value);
     }
 }
 
@@ -257,6 +280,10 @@ class FakeDocument {
 
     createTextNode(text) {
         return new FakeText(this, text);
+    }
+
+    createComment(data) {
+        return new FakeComment(this, data);
     }
 
     getElementById(id) {
