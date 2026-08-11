@@ -2,125 +2,92 @@
 
 **Verdict:** APPROVED_WITH_WARNINGS
 
-**Iter:** 9 (fix pos-aprovacao — 6o feedback do usuario, screenshot do app real) · Reviewer: `jdi-reviewer-translatereader` (mode=verify + dod-critic fold-in, D-5 enhanced) · Data: 2026-08-11
-**HEAD revisado:** `e67be75` · Fix revisado: `016ef1e` (redesign do walk: boundary CONTIDO em elemento divide via clones rasos, recursivo; so CROSSING adia) · Baseline da phase: `02a4c6c` · Base do round: `b16ba36` (iter 8 aprovado)
+**Iter:** 10, re-verify final (pos-fix B-5) · Reviewer: `jdi-reviewer-translatereader` (mode=verify + dod-critic fold-in, D-5 enhanced) · Data: 2026-08-11
+**HEAD revisado:** `52fc671` · Fixes do iter 10: `1b89bb3`+`2b84504` (D-A/D-B), `0feaafc` (B-4), `371e7af` (B-5) · Baseline da phase: `02a4c6c` · Base do round: `4950262` (iter 9 aprovado)
 
-**Contexto:** o iter 8 fechou B-1/B-2/B-3, mas a regra "elemento atomico" adiava TODOS os boundaries internos — um paragrafo cujo corpo inteiro vive dentro de UM `<span>` (comum em EPUBs reais: Wardley Maps, exports Calibre/web) degenerava em periodo unico inselecionavel. O redesign separa as duas relacoes: boundary CRUZANDO borda de elemento adia (B-1 preservado); boundary CONTIDO divide o elemento recursivamente em clones rasos.
+**B-4 e B-5 RESOLVIDOS e verificados por probe re-compilado contra o Core real.** A correcao de processo tambem foi entregue: o stand-in alongado sumiu dos 3 sites e o fixture #3 vive numa const BYTE-IDENTICA ao texto deste reviewer (`ReviewerFixtureThree`), pinada nos DOIS entry points com um comentario que inverte o onus ("se esta literal falhar, o codigo esta errado — nao o fixture").
 
 ## Gates
 
 | Gate | Status | Details |
 |---|---|---|
-| Build | PASS | `net10.0-windows10.0.19041.0` Release: exit 0, `0 Aviso(s), 0 Erro(s)`. Diff 100% JS/teste/doc |
-| Tests | PASS | C#: **414 passed / 0 failed / 2 skipped (GPU-only pre-existentes) / 416 total** >= baseline 167 (D-2), IDENTICO (`git diff b16ba36..HEAD -- '*.cs'` VAZIO, re-derivado). JS: **210/210, 0 fail, 0 skipped** (era 204: +6 novos; 1 teste RENOMEADO com premissa nova por design, 1 com corpo atualizado — cobertura equivalente-ou-mais-forte, analise na secao dedicada; zero teste de `main` perdido) |
-| Coverage | PASS | `bash scripts/coverage-gate.sh` **exit 0 capturado diretamente**: `COVERAGE_SCOPE covered=1340 valid=1411 pct=94.97 files=26` (piso 90, D-6) — IDENTICO, coerente com diff sem `.cs`; `COVERAGE_JS covered=1840 valid=1850 pct=99.46 files=5` (piso 85, D-...-4); `COVERAGE_GUARD new_app_cs=0 waived=0`; zero `COVERAGE_WAIVER_INVALID`. Numeros do doer (210/210, 416, 99.46, 94.97) TODOS reproduzidos |
-| Lint | WARN | `dotnet format whitespace --verify-no-changes` — as MESMAS 2 violacoes FINALNEWLINE legadas (fora do diff, W-7). Zero ID novo em `NoWarn`/`.editorconfig` |
-| Security/Layer | PASS | Lado C# identico ao baseline abencoado (zero `.cs`). Walk novo auditado na fonte: capability gate do B-3 preservado, clamp preservado, zero serializacao/reparse (cloneNode(false) e movimentacao de nodes), recursao bounded pelo parser — verificacao cetica abaixo |
-| Consistency | PASS | 2 commits atomicos (`016ef1e` fix, `e67be75` docs), conventional, escopo `snippet-translation` (D-4). Arquivos batem com o SUMMARY; claim de mutacao ("exatamente os 4 testes de split recursivo falham no algoritmo antigo") coerente com a construcao dos asserts, conferido por leitura |
-| UI Validation | SKIPPED | has_frontend=false. Nota: orquestrador re-rodou TODOS os probes em Chrome real — caso B 3 periodos com spans preservados, casos A/C byte-identicos ao pre-fix, B-1 e B-3 intactos, zero pageerror — convergente com os probes deste review |
-| DoD | PASS | **10/10 auto PASS, 0 manual** (`dod=auto_only`). Comandos extraidos mecanicamente do CONTEXT.md (diff 0 linhas no round) e re-executados integralmente em HEAD `e67be75` |
+| Build | PASS | `net10.0-windows10.0.19041.0` Release: exit 0, `0 Aviso(s), 0 Erro(s)` |
+| Tests | PASS | C#: **443 passed / 0 failed / 2 skipped / 445 total** (+4 Facts B-5, -2 InlineData do stand-in removido = +2 liquido — contagem re-derivada) >= baseline 167 (D-2). JS: **215/215** (diff JS do sub-round = 0 linhas). Numeros do doer reproduzidos |
+| Coverage | PASS | `bash scripts/coverage-gate.sh` **exit 0 direto**: `COVERAGE_SCOPE covered=1419 valid=1490 pct=95.23 files=27` (utility `69/69` = 100% no proprio stdout do gate); `COVERAGE_JS covered=1887 valid=1901 pct=99.26 files=5`; `GUARD 0/0`; zero WAIVER_INVALID |
+| Lint | WARN | Mesmas 2 FINALNEWLINE legadas (W-7); zero `NoWarn` novo |
+| Security/Layer | PASS | B-4/B-5 fechados; camadas The Method corretas (Utility pura, Manager orquestra); verificacao cetica abaixo |
+| Consistency | PASS | 2 commits atomicos (`371e7af` fix, `52fc671` docs), conventional (D-4); numeros do SUMMARY reproduzidos; a ressalva de processo do round anterior foi CORRIGIDA de fato (const byte-identica + remocao do stand-in em todos os sites, verificado por grep no source — so binarios stale de bin/obj ainda casam) |
+| UI Validation | SKIPPED | has_frontend=false |
+| DoD | PASS | **10/10 auto PASS, 0 manual**; comandos re-executados integralmente em HEAD `52fc671` |
 
 ## Blockers
 
-Nenhum. Verificacao cetica do redesign abaixo — incluindo re-execucao dos 3 probes historicos deste reviewer (B-1, B-3 A/B, fallback B-2), todos verdes com as semanticas esperadas pos-redesign.
+Nenhum aberto. B-1..B-3 (iters 8-9) e B-4/B-5 (iter 10) todos resolvidos e verificados.
 
-## Verificacao cetica do redesign (`016ef1e`)
+## Verificacao dos fixes B-4/B-5 (probe re-compilado contra o Core real, ambos entry points)
 
-**1. `_crossesElement` — semantica completa, sem terra de ninguem.** `overlaps && !fullyContained` e exatamente o complemento do split: para cada range de elemento, um match ou (a) nao overlapa (livre — irrelevante para esse range), ou (b) e integralmente contido (split legitimo), ou (c) cruza a borda (adiado — unica relacao que ainda adia, B-1). Analise de casos exaustiva por range; o match sobrevive sse NENHUM range e cruzado. **Aninhamento verificado na recursao:** boundary contido no `<em>` interno tambem e contido no `<span>` externo (range do em e subconjunto do range do span) — nao cruza nenhum, e mantido; `_distributeNodes` no nivel do em produz N pieces, o nivel do span ve `sub.pieces.length > 1` e clona A SI MESMO por piece, o nivel do paragrafo repete — **a divisao propaga por TODOS os ancestrais que contem o boundary** (re-derivado a mao E pinado pelo teste `doubly-nested`, que asserta 3 clones do span externo, 2 do em, e o encadeamento exato clone-dentro-de-span-dentro-de-periodo). Boundary contido no externo mas cruzando o interno: dropado pelo filtro (cruza o interno) — adia, correto. Consumo em ordem de documento com `state.matchIdx` compartilhado: cada recursao consome exatamente os matches do seu range antes de retornar (ranges de texto e elemento particionam o espaco achatado em cada nivel; comment tem largura zero — nenhum match e pulado nem consumido pelo no errado). Elemento SEM boundary interno: `sub.pieces.length === 1`, o resultado da recursao e descartado e o NO ORIGINAL move inteiro — e a recursao descartada nao mutou nada (sem match interno, `_consumeIntoPieces` nao executa nenhum `splitText`; push em array JS nao move DOM). Edge de boundary encostado na borda: `m.end == r.start`/`m.start == r.end` nao overlapa — livre; boundary comecando/terminando EXATAMENTE na borda interna do elemento (whitespace inicial/final do elemento) e contido — divide com um clone vazio numa ponta (cosmetico, inline, sem crash; texto dos periodos correto).
+```
+FRESH:     ACCEPTED  os 4 fixtures de dialogo VERBATIM (incl. #3: "I can't breathe," she whispered,
+                     afraid of everything around her.)                       [B-5 fechado]
+FRESH:     ACCEPTED  "He nodded slowly and walked away without a word."      [narracao EN 40-90 chars]
+FRESH:     ACCEPTED  "— Não sei — disse ele, olhando para o chão."           [dialogo curto PT-BR]
+FRESH:     ACCEPTED  dialogo curto ES ("Yo no sé nada", dijo ella...)        [tabela ES enriquecida tambem]
+FRESH:     REJECTED  recusa do screenshot, destino PT-BR (blocklist E ratio)
+FRESH:     REJECTED  recusa do screenshot, destino EN — ratio passa (texto EN), a BLOCKLIST sozinha pega
+FRESH:     REJECTED  texto PT com destino EN — a tabela EN enriquecida AINDA detecta idioma errado
+                     (o enriquecimento nao diluiu o ratio: pronomes EN nao colidem com PT)
+PERSISTED: ACCEPTED  os 4 fixtures + fixture #3 verbatim + linha PT com destino trocado p/ Spanish
+PERSISTED: REJECTED  recusa do screenshot
+WHOLE-WORD: "i cannot"+"against" nao conta ("ai" nunca casa como substring); "TRADUÇÃO" maiusculo-acentuado conta
+```
 
-**2. Clones rasos — atributos sim, listeners nao; periodos clicaveis.** `cloneNode(false)` copia tag + atributos (incl. `data-*`) e NUNCA listeners — o `FakeElement.cloneNode` novo do harness e spec-faithful nisso (atributos via setAttribute + dataset; listeners jamais; `this.constructor` cobre a subclasse SVG) e o teste do caso B pina `class`/`data-x` em CADA clone. Clones de conteudo nunca precisaram de listener (conteudo inline de livro nunca teve); o listener de selecao vive no WRAPPER `_emptyPeriodSpan` (pointerdown adicionado a cada periodo novo, inalterado) e `_onSentPointerDown` resolve por `e.target.closest("[data-si]")` (snippets.js:779) — tap num clone descendente BORBULHA e resolve para o periodo certo no DOM real; o teste do caso B pina `tap(spans[1])` selecionando SO o periodo 2, e o Chrome real do orquestrador confirmou pill/selecao nos 3 periodos.
-
-**3. Premissas alteradas dos 2 testes — cobertura equivalente-ou-mais-forte.** (a) O teste "boundary dentro de em e adiado" pinava o comportamento que este fix REMOVE por design (era exatamente a limitacao do 6o feedback); o renomeado pina a semantica nova com asserts mais fortes (3 periodos com textos exatos, 2 clones do em com textos exatos, encadeamento). A UNICA deferral restante (crossing) continua pinada pela regressao B-1 (`One. <em> Two words</em>` → 1 periodo, sem excecao — re-executada verde inclusive pelo probe deste reviewer). (b) O teste do cap B-2 precisava de boundary que AINDA adia — input trocado para um genuinamente cruzando (`One. <em> Two words are here</em> and more.`); o cap segue pinado (`['0','1']` estrito) e a nota sobre normalizacao do espaco duplo pelo `.trim()` do fallback e trait pre-existente documentado, nao regressao. Nenhuma garantia abencoada ficou sem pino.
-
-**4. Explosao de nos — linear e bounded, sem necessidade de limite.** K boundaries contidos a profundidade D geram K x D clones rasos extras — LINEAR no numero de sentencas vezes a profundidade de aninhamento (nao ha efeito multiplicativo entre boundaries). Livro patologico: span com 200 frases → ~200 clones de span + 200 period spans — a MESMA ordem de grandeza que um paragrafo plain de 200 frases ja produz (200 spans); profundidade e bounded pelo parser HTML do Chromium (cap de aninhamento em 512, aplicado na propria injecao via innerHTML), entao a recursao de `_gatherElementRanges`/`_distributeNodes` nao alcanca estouro de pilha com input de livro. Custo e mount-time one-shot (evento discreto), nunca em loop de token/paragrafo — dentro da politica de hot paths do csharp.md.
-
-**5. Probes historicos re-executados (semanticas pos-redesign corretas):** B-1 (`One. <em> Two words</em>`) → 1 periodo, sem excecao, stock E spec; B-3 A (`End. <!-- note --> Next sentence <em>y</em>.`) → monta OK, 2 periodos, "End." preservado; B-3 B → `["Intro word one.","Second half here."]`; fallback B-2 sobre o input historico → agora monta como 3 periodos (contido divide, por design), restore+remove sem `data-si` duplicado e `_rangeText(p,1,1)` correto — o cap segue funcionando sob a estrutura nova.
-
-**6. Preservacoes do iter 8 auditadas na fonte:** capability gate `_isSplittableText` gateia o consumo de texto e o accounting de posicao nos DOIS pontos novos (`_gatherElementRanges` e `_distributeNodes` — Comment contribui zero e move inteiro, teste novo cobre comment DENTRO de elemento dividido); os dois `splitText` de `_consumeIntoPieces` seguem clampados (`Math.min(..., remaining.data.length)`); zero serializacao/reparse (cloneNode raso + movimentacao de nodes); `_topLevelElementRanges`/`_consumeTextNode` removidos sem referencia pendente (grep limpo, so mencao em comentario de teste).
-
-**Observacao menor (nao-warning):** unmount de paragrafo com elemento DIVIDIDO restaura textContent byte-identico (pinado pelo teste novo) mas NAO a estrutura original (1 elemento vira N clones + separadores soltos fora deles — trade-off explicito, documentado no proprio nome do teste). Sem consequencia funcional: re-mount sobre a estrutura de clones produz os MESMOS periodos/indices (re-derivado — boundaries caem no texto livre entre clones), o DOM do capitulo e reconstruido a cada injecao, e a unica diferenca visual possivel e um gap de estilo em spans com background/border nos limites de periodo — ja presente no estado montado por design (separadores soltos). O teste antigo de unmount byte-identico segue pinando o caso nao-dividido.
-
-## Verificacao adicional re-derivada
-
-- **Regex single-source:** literal da fronteira 1x (re-contado); `_blobPath(bands, 10)` 1x; `OFF=8`/`padX=5`/`padY=1.5` 3/3; pt-BR em `snippets.js` = 0; zero `querySelectorAll` proibido (re-contado comment-stripped); aspas duplas no JS novo.
-- **Congelados/goldens:** `translation.js`/`paginated.js`/`scroll.js` diff VAZIO vs `02a4c6c` em HEAD; zero linha de `blob geometry` removida no diff — goldens intactos.
-- **Zero `.cs` no diff** — suite C# identica (416) por construcao e re-executada mesmo assim.
-- **Contagem JS re-derivada:** 204 → 210 = +6 novos (caso B com atributos, doubly-nested, regressoes A/C, comment em elemento dividido, unmount com clones) + 1 renomeado (0 liquido) + 1 corpo atualizado; comm vazio vs `main`.
+1. **Tabelas enriquecidas (B-5):** EN +27 (pronomes/auxiliares — "a" deliberadamente FORA, evitando colisao PT/ES), ES +13, PT-BR +15; limiar/comprimento inalterados. O fixture #3 verbatim passa agora com folga (i, you...her, my — multiplos hits) e o wrong-language continua reprovando (probe acima).
+2. **Const byte-identica:** `ReviewerFixtureThree` conferida caractere a caractere contra o fixture original deste reviewer; usada no fresh (`..._IsAcceptedInTheFreshPath`), no persisted (`..._IsAccepted`) e no teste de purga do Manager (string exata inline). Grep no source: zero stand-in remanescente.
+3. **Regressoes discriminantes:** os 4 Facts novos cobrem exatamente as falhas provadas (fixture #3 fresh, narracao EN, dialogo PT-BR curto, fixture #3 persisted); a recusa classica segue pinada nos dois entry points e pontua 0 hits no ratio (as adicoes EN nao aparecem nela... a deteccao dela e blocklist-meta, intocada).
 
 ## Warnings
 
-Nenhuma nova neste iter. Resolvida no iter 8: **W-13**. Carregadas (re-verificadas em HEAD `e67be75`; diff nao toca nenhum trecho citado):
+Resolvidas: **W-13** (iter 8), **W-16** (iter 10) — mantidas.
 
-- **W-2 — Hint pode ressuscitar com a camada desmontada (JS).** Zero `removeEventListener` (re-contado hoje). Inalterado.
-- **W-3 — `SnippetRequest.ChapterHRef` string nao-anulavel carregando null do WebView** no modo paginado. Inalterado.
-- **W-4 — `_APP_ACCENT` hardcoded** duplicando o accent dos tokens XAML. Inalterado.
-- **W-5 — `SnippetLabels.cs` 0/15 e `SnippetTheme.cs` 0/1** — gate agregado passa com folga (94.97). Inalterado.
-- **W-6 — Legado: `dotnet test` a nivel de solution sai 1** (CA1711 em TFMs iOS/MacCatalyst). Pre-existente de `main`.
-- **W-7 — Legado: FINALNEWLINE em `Platforms/Android/MainActivity.cs` e `MainApplication.cs`** (re-confirmado hoje; fora do diff).
-- **W-8 — OCE/excecoes absorvidas so em fronteiras terminais de event handler/teardown de WebView.** Inalterado.
-- **W-9 — Sem guard de reentrancia no `EnsureModelDownloadedAsync`**; mitigado pelo overlay modal. Inalterado.
-- **W-10 — Afinidade de thread das propriedades observaveis** no handler hybrid. Inalterado.
-- **W-11 — Falha parcial em selecao multi-trecho diverge UI/banco ate reload.** Inalterado.
-- **W-12 — Custo do sweep `_renderAllBlobs`.** Inalterado.
-- **W-14 — Hint nao e re-medido em resize.** Inalterado.
-- **W-15 — Formula da guarda C#/JS duplicada sem pino cruzado** (`* 3) + 120`). Inalterado.
-- **W-16 — Predicado de plausibilidade mora no Manager.** Inalterado.
-- **W-17 — "Texto acima do vidro" depende de CSS nao pinada** (`position: relative` de `.tr-sent`/`[data-snip]`). Inalterado.
-- **W-18 — Resultado tardio pode aterrissar no paragrafo do capitulo ERRADO no modo paginado** (`_snippetCts` nao cancelado na troca de capitulo + `_findParagraph` tolerante). Pre-existente; candidata a phase de higiene.
+- **W-20 (ATUALIZADA) — Residuais da guarda heuristica de recusa/idioma (documentados por probe; nenhum destroi dado bom em volume).** (a) RECALL: recusa curta sem meta-vocabulario ("I cannot help with that.", <40 chars) passa tudo; recusa EN >= 40 sem meta passa o ratio PT via colisao lexical ("do"/"as" na tabela PT — persiste pos-enriquecimento, re-provado). Sintoma original pode ressurgir para recusas frouxas — raro (recusas de traducao costumam nomear a tarefa) e barato (falso negativo re-aparece e o usuario descarta como hoje). (b) PRECISAO: dialogo legitimo com conjuncao acidental frase+meta na janela de 160 ("I'm sorry about my language," he said...) segue reprovado nos DOIS entry points — no persisted isso PURGA uma linha legitima; banda estreita (exige a conjuncao) mas real. Candidatas de higiene: remover "do"/"as" da tabela PT (ambiguidade EN) e enxugar meta-palavras largas ("language", "text", "provide") ou exigir 2 hits de meta.
+
+Abertas (re-verificadas em HEAD `52fc671`): **W-2** (hint listeners), **W-3** (ChapterHRef null), **W-4** (_APP_ACCENT), **W-5** (SnippetLabels/Theme 0%), **W-6** (solution test legado), **W-7** (FINALNEWLINE legado), **W-8** (OCE fronteiras), **W-9** (reentrancia download), **W-10** (thread afinidade), **W-11** (multi-trecho parcial), **W-12** (sweep blobs), **W-14** (hint resize), **W-15** (formula `*3+120` C#/JS sem cross-pin), **W-17** (CSS nao pinada), **W-18** (capitulo errado paginado), **W-19** (`_originalParagraphText` morta em producao).
 
 ## Gate 5 — detalhe
 
 | Check | Resultado |
 |---|---|
-| 5.1-5.10, 5.14-5.16 (C#) | limpos/identicos ao baseline abencoado — zero `.cs` no diff |
-| 5.11 Eventos +=/-= | subscribe=5 / unsubscribe=4 (baseline bootstrap); JS: zero listener novo de window/document; pointerdown por periodo inalterado (clones nunca carregam listener — spec de cloneNode) |
-| 5.12/5.13 Static/cache | nenhum novo; `_snipOriginalNodes` segue bounded |
-| 5.14 (JS) | split recursivo roda 1x por paragrafo por mount; K x D clones lineares, depth bounded pelo parser (512); zero `ReadAll*` novo |
-| 5.15 Fail fast | sem catch novo, sem Result/Try; clamp e capability gate preservados na causa |
-| 5.17 Disciplina de teste | NSubstitute so interfaces; zero I/O real novo. 6 regressoes novas pinam o redesign (incl. mutacao: os 4 testes de split recursivo falham no algoritmo antigo — coerencia conferida por leitura); harness `cloneNode` spec-faithful (atributos sim, listeners nao, deep opcional correto) |
+| 5.1-5.5 Camadas | ok — Utility estatica pura (teste da maquina de cappuccino), Manager orquestra; contratos intactos; W-16 segue resolvida |
+| 5.6-5.13 | limpos — zero site novo de zip/XML/EvaluateJavaScriptAsync/segredo/evento/static-mutavel/cache; `FrozenSet`s static readonly imutaveis |
+| 5.14 | tokenizacao por resposta (evento discreto) — aceitavel, fora dos hot paths |
+| 5.15 | zero catch novo; falha da dupla tentativa lanca e o PageModel converte na fronteira unica |
+| 5.16/5.17 | zero TODO; NSubstitute so interfaces; zero I/O real; utility 69/69 = 100%; fixtures agora VERBATIM com const anti-regressao |
 
 ## DoD Checklist (gate 8)
 
-Comandos extraidos mecanicamente do CONTEXT.md (diff 0 linhas no round) e executados integralmente em HEAD `e67be75` por este review.
+10 comandos extraidos mecanicamente do CONTEXT.md (intocado no round inteiro) e re-executados verbatim em HEAD `52fc671` — **10/10 PASS, 0 manual** (`dod=auto_only`). Evidencias re-derivadas: build 0 Error(s); C# 445 / JS 215 com zero teste perdido vs `main`; `~Snippet` verde com folga sobre o piso 12; regex da fronteira 1x; goldens `blob geometry` e 3 JS congelados intactos (diff vazio vs `02a4c6c`); `COVERAGE_JS files=5` + `GUARD 0/0`; pisos 90/85 inalterados; pt-BR 0 no JS.
 
-| # | Criterion | Source | Type | Status | Evidence |
-|---|---|---|---|---|---|
-| 1 | Ground truth v0.2.0 existe e e medida | CONTEXT (D-...-4) | Auto | PASS | exit 0; 14 literais; >= 4 JPGs; spec fora do diff |
-| 2 | Tabela/Model/Access novos, storage invisivel, round-trip testado | CONTEXT (D-...-1) | Auto | PASS | exit 0; `~Snippet`: 40 passed / 0 failed — identico, 0 `.cs` no diff |
-| 3 | Split de periodos: UMA funcao, regex literal, fronteiras testadas | CONTEXT (D-...-4) | Auto | PASS | exit 0; regex 1x re-contada POS-redesign (`_sentenceBoundaryMatches` segue derivando por `.source`); fail 0 |
-| 4 | Geometria dourada do blob | CONTEXT (D-...-4) | Auto | PASS | exit 0; 4 nomes exatos ok; goldens intactos (zero linha `blob geometry` removida); literais preservados; `_blobPath` fora do diff |
-| 5 | Persistencia: restaura, toggle, descarta hash divergente | CONTEXT (D-...-1) | Auto | PASS | exit 0; 4 nomes exatos; skip silencioso de hash divergente confirmado (fonte inalterada). Nota: snips persistidos ANTES deste fix sobre paragrafo que agora divide diferente terao hash divergente e serao pulados sem purge — mesma semantica ja abencoada no iter 8 (ancora invalida != registro podre) |
-| 6 | Independente do modo: `_snippetRoots` unica fonte | CONTEXT (D-...-3) | Auto | PASS | exit 0; contagem corpo==arquivo re-executada pos-diff |
-| 7 | 3 JS congelados intocados, seletor nao duplicado, ordem de carga | CONTEXT (D-...-2,-3) | Auto | PASS | exit 0; diff vazio vs BASELINE nos 3 congelados em HEAD |
-| 8 | Gate de cobertura com 5 JS e sem `.cs` novo | CONTEXT (D-...-2) | Auto | PASS | exit 0; `files=5`; `GUARD 0/0`; pisos 90/85 inalterados; zero WAIVER_INVALID |
-| 9 | Build limpo + 2 suites verdes, zero teste perdido | CONTEXT (D-...-6) | Auto | PASS | exit 0; build 0 Error(s); C# 416; JS 210/210 fail 0 skipped 0; comm vazio vs `main` (o renomeado nao pertencia a `main`) |
-| 10 | Literais visuais na spec E no JS; zero pt-BR no JS | CONTEXT (D-...-2,-4) | Auto | PASS | exit 0; 15 literais; pt-BR 0 (re-contado); 9 strings pt-BR no ReaderPage |
-
-**Totals:** 10 items | Auto: 10 (10 PASS, 0 FAIL) | Manual: 0 pending
-
-Nota: `.jdi/PROJECT.md` nao possui secao `## Definition of Done`; o conjunto acima (CONTEXT.md, `dod=auto_only`) e o DoD integral. Itens humanos vivem em `## Deferred to PR review`.
+Nota: `.jdi/PROJECT.md` nao possui secao `## Definition of Done`; o conjunto do CONTEXT.md e o DoD integral. Itens humanos vivem em `## Deferred to PR review` (paridade visual em device, blur, drag em toque, qualidade linguistica, posicao da pill, custo de sliders, SonarCloud pos-push).
 
 ## DoD-critic (D-5 enhanced, segunda passada — mesmo reviewer, mode=dod-critic)
 
-Re-inspecao adversarial dos 10 rows Auto/PASS contra os ARTEFATOS em HEAD `e67be75`:
-
 ```json
 [
-  {"row": 1, "hollow": false, "evidence": "spec fora do diff; grep re-executado no arquivo real"},
-  {"row": 2, "hollow": false, "evidence": "40 testes ~Snippet reais verdes; diff sem .cs"},
-  {"row": 3, "hollow": false, "evidence": "regex 1x re-contada com o walk novo presente; _crossesElement/_distributeNodes nao escrevem o pattern; o criterio 'fronteiras testadas' ganhou 6 pinos novos cobrindo o caso que o 6o feedback expos"},
-  {"row": 4, "hollow": false, "evidence": "goldens intactos por diff sem remocao de blob geometry; _blobPath fora do diff; 4 nomes exatos verdes em execucao real"},
-  {"row": 5, "hollow": false, "evidence": "restoreSnippets intocado; 4 testes reais verdes; skip-sem-purge re-confirmado na fonte. Risco especifico checado: a mudanca de segmentacao pode invalidar hashes de snips pre-fix (paragrafos que agora dividem diferente) — comportamento coberto pelo proprio criterio ('descarta quando hash diverge'), nao pass oco"},
-  {"row": 6, "hollow": false, "evidence": "contagem corpo==arquivo re-executada pos-diff"},
-  {"row": 7, "hollow": false, "evidence": "diff dos 3 congelados vazio contra 02a4c6c em HEAD real"},
-  {"row": 8, "hollow": false, "evidence": "gate re-executado com exit 0 real; JS 99.45->99.46 coerente com +6 testes cobrindo ~120 linhas novas; SCOPE identico (1340/1411) prova zero .cs no AM scope"},
-  {"row": 9, "hollow": false, "evidence": "416 C# / 210 JS rodados por este review; o unico nome removido (teste renomeado) nasceu no iter 8, nunca existiu em main — comm -23 segue vazio por construcao E re-executado; a premissa antiga era exatamente o defeito corrigido, e a garantia remanescente (crossing adia) segue pinada pela regressao B-1"},
-  {"row": 10, "hollow": false, "evidence": "JS novo lido na integra: zero string de UI; grep pt-BR 0 hits"}
+  {"row": 1, "hollow": false, "evidence": "spec fora do diff; grep re-executado"},
+  {"row": 2, "hollow": false, "evidence": "testes ~Snippet reais verdes; nomes novos lidos; contagem +4/-2 re-derivada"},
+  {"row": 3, "hollow": false, "evidence": "regex 1x; split intocado desde o iter 9"},
+  {"row": 4, "hollow": false, "evidence": "goldens intactos; _blobPath fora do diff"},
+  {"row": 5, "hollow": false, "evidence": "restore verde; purga blocklist-only verificada na fonte e por probe (linha PT sobrevive a settings hostis)"},
+  {"row": 6, "hollow": false, "evidence": "contagem corpo==arquivo pos-diff"},
+  {"row": 7, "hollow": false, "evidence": "3 congelados diff vazio vs 02a4c6c em HEAD real"},
+  {"row": 8, "hollow": false, "evidence": "gate exit 0 real; SCOPE 95.23 coerente com utility 69/69 no AM scope; JS estavel em 99.26 (JS intocado)"},
+  {"row": 9, "hollow": false, "evidence": "445 C# / 215 JS rodados por este review; a remocao dos 2 InlineData e a troca do stand-in pelo fixture verbatim TORNAM os testes mais fortes, nao mais fracos — verificado nome a nome"},
+  {"row": 10, "hollow": false, "evidence": "zero pt-BR novo no JS (intocado)"}
 ]
 ```
 
-**Resultado do critic: nenhum row hollow.** Verdito mantido.
+**Nenhum row hollow.** O critic so aperta — verdito mantido.
 
 ## Recommendation
 
-O redesign resolve a limitacao real do 6o feedback na causa (a relacao contido-vs-cruzando estava colapsada numa regra so) sem regredir nenhuma das conquistas dos iters anteriores: B-1 (crossing adia — probe e regressao verdes), B-2 (cap do fallback — probe verde sob a segmentacao nova), B-3 (capability gate + clamp — preservados nos dois pontos novos do walk e testados com comment dentro de elemento dividido). A recursao propaga a divisao por todos os ancestrais contendo o boundary (re-derivada a mao e pinada), clones rasos preservam atributos e nunca listeners (harness spec-faithful), periodos continuam clicaveis via bubbling + closest, e o custo e linear e bounded. Todos os gates e os 10 DoD passam por execucao real; numeros do doer reproduzidos integralmente. Trade-off documentado e aceito: unmount de elemento dividido restaura texto, nao estrutura (pinado por teste; re-mount estavel). W-2..W-12, W-14..W-18 seguem como candidatas a phase de higiene (nenhuma bloqueia; W-13 resolvida). Pronto para `/jdi-ship snippet-translation`.
+O iter 10 fecha completo: D-A (recusa/idioma com co-ocorrencia whole-word e purga segura por construcao), D-B (janela de contexto), B-4 e B-5 mortos na causa e verificados por probe mecanico contra o Core real nos DOIS entry points — incluindo recall preservado nos tres caminhos da recusa do screenshot e wrong-language intacto pos-enriquecimento. A correcao de processo pedida foi entregue de verdade: fixture #3 byte a byte numa const anti-regressao usada em todos os sites, stand-ins eliminados do source. Todos os gates e os 10 DoD passam por execucao real; numeros do doer reproduzidos integralmente. W-20 atualizada com os dois residuais da heuristica (FN raro + FP raro por conjuncao — candidatas de higiene mapeadas); W-2..W-19 seguem para a phase de higiene (nenhuma bloqueia; W-13/W-16 resolvidas). Pronto para `/jdi-ship snippet-translation`.
