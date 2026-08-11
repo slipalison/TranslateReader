@@ -872,14 +872,20 @@ function _emptyPeriodSpan(index) {
 // Splits a paragraph that has element children on the SAME sentence boundaries _splitSentences
 // finds (via _sentenceBoundaryMatches, the shared regex — never a second literal), located as
 // offsets in the flattened text rather than re-parsed from the trimmed strings _splitSentences
-// returns. An inline element is atomic: any boundary whose matched whitespace sits inside one is
-// dropped before the walk even starts, so the period that would have ended there simply keeps going
-// until the next boundary that actually lands in free text — the element itself is never cut, and
-// no node is ever serialized/reparsed (csharp.md §4: book HTML is untrusted input).
+// returns. An inline element is atomic: any boundary whose matched whitespace OVERLAPS one AT ALL —
+// not just a boundary that starts inside it, but one that starts in free text and runs on into the
+// element too (EPUB markup routinely opens an inline tag with a leading space, e.g.
+// `<em> continues</em>`) — is dropped before the walk even starts, so the period that would have
+// ended there simply keeps going until the next boundary that actually lands entirely in free text.
+// A boundary only PARTIALLY excluded here would hand _consumeTextNode an offset measured against the
+// wrong node's length once the split runs, past that node's own text (B-1) — spec `Text.splitText`
+// throws IndexSizeError on that, aborting the mount mid-paragraph and losing whatever was already
+// moved. The element itself is never cut, and no node is ever serialized/reparsed (csharp.md §4:
+// book HTML is untrusted input).
 function _wrapMarkupParagraph(el) {
     var elementRanges = _topLevelElementRanges(el);
     var matches = _sentenceBoundaryMatches(el.textContent).filter(function (m) {
-        return !elementRanges.some(function (r) { return m.start >= r.start && m.start < r.end; });
+        return !elementRanges.some(function (r) { return m.end > r.start && m.start < r.end; });
     });
     var state = { ordered: [], si: 0, span: _emptyPeriodSpan(0), matchIdx: 0, pos: 0 };
     for (var node of Array.from(el.childNodes)) {

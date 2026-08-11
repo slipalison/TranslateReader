@@ -548,6 +548,27 @@ test('mount: a sentence boundary that would fall inside an inline element is def
     assert.strictEqual(spans[1].textContent, 'Final sentence.');
 });
 
+// Reviewer BLOCKED B-1: a boundary's whitespace run can START in free text and continue PAST an
+// inline element's own opening tag when that element's own content starts with a space (common EPUB
+// markup, e.g. `<em> continues</em>`). Filtering only on the boundary's START missed this, so
+// _consumeTextNode later called Text.splitText with an offset measured past the SHRUNK node it was
+// actually holding — a real WebView (and a spec-faithful harness) throws IndexSizeError there,
+// aborting the mount mid-paragraph with whatever was already moved detached from the screen.
+test('mount: a sentence boundary whose whitespace starts in free text and continues into a leading space inside the next element never crashes the mount (B-1)', () => {
+    const env = loadFull();
+    const paragraph = pagerWithMarkup(env, 'One. <em> Two words</em>');
+    const em = paragraph.querySelectorAll('em')[0];
+
+    assert.doesNotThrow(() => env.window.mountSnippetLayer());
+
+    const spans = paragraph.querySelectorAll('[data-si]');
+    assert.strictEqual(spans.length, 1, 'the only boundary found overlaps the element, so it is deferred entirely — one period');
+    assert.ok(
+        Array.from(spans[0].childNodes).includes(em),
+        'the <em> must still be moved in whole, not lost/detached by an aborted mount');
+    assert.strictEqual(paragraph.textContent, 'One.  Two words', 'no character is lost');
+});
+
 test('unmount: a paragraph with inline markup between real sentence boundaries restores the exact original DOM structure', () => {
     const env = loadFull();
     const paragraph = pagerWithMarkup(

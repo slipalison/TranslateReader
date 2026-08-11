@@ -101,8 +101,17 @@ class FakeText extends FakeNode {
     // Mirrors Node.splitText: truncates this node's data to `offset` and inserts a NEW text node
     // holding the rest as the very next sibling, still attached to the same parent. snippets.js uses
     // this to carve period spans out of a paragraph's text nodes around inline markup without ever
-    // serializing and reparsing it (csharp.md §4: book HTML is untrusted input).
+    // serializing and reparsing it (csharp.md §4: book HTML is untrusted input). Spec-faithful on the
+    // bound that matters here: an `offset` past the node's own length throws an IndexSizeError
+    // DOMException, exactly like a real WebView (Chrome/WebView2) does — a silently clamping fake
+    // here previously masked an entire class of production bug (B-1) where a caller computed an
+    // offset against the wrong node's length.
     splitText(offset) {
+        if (offset > this.data.length) {
+            throw new DOMException(
+                `Failed to execute 'splitText' on 'Text': The offset ${offset} is larger than the Text node's length.`,
+                'IndexSizeError');
+        }
         const tail = new FakeText(this.ownerDocument, this.data.slice(offset));
         this.data = this.data.slice(0, offset);
         if (this.parentNode) {

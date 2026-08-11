@@ -320,3 +320,28 @@ test('splitText can be called twice on the tail it produced, carving three piece
     assert.strictEqual(third.data, 'EF');
     assert.deepStrictEqual(paragraph.childNodes, [first, second, third]);
 });
+
+// B-1: a silently clamping fake here previously masked an entire class of production bug — a
+// boundary partially inside an inline element led snippets.js to compute a splitText offset against
+// the wrong (already-shrunk) node, which a real WebView (Chrome/WebView2) rejects outright.
+test('splitText throws an IndexSizeError DOMException when the offset is past the node\'s own length', () => {
+    const env = createEnv();
+    const textNode = env.document.createTextNode('hi');
+
+    assert.throws(() => textNode.splitText(3), (error) => {
+        assert.ok(error instanceof DOMException);
+        assert.strictEqual(error.name, 'IndexSizeError');
+        return true;
+    });
+    assert.strictEqual(textNode.data, 'hi', 'a rejected split must not mutate the node');
+});
+
+test('splitText at exactly the node\'s own length is valid and yields an empty tail', () => {
+    const env = createEnv();
+    const textNode = env.document.createTextNode('hi');
+
+    const tail = textNode.splitText(2);
+
+    assert.strictEqual(textNode.data, 'hi');
+    assert.strictEqual(tail.data, '');
+});
