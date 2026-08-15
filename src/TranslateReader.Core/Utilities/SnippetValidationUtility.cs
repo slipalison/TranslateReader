@@ -12,11 +12,22 @@ public static partial class SnippetValidationUtility
 {
     private const int RegexTimeoutMilliseconds = 1000;
 
-    // EN->PT rarely expands past ~1.6x; 3x the excerpt's own length plus slack for very short
-    // excerpts is a conservative ceiling that still catches a model echoing the whole surrounding
-    // paragraph (or a stale, pre-hardening cache/DB row) back instead of just the delimited excerpt.
-    private const int LengthRatioMultiplier = 3;
-    private const int LengthRatioSlack = 120;
+    // EN->PT rarely expands past ~1.6x. Tightened from 3x/120 (iter 11, A3): the measured leak was a
+    // 134-char excerpt whose "translation" was actually itself PLUS the next sentence in the context
+    // window (D-B, iter 10) at 399 chars - 134*3+120=522 comfortably let it through. 1.8x is the
+    // multiplier; the slack started at the prescribed 80 but had to move to 100 because it made an
+    // existing legitimate fixture (an 82-char excerpt whose real translation runs 237 chars, 82*1.8+
+    // 80=227.6<237) fail - 100 keeps that fixture passing (82*1.8+100=247.6>237) while still catching
+    // the measured case (134*1.8+100=341.2<399).
+    private const double LengthRatioMultiplier = 1.8;
+    private const int LengthRatioSlack = 100;
+
+    // A2 (iter 11): the SAME boundary rule js/snippets.js's _splitSentences uses (cross-pinned by
+    // HybridWebViewContractTests), so a translation can never silently absorb a NEIGHBORING sentence
+    // from the context window (D-B, iter 10) without being caught here - the measured leak had 1
+    // original sentence come back as 3. The +1 slack allows a translator that legitimately breaks one
+    // long period into two shorter ones.
+    private const int MaxExtraSentences = 1;
 
     // A refusal always opens the response ("No, I cannot...", "Desculpe, ..."), so only the opening
     // window is checked - a legitimate translation that merely discusses apologies or AI further in
@@ -91,19 +102,23 @@ public static partial class SnippetValidationUtility
     /// <summary>
     /// True when a FRESH snippet translation response (a cache hit or a new inference result, where
     /// the source/target language pair is known and nothing has been persisted yet) is plausible
-    /// enough to trust: not implausibly longer than the excerpt it translates (when the excerpt is
-    /// known), does not open with a model refusal, and - when long enough and a stopword table
-    /// exists for the target language - contains a plausible share of that language's most common
-    /// words. <paramref name="originalText"/> may be null when the original excerpt is not available
-    /// to the caller; the length-ratio check is skipped in that case and the other two still apply.
-    /// Never use this overload to judge an already-persisted row at load time - see
+    /// enough to trust: not implausibly longer than the excerpt it translates and not made of
+    /// noticeably more sentences than it (when the excerpt is known), does not open with a model
+    /// refusal, and - when long enough and a stopword table exists for the target language - contains
+    /// a plausible share of that language's most common words. <paramref name="originalText"/> may be
+    /// null when the original excerpt is not available to the caller; the length-ratio and
+    /// sentence-count checks are both skipped in that case and the other two still apply. Never use
+    /// this overload to judge an already-persisted row at load time - see
     /// <see cref="IsPlausiblePersistedSnippetTranslation"/>.
     /// </summary>
     public static bool IsPlausibleSnippetTranslation(
         string? originalText, string translated, string sourceLanguage, string targetLanguage)
     {
-        if (originalText is not null && IsImplausiblyLong(originalText, translated))
-            return false;
+        if (originalText is not null)
+        {
+            if (IsImplausiblyLong(originalText, translated)) return false;
+            if (HasTooManySentences(originalText, translated)) return false;
+        }
 
         return !ContainsRefusalOpening(translated) &&
             HasPlausibleTargetLanguageRatio(translated, sourceLanguage, targetLanguage);
@@ -121,6 +136,18 @@ public static partial class SnippetValidationUtility
 
     private static bool IsImplausiblyLong(string text, string translated) =>
         translated.Length > (text.Length * LengthRatioMultiplier) + LengthRatioSlack;
+
+    private static bool HasTooManySentences(string text, string translated) =>
+        CountSentences(translated) > CountSentences(text) + MaxExtraSentences;
+
+    // Only the boundary COUNT is needed here, never the split pieces themselves, so unlike
+    // js/snippets.js's _splitSentences there is nothing to reassemble - one more than the number of
+    // boundary matches in the trimmed text.
+    private static int CountSentences(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length == 0 ? 0 : SentenceBoundaryRegex().Count(trimmed) + 1;
+    }
 
     private static bool ContainsRefusalOpening(string translated)
     {
@@ -169,4 +196,10 @@ public static partial class SnippetValidationUtility
 
     [GeneratedRegex(@"[^\p{L}]+", RegexOptions.None, RegexTimeoutMilliseconds)]
     private static partial Regex NonLetterRegex();
+
+    // Cross-pinned against js/snippets.js's _splitSentences by HybridWebViewContractTests (A5) - the
+    // two must stay byte-identical, since a drift here would silently disagree with the JS-side
+    // sentence count that snippets.js will apply against the very same excerpt at restore time.
+    [GeneratedRegex(@"(?<=[.!?…][""”’»)\]]?)\s+(?=[A-ZÀ-Þ""“«'(])", RegexOptions.None, RegexTimeoutMilliseconds)]
+    private static partial Regex SentenceBoundaryRegex();
 }

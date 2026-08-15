@@ -193,6 +193,119 @@ public class SnippetValidationUtilityTests
     }
 
     [Fact]
+    public void IsPlausibleSnippetTranslation_OriginalTextNull_SkipsTheSentenceCountCheck()
+    {
+        var manySentences = "Um. Dois. Tres. Quatro. Cinco. Seis.";
+
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            null, manySentences, "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.True(result);
+    }
+
+    // Iter 11 (A2/A3): the measured leak from the "Righting Software" book - a single 134-char
+    // original sentence, translated as itself PLUS the next sentence from the context window
+    // (D-B, iter 10). The original excerpt is quoted verbatim from the incident report; the exact
+    // leaked continuation was not captured byte-for-byte in the report, so the translated text below
+    // is a representative reconstruction with the SAME reported shape (~399 chars, 3 sentences: a
+    // real translation of the original plus two more). Rejected by BOTH new layers independently -
+    // see the two isolated tests right below, which pin each layer separately using shorter/longer
+    // variants of this same shape so a regression in either one is caught even if the other still
+    // happens to catch this particular case.
+    private const string MeasuredLeakOriginal =
+        "A customer will hardly ever present you with the requirements in a useful format, " +
+        "let alone in a way that is conducive to good design.";
+
+    [Fact]
+    public void IsPlausibleSnippetTranslation_MeasuredLeak_IsRejected()
+    {
+        const string leaked =
+            "Um cliente dificilmente lhe apresentará os requisitos em um formato útil, muito menos de " +
+            "uma maneira propícia a um bom design. Você deve sempre transformar esses requisitos " +
+            "recebidos do cliente em informações estruturadas antes de seguir adiante com o projeto. " +
+            "No início do processo de design, um formato mais claro e organizado se torna muito mais " +
+            "natural para todos os envolvidos na equipe.";
+
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            MeasuredLeakOriginal, leaked, "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.False(result);
+    }
+
+    // Isolates the sentence-count layer: short enough to pass the length ratio on its own (122 chars
+    // against a 341.2-char ceiling for this original), but still 3 sentences against an original of 1
+    // (ceiling 2) - if sentence counting alone were disabled, this fixture would pass.
+    [Fact]
+    public void IsPlausibleSnippetTranslation_MeasuredLeakShape_SentenceCountAloneRejects()
+    {
+        const string threeShortSentences =
+            "Um cliente raramente apresenta os requisitos. Isso raramente ocorre de forma útil. " +
+            "Um bom design exige muito mais cuidado.";
+
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            MeasuredLeakOriginal, threeShortSentences, "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.False(result);
+    }
+
+    // Isolates the length-ratio layer: only 2 sentences against an original of 1 (ceiling 2, passes
+    // sentence counting on its own), but 363 chars against a 341.2-char ceiling - if the ratio alone
+    // were disabled, this fixture would pass.
+    [Fact]
+    public void IsPlausibleSnippetTranslation_MeasuredLeakShape_LengthRatioAloneRejects()
+    {
+        const string twoVerboseSentences =
+            "Um cliente dificilmente apresentará a você os requisitos originais em um formato " +
+            "verdadeiramente útil e bem estruturado, muito menos de uma maneira que seja propícia a " +
+            "um excelente processo de design de software orientado a serviços. Isso torna o trabalho " +
+            "do arquiteto ainda mais difícil e demorado do que já costuma ser em projetos " +
+            "convencionais de grande porte.";
+
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            MeasuredLeakOriginal, twoVerboseSentences, "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsPlausibleSnippetTranslation_SingleSentenceTranslation_IsAccepted()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Ela disse que sim.", "She said yes.", "Brazilian Portuguese (PT-BR)", "English");
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsPlausibleSnippetTranslation_TranslationThatBreaksOnePeriodIntoTwo_IsAcceptedBySlack()
+    {
+        // The +1 sentence-count slack exists precisely for a translator that legitimately splits one
+        // long original sentence into two shorter ones.
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "Ela disse que sim.", "She said yes. She meant it.", "Brazilian Portuguese (PT-BR)", "English");
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsPlausibleSnippetTranslation_ThreeOriginalSentencesToFour_IsAcceptedBySlack()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "One. Two. Three.", "Um. Dois. Tres. Quatro.", "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsPlausibleSnippetTranslation_ThreeOriginalSentencesToFive_IsRejected()
+    {
+        var result = SnippetValidationUtility.IsPlausibleSnippetTranslation(
+            "One. Two. Three.", "Um. Dois. Tres. Quatro. Cinco.", "English", "Brazilian Portuguese (PT-BR)");
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public void IsPlausiblePersistedSnippetTranslation_ClassicRefusalTextFromTheModel_IsRejected()
     {
         var result = SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(ClassicRefusal);

@@ -63,8 +63,7 @@ public class SnippetTranslationManagerTests
         _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildSnippetTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
         _translationEngine.GenerateAsync("system", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("She said yes.");
@@ -82,17 +81,16 @@ public class SnippetTranslationManagerTests
         _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildSnippetTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system", "user"));
         _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("She said yes.");
 
         await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
 
+        // Iter 11 (A1): the first attempt is now the context-free (5-arg) overload.
         _promptUtility.Received(1).BuildSnippetTranslationMessages(
-            "Ela disse que sim.", "Ela disse que sim. Ele concordou.", "English", "Portuguese",
-            "Test Book", Arg.Any<string?>());
+            "Ela disse que sim.", "English", "Portuguese", "Test Book", Arg.Any<string?>());
         _promptUtility.DidNotReceive().BuildTranslationMessages(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
@@ -177,33 +175,89 @@ public class SnippetTranslationManagerTests
         await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), "She said yes.");
     }
 
+    // Iter 11 (A1): the order flipped - the FIRST attempt is now context-free and the retry ADDS the
+    // paragraph/window as a second-chance net, the opposite of the pre-iter-11 mechanism this test
+    // used to pin (renamed from ..._RetriesWithoutParagraphContext).
     [Fact]
-    public async Task TranslateSnippetAsync_WhenFirstAttemptIsTooLong_RetriesWithoutParagraphContext()
+    public async Task TranslateSnippetAsync_WhenFirstAttemptIsTooLong_RetriesWithParagraphContext()
     {
         _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system-with-context", "user"));
-        _promptUtility.BuildSnippetTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
-            .Returns(("system-without-context", "user"));
         var tooLong = new string('x', 500);
-        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(tooLong);
         _translationEngine.GenerateAsync("system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(tooLong);
+        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("She said yes.");
 
         var result = await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
 
         Assert.Equal("She said yes.", result.TranslatedText);
         _promptUtility.Received(1).BuildSnippetTranslationMessages(
+            "Ela disse que sim.", "English", "Portuguese", "Test Book", Arg.Any<string?>());
+        _promptUtility.Received(1).BuildSnippetTranslationMessages(
             "Ela disse que sim.", "Ela disse que sim. Ele concordou.", "English", "Portuguese",
             "Test Book", Arg.Any<string?>());
-        _promptUtility.Received(1).BuildSnippetTranslationMessages(
-            "Ela disse que sim.", "English", "Portuguese", "Test Book", Arg.Any<string?>());
         await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), "She said yes.");
+    }
+
+    // Iter 11 (A1), proven directly on the engine call (not just prompt-builder counts): the very
+    // first message the engine ever sees for a snippet must be the context-free one.
+    [Fact]
+    public async Task TranslateSnippetAsync_TriesWithoutParagraphContextBeforeWithContext()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-with-context", "user"));
+        var tooLong = new string('x', 500);
+        _translationEngine.GenerateAsync("system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(tooLong);
+        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("She said yes.");
+
+        await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
+
+        Received.InOrder(() =>
+        {
+            _ = _translationEngine.GenerateAsync(
+                "system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            _ = _translationEngine.GenerateAsync(
+                "system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        });
+    }
+
+    // Iter 11 (A1): the with-context (6-arg) overload must never even be built when the context-free
+    // attempt already passed - the retry is a fallback, not a second opinion always consulted.
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenFirstAttemptSucceeds_NeverBuildsMessagesWithParagraphContext()
+    {
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns("She said yes.");
+
+        await _sut.TranslateSnippetAsync(1, MakeRequest(), "English", "Portuguese", CancellationToken.None);
+
+        _promptUtility.DidNotReceive().BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>());
+        await _translationEngine.Received(1).GenerateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -395,25 +449,25 @@ public class SnippetTranslationManagerTests
         await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), Arg.Any<string>());
     }
 
-    // Inference path (iter 10, D-A): a fresh response that reads as the wrong language retries
-    // without paragraph context exactly like the too-long guard already did.
+    // Inference path (iter 10, D-A; roles swapped in iter 11 per A1): a fresh, context-free response
+    // that reads as the wrong language retries WITH paragraph context, the new second-chance net.
     [Fact]
-    public async Task TranslateSnippetAsync_WhenInferenceReturnsTheWrongLanguage_RetriesWithoutParagraphContext()
+    public async Task TranslateSnippetAsync_WhenInferenceReturnsTheWrongLanguage_RetriesWithParagraphContext()
     {
         _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns((string?)null);
         _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<string?>(), Arg.Any<string?>())
             .Returns(("system-with-context", "user"));
-        _promptUtility.BuildSnippetTranslationMessages(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
-            .Returns(("system-without-context", "user"));
         const string wrongLanguage =
             "The committee reviewed the proposal and decided to postpone the final vote until next week.";
-        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(wrongLanguage);
         _translationEngine.GenerateAsync("system-without-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(wrongLanguage);
+        _translationEngine.GenerateAsync("system-with-context", "user", Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns("Ela concordou rapidamente com a proposta apresentada durante a reunião.");
 
         var result = await _sut.TranslateSnippetAsync(
@@ -421,5 +475,44 @@ public class SnippetTranslationManagerTests
 
         Assert.Equal("Ela concordou rapidamente com a proposta apresentada durante a reunião.", result.TranslatedText);
         await _cacheAccess.Received(1).SaveTranslationAsync(1, "ch1.html", Arg.Any<string>(), result.TranslatedText);
+    }
+
+    // Iter 11 (A2): the measured defect - a 134-char single-sentence excerpt whose "translation" was
+    // actually itself plus the NEXT sentence from the context window (D-B, iter 10), reproduced as
+    // its own inference-path regression on top of the unit-level coverage in
+    // SnippetValidationUtilityTests. The context-free first attempt already leaked here (a weak model
+    // can echo extra material even without a window in the prompt), so the with-context retry must
+    // also fail and the whole call throws - nothing is ever cached or persisted from either response.
+    [Fact]
+    public async Task TranslateSnippetAsync_WhenBothAttemptsLeakAnExtraSentence_ThrowsAndPersistsNothing()
+    {
+        const string measuredOriginal =
+            "A customer will hardly ever present you with the requirements in a useful format, " +
+            "let alone in a way that is conducive to good design.";
+        const string leaked =
+            "Um cliente dificilmente lhe apresentará os requisitos em um formato útil, muito menos de " +
+            "uma maneira propícia a um bom design. Você deve sempre transformar esses requisitos " +
+            "recebidos do cliente em informações estruturadas antes de seguir adiante com o projeto. " +
+            "No início do processo de design, um formato mais claro e organizado se torna muito mais " +
+            "natural para todos os envolvidos na equipe.";
+        _cacheAccess.FetchTranslationAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns((string?)null);
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-without-context", "user"));
+        _promptUtility.BuildSnippetTranslationMessages(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(("system-with-context", "user"));
+        _translationEngine.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<float>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(leaked);
+
+        var request = MakeRequest(text: measuredOriginal, paragraph: measuredOriginal);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _sut.TranslateSnippetAsync(1, request, "English", "Brazilian Portuguese (PT-BR)", CancellationToken.None));
+
+        await _cacheAccess.DidNotReceive().SaveTranslationAsync(
+            Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
+        await _snippetTranslationAccess.DidNotReceive().SaveSnippetAsync(Arg.Any<SnippetTranslation>());
     }
 }

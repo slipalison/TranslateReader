@@ -418,26 +418,33 @@ public class TranslationManager(
         return snippet;
     }
 
-    // A cache hit that fails the guard is treated exactly like a miss (regenerated and overwritten);
-    // a fresh generation gets one deterministic retry with the paragraph dropped entirely before the
-    // whole use case fails — nothing is ever persisted or applied from a response that never passed.
+    // Iter 11 (A1): D-2026-08-09-snippet-translation-5 ("excerpt + paragraph context") is
+    // EMPIRICALLY SUPERSEDED here after three rounds of user feedback proved the local model cannot
+    // use paragraph/window context without copying chunks of it back into the translation - including
+    // the iter-10 window (prev + excerpt + next), which still leaked the NEIGHBORING sentence into a
+    // persisted translation. The first attempt is now context-FREE (deterministic: with no
+    // surrounding text in the prompt, there is nothing left for the model to leak); the windowed
+    // retry is a second-chance net for pronoun/reference disambiguation, tried ONLY when the
+    // context-free attempt fails validation - never the primary strategy anymore. A cache hit that
+    // fails the guard is treated exactly like a miss (regenerated and overwritten); if both attempts
+    // fail, nothing is ever persisted or applied from a response that never passed.
     private async Task<string> GenerateValidSnippetTranslationAsync(
         int bookId, SnippetRequest request, string sourceLanguage, string targetLanguage, CancellationToken ct)
     {
         var book = await booksAccess.FetchBookAsync(bookId);
-
-        var withContext = await GenerateSnippetTranslationAsync(
-            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: true, ct);
-        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withContext, sourceLanguage, targetLanguage))
-            return withContext;
 
         var withoutContext = await GenerateSnippetTranslationAsync(
             request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: false, ct);
         if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withoutContext, sourceLanguage, targetLanguage))
             return withoutContext;
 
+        var withContext = await GenerateSnippetTranslationAsync(
+            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: true, ct);
+        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withContext, sourceLanguage, targetLanguage))
+            return withContext;
+
         throw new InvalidOperationException(
-            "The translation model returned an implausible response for this excerpt, both with and without paragraph context.");
+            "The translation model returned an implausible response for this excerpt, both without and with paragraph context.");
     }
 
     private async Task<string> GenerateSnippetTranslationAsync(
