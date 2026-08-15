@@ -1455,3 +1455,137 @@ fixture #3 verbatim tambem.
 
 Commit: `371e7af` — `fix(snippet-translation): enrich EN/ES/PT-BR stopword tables with pronouns and
 auxiliaries (B-5)`.
+
+## Iter 11 (fix round pos-loop, autorizado pelo usuario — 8o feedback, mesma classe de vazamento isolada pelo orquestrador)
+
+Livro real "Righting Software", paragrafo de 5 periodos: o usuario traduziu o periodo 0 (134 chars,
+1 sentenca) e a traducao PERSISTIDA continha o periodo 0 **e** o periodo 1 (~375 chars, 3 sentencas)
+— exatamente a janela do iter 10 (`prev + trecho + next`, D-B): o periodo 0 nao tem anterior, entao a
+janela = P0+P1, e o modelo traduziu a janela inteira em vez de so o trecho. Nenhuma guarda existente
+pegava: `375 < 134*3+120=522` (proporcao antiga passava), PT-BR legitimo (ratio de idioma passava),
+sem recusa (blocklist passava). Correcao prescrita em 5 partes (A1-A5), entregue em 2 commits
+atomicos por mecanismo (A1-A3 = guardas C#; A4-A5 = purga JS + cross-pin).
+
+### A1 — ordem das tentativas invertida (`3978ac8`)
+
+`GenerateValidSnippetTranslationAsync` tenta o prompt SEM contexto PRIMEIRO agora (deterministico:
+sem paragrafo/janela no prompt, nao ha o que vazar); o retry COM a janela so acontece se a primeira
+tentativa reprovar nas guardas. **Isto SUPERSEDE empiricamente
+`D-2026-08-09-snippet-translation-5`** ("trecho + contexto de paragrafo" como estrategia primaria):
+tres rounds de feedback do usuario (iter 5 parte 2, iter 10, iter 11) provaram que o modelo local nao
+consegue usar contexto sem copiar pedacos dele de volta, e o custo (vazamentos repetidos, sessoes de
+fix inteiras) supera o valor da desambiguacao de pronomes que o contexto oferecia. A janela sobrevive
+so como rede de segunda tentativa.
+
+### A2 — nova camada: contagem de sentencas (`SnippetValidationUtility`, `3978ac8`)
+
+Tradução invalida se `SentenceCount(translated) > SentenceCount(original) + 1` (a folga de 1 cobre um
+tradutor que legitimamente quebra 1 periodo longo em 2). Contagem via `[GeneratedRegex]` NOVO
+(`SentenceBoundaryRegex`) com a MESMA regra de fronteira do `_splitSentences` do JS (cross-pinada por
+A5) — so a CONTAGEM de boundaries e necessaria em C# (`Regex.Count(text) + 1`), nao os pedacos
+(diferente do JS, que ja tinha `_splitSentences` pronto e reusa a funcao inteira). Aplica-se so onde
+ha original em maos (cache hit + as duas inferencias); **nao se aplica ao caminho persisted** (B-4
+intacto — la so a blocklist, language-agnostic).
+
+### A3 — proporcao apertada (`SnippetValidationUtility`, `3978ac8`)
+
+`LengthRatioMultiplier` 3 -> **1.8** (agora `double`), `LengthRatioSlack` 120 -> **100**
+(prescrito era 80; **ajustado para 100**). Motivo do ajuste: com slack=80, um fixture LEGITIMO ja
+existente (`BlocklistDoesNotFlagTheSamePhraseInTheMiddleOfALegitTranslation`: original 82 chars,
+traducao real 237 chars) passava a REPROVAR (`82*1.8+80=227.6 < 237`) — exatamente o caso que a
+instrucao previu ("se algum trecho curto legitimo reprovar, ajuste o slack, nao o multiplicador").
+Verificado programaticamente contra TODOS os fixtures do arquivo (deste round e dos B-4/B-5) antes de
+fechar: slack=100 mantem esse fixture aprovado (`82*1.8+100=247.6 > 237`) e ainda pega o caso medido
+com folga (`134*1.8+100=341.2 < 375`, margem de ~34 chars). **Valor final: multiplicador 1.8, slack
+100.**
+
+### A4 — purga do estrago ja salvo no JS (`restoreSnippets`, `0b5d477`)
+
+`restoreSnippets` ja purgava por proporcao (guarda do iter 6/D-A); ganhou a MESMA checagem de
+contagem de sentencas antes de aplicar um snip restaurado: `_hasTooManySentences(original,
+translatedText)`, reusando o `_splitSentences` que o arquivo ja tem (sem precisar contar boundaries
+separadamente, ao contrario do C#). Reprovou (por proporcao OU contagem) -> nao aplica o snip E emite
+`snip-remove|` com a ancora exata (mecanismo ja existente, reusado sem mudanca). Hash divergente
+continua descarte silencioso SEM remove (comportamento intocado). "Linha legitima aplica" e "hash
+divergente descarta sem remove" ja estavam cobertos por testes pre-existentes (`restore: a plausible
+translation is applied and never triggers a purge`, `restore: a snippet whose hash diverges is
+discarded silently, without purging anything`) — reverificados verdes, nao duplicados.
+
+### A5 — cross-pin C#<->JS (resolve W-15, `0b5d477`)
+
+`snippets.js` ganhou 3 constantes nomeadas e greppable no topo do arquivo (molde de
+`_SENTENCE_BOUNDARY_RE`/`_APP_ACCENT`): `_LENGTH_RATIO_MULTIPLIER = 1.8`, `_LENGTH_RATIO_SLACK =
+100`, `_MAX_EXTRA_SENTENCES = 1` — usadas pelas duas funcoes de guarda (`_isSnippetTranslationTooLong`
+passou a le-las em vez de literais inline; `_hasTooManySentences` nova). `HybridWebViewContractTests`
+ganhou `SnippetsJs_GuardConstantsMatchSnippetValidationUtility`: extrai os 3 valores do JS via regex
+(`var NOME = <numero>;`) e compara contra os 3 campos `private const` equivalentes em
+`SnippetValidationUtility` via reflection (`BindingFlags.NonPublic | BindingFlags.Static`, MESMO
+padrao ja usado por `ParsingEngineRegexTests.Pattern(name)` para detalhe de implementacao privado —
+nenhum `InternalsVisibleTo` novo). **Sanity check deliberado antes de fechar:** mudei
+`_LENGTH_RATIO_SLACK` para `999` no JS e confirmei que o teste falha (`Expected: 100, Actual: 999`)
+antes de reverter — prova que o teste detecta drift de verdade, nao passa vacuamente.
+
+**Nota operacional (correcao de um erro proprio nesta sessao):** ao rodar o sanity check acima, usei
+`git checkout -- snippets.js` pra reverter o `999` — mas isso descartou TODAS as mudancas
+nao-commitadas do arquivo (A4 inteiro), nao so a linha alterada, ja que o arquivo ainda nao tinha
+sido commitado. Detectado imediatamente via `git status`/`grep`, e as edicoes de A4 foram reaplicadas
+identicas (confirmado por `grep -c` das 4 strings-chave e nova rodada verde da suite JS completa)
+antes de prosseguir. Nenhum commit foi afetado; registrado aqui por transparencia de processo.
+
+### Testes novos (12 C# + 3 JS = 15)
+
+**C#** (`3978ac8`, `SnippetValidationUtilityTests` +8 / `SnippetTranslationManagerTests` +3 liquido
+[2 tiveram so o nome/corpo trocado pela premissa invertida do A1, mesmo precedente do iter 9/B-2 para
+mudanca deliberada de mecanismo — nao contam como teste perdido] / `HybridWebViewContractTests` +1
+no proximo commit):
+- Caso medido (`MeasuredLeakOriginal` = citacao verbatim do original de 134 chars do relato; a
+  traducao vazada de ~399 chars/3 sentencas e uma reconstrucao representativa do FORMATO relatado, ja
+  que o relato nao trouxe o texto vazado byte a byte) reprovado pelo predicado publico E por 2 testes
+  ISOLADOS que provam cada camada nova separadamente (uma variante curta-mas-3-sentencas que so falha
+  por contagem; uma variante longa-mas-2-sentencas que so falha por proporcao).
+- 1 sentenca -> 1 aprovado; 1 -> 2 aprovado pela folga; 3 -> 4 aprovado pela folga; 3 -> 5 reprovado.
+- `originalText: null` continua pulando AMBAS as checagens novas (proporcao E contagem), nao so a
+  antiga.
+- Ordem invertida provada NO ENGINE (nao so no prompt builder): `Received.InOrder` comparando as
+  MENSAGENS reais (`"system-without-context"` antes de `"system-with-context"`); with-context
+  provado NUNCA construido quando o primeiro passa; testes de retry (too-long, idioma errado)
+  reescritos com os papeis trocados; nova regressao de inferencia reproduzindo o caso medido fim a
+  fim (ambas tentativas vazam -> lanca, nada persistido).
+- Fixtures do B-4/B-5 e a recusa do screenshot reverificados verdes sem alteracao (regex 1.8/100 e a
+  contagem de sentencas nao os afetam — confirmado programaticamente ANTES de codificar, nao so
+  depois).
+
+**JS** (`0b5d477`, `snippets.test.js` +3): 2 testes diretos de `_hasTooManySentences` (espelhando o
+par existente de `_isSnippetTranslationTooLong`); 1 regressao de restore isolando SO a contagem de
+sentencas (curta o bastante pra passar a proporcao sozinha, ainda 3 sentencas pra 1 original) ->
+purga via `snip-remove` com ancora exata.
+
+### Verificacao pos-fix
+
+- C#: build Windows Release `0 Warning(s), 0 Error(s)`. `dotnet test`: **455 passed / 2 skipped
+  (GPU-only pre-existentes) / 0 failed / 457 total** — +12 vs o `371e7af` anterior (445 total).
+  Por classe (rodado isoladamente via `--filter`, xUnit expande cada `[InlineData]` como um caso):
+  `SnippetValidationUtilityTests` 30 (era 22 — 16 `[Fact]` + 6 `[InlineData]` — no `371e7af`: +8);
+  `SnippetTranslationManagerTests` 23 (era 20: +3 liquido — 2 testes tiveram so o NOME/corpo trocado
+  pela premissa invertida do A1, sem virar +1/-1 no total); `HybridWebViewContractTests` 28 (era 27:
+  +1, o cross-pin).
+- JS: **218/218** (era 215 no fim do B-5), 0 fail, 0 skipped.
+- `bash scripts/coverage-gate.sh`: exit 0. `COVERAGE_SCOPE covered=1423 valid=1494 pct=95.25
+  files=27` (subiu de 95.23 — `SnippetValidationUtility.cs` 73/73 = 100% coberto, era 69/69).
+  `COVERAGE_JS covered=1906 valid=1920 pct=99.27 files=5` (subiu levemente de 99.26).
+  `COVERAGE_GUARD new_app_cs=0 waived=0`. Zero `COVERAGE_WAIVER_INVALID`.
+- `dotnet format whitespace --verify-no-changes` nos arquivos C# tocados: exit 0, limpo.
+- Invariantes re-conferidos: `translation.js`/`paginated.js`/`scroll.js` diff VAZIO vs `BASELINE`;
+  regex de `_splitSentences`/`_SENTENCE_BOUNDARY_RE` continua 1x; `_blobPath(bands, 10)` literal
+  intacto; zero `querySelectorAll('...')` com aspas simples proibido.
+- `git status`/`git diff --name-only` confirmam escopo: `TranslationManager.cs`,
+  `SnippetValidationUtility.cs`, `SnippetTranslationManagerTests.cs`,
+  `SnippetValidationUtilityTests.cs`, `snippets.js`, `snippets.test.js`,
+  `HybridWebViewContractTests.cs` (mais `.jdi/` do orquestrador, nao tocado por este specialist).
+
+**Valor final de slack:** 100 (multiplicador 1.8 mantido conforme prescrito).
+
+Commits: `3978ac8` — `fix(snippet-translation): try context-free translation first, and reject
+responses with extra sentences or excessive length (iter 11, A1-A3)`; `0b5d477` —
+`fix(snippet-translation): purge already-persisted rows by sentence count too, and cross-pin the
+JS/C# guard constants (iter 11, A4-A5)`.
