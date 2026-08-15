@@ -59,13 +59,31 @@ function _snipHash(text) {
     return h.toString(16).padStart(8, '0');
 }
 
-// Mirrors TranslationManager.IsSnippetTranslationTooLong: EN->PT rarely expands past ~1.6x, so a
-// translation more than 3x the original excerpt's length (plus slack for short excerpts) means the
-// model echoed back more than just the requested excerpt - most often the whole surrounding
-// paragraph. Used on restore to auto-purge rows persisted before that guard existed, since the C#
-// side only validates new translations, never rewrites an already-saved row on its own.
+// Cross-pinned against SnippetValidationUtility's C# constants of the same shape by
+// HybridWebViewContractTests (A5, iter 11) - a drift on either side breaks the build. Named and kept
+// greppable here on purpose, rather than inlined into the functions below.
+var _LENGTH_RATIO_MULTIPLIER = 1.8;
+var _LENGTH_RATIO_SLACK = 100;
+var _MAX_EXTRA_SENTENCES = 1;
+
+// Mirrors SnippetValidationUtility's length-ratio check: EN->PT rarely expands past ~1.6x, so a
+// translation more than _LENGTH_RATIO_MULTIPLIER times the original excerpt's length (plus slack for
+// short excerpts) means the model echoed back more than just the requested excerpt - most often the
+// whole surrounding paragraph, or (iter 11) the neighboring sentence from the context window. Used
+// on restore to auto-purge rows persisted before that guard existed, since the C# side only
+// validates new translations, never rewrites an already-saved row on its own.
 function _isSnippetTranslationTooLong(originalText, translatedText) {
-    return translatedText.length > (originalText.length * 3) + 120;
+    return translatedText.length > (originalText.length * _LENGTH_RATIO_MULTIPLIER) + _LENGTH_RATIO_SLACK;
+}
+
+// A2/A4 (iter 11): mirrors SnippetValidationUtility's sentence-count check, using the SAME
+// _splitSentences this file already has (no boundary count needed - the split pieces are already
+// here) - the measured leak had 1 original sentence come back as 3. Applied on restore for the same
+// reason _isSnippetTranslationTooLong is: the C# side only validates a translation once, at the
+// moment it is produced, never re-checking an already-persisted row on its own.
+function _hasTooManySentences(originalText, translatedText) {
+    return _splitSentences(translatedText).length >
+        _splitSentences(originalText).length + _MAX_EXTRA_SENTENCES;
 }
 
 function _n(v) {
@@ -1351,11 +1369,12 @@ window.restoreSnippets = function (list) {
         if (!p) continue;
         var original = _rangeText(p, item.sentenceStart, item.sentenceEnd);
         if (!original || _snipHash(original) !== item.originalHash) continue;
-        if (_isSnippetTranslationTooLong(original, item.translatedText)) {
-            // A row poisoned before the length guard existed (or by a stale cache entry from an
-            // earlier session): skip applying it AND ask the C# side to delete the dead row, so the
-            // very first time the book reopens after this fix quietly cleans up past damage instead
-            // of re-rendering it forever.
+        if (_isSnippetTranslationTooLong(original, item.translatedText) ||
+            _hasTooManySentences(original, item.translatedText)) {
+            // A row poisoned before these guards existed (or by a stale cache entry from an earlier
+            // session): skip applying it AND ask the C# side to delete the dead row, so the very
+            // first time the book reopens after this fix quietly cleans up past damage instead of
+            // re-rendering it forever.
             window.sendRawMessage('snip-remove|' + JSON.stringify({
                 chapterHRef: item.chapterHRef, paragraphIndex: item.paragraphIndex,
                 sentenceStart: item.sentenceStart, sentenceEnd: item.sentenceEnd,

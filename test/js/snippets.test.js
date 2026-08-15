@@ -167,6 +167,22 @@ test('isSnippetTranslationTooLong: a plausible translation is not flagged', () =
         env.window._isSnippetTranslationTooLong('Ela disse que sim.', 'She said yes.'), false);
 });
 
+// Iter 11 (A2): mirrors SnippetValidationUtility's sentence-count check (cross-pinned constants,
+// A5), reusing this file's own _splitSentences instead of a boundary count.
+test('hasTooManySentences: flags a translation with more sentences than the original plus one', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(
+        env.window._hasTooManySentences('Ela disse que sim.', 'Sim. Ela disse. Isso mesmo.'), true);
+});
+
+test('hasTooManySentences: a translation that breaks one sentence into two is not flagged', () => {
+    const env = loadSnippets();
+
+    assert.strictEqual(
+        env.window._hasTooManySentences('Ela disse que sim.', 'She said yes. She meant it.'), false);
+});
+
 test('blob geometry: a single line yields one rounded band', () => {
     const env = loadSnippets();
 
@@ -1327,6 +1343,32 @@ test('restore: a translation implausibly longer than the original is dropped and
     env.window.restoreSnippets([{
         chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
         originalHash: SNIP_HASH_GOLDEN, translatedText: poisoned, showingOriginal: false,
+    }]);
+
+    assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
+    assert.strictEqual(paragraphs[0].querySelectorAll('[data-si]').length, 1);
+    assert.strictEqual(sent.length, 1);
+    assert.ok(sent[0].startsWith('snip-remove|'));
+    assert.deepStrictEqual(JSON.parse(sent[0].slice('snip-remove|'.length)), {
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+    });
+});
+
+// Iter 11 (A2/A4): isolates the NEW sentence-count guard from the length-ratio one - short enough to
+// stay under the length ceiling on its own (27 chars against a 132.4-char ceiling for this original),
+// but still 3 sentences for a 1-sentence original (ceiling 2). This is the JS side of the measured
+// "Righting Software" leak: the context window (D-B, iter 10) let a translation absorb the NEXT
+// sentence, and a row saved before this guard existed must purge itself on the chapter's next open.
+test('restore: a translation split into too many sentences is dropped and its dead row is purged via snip-remove', () => {
+    const env = loadWithLabels();
+    const paragraphs = mountWithParagraphs(env, ['Ela disse que sim.']);
+    const sent = [];
+    env.window.sendRawMessage = (message) => { sent.push(message); return true; };
+    const inflated = 'Sim. Ela disse. Isso mesmo.';
+
+    env.window.restoreSnippets([{
+        chapterHRef: 'ch1.xhtml', paragraphIndex: 0, sentenceStart: 0, sentenceEnd: 0,
+        originalHash: SNIP_HASH_GOLDEN, translatedText: inflated, showingOriginal: false,
     }]);
 
     assert.strictEqual(env.document.querySelectorAll('[data-snip]').length, 0);
