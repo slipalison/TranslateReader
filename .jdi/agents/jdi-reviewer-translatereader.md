@@ -179,10 +179,15 @@ missing-workload-tolerant secondary target (that premise is retired by D-2026-08
 both TFMs are expected to build at 0 Error(s), and Android is expected at 0 Warning(s) too
 (`.jdi/decisions/D-2026-08-16-llm-mobile-4.md` baseline).
 
-iOS build is CI-only (macOS runner) and is never a local gate: this machine is Windows without the
-`maui-ios` workload. `net10.0-ios`/`net10.0-maccatalyst` only build in the `build-ios` job of
-`.github/workflows/ci.yml`; a local reviewer run does not attempt them, and their absence here is
-expected, not a finding.
+iOS is never a local gate: this machine is Windows without the `maui-ios` workload, so a local
+reviewer run does not attempt `net10.0-ios`/`net10.0-maccatalyst` and their absence here is expected,
+not a finding.
+
+There is currently NO `build-ios` job in `.github/workflows/ci.yml`, and that is deliberate. It was
+removed in `b721fda` because the iOS P/Invoke layer declares `tr_llama_*` entrypoints that no shipped
+artifact exports, which makes the link failure deterministic rather than unknown — see
+`.jdi/decisions/D-2026-08-16-llm-mobile-12.md`. Do not treat the missing job as a regression, and do
+not add one back until the native symbol gap is closed.
 
 ### Gate 2: Tests
 

@@ -1,7 +1,7 @@
 ---
 phase_slug: llm-mobile
 phase_position: 6
-iter: 0
+iter: 1
 total_resets: 0
 status: running
 max_iter_per_round: 5
@@ -11,3 +11,4 @@ created_at: 2026-08-16T14:05:12-03:00
 
 ## History
 
+- iter 1: BLOCKED, hash=b1-tr-llama-symbols, commit=8a21bb8, ts=2026-08-16T15:54:06-03:00
