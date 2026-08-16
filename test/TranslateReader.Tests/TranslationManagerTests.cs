@@ -20,11 +20,16 @@ public class TranslationManagerTests
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
     private readonly ISettingsAccess _settingsAccess = Substitute.For<ISettingsAccess>();
     private readonly ISnippetTranslationAccess _snippetTranslationAccess = Substitute.For<ISnippetTranslationAccess>();
+    private readonly IDeviceMemoryUtility _deviceMemoryUtility = Substitute.For<IDeviceMemoryUtility>();
     private readonly TranslationManager _sut;
 
     public TranslationManagerTests()
     {
         _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
+        // Sufficient by default and platform-supported by default: this fixture's tests target
+        // download/cache/translation behavior, not the availability gate (TranslationEngineAvailabilityTests
+        // owns that) -- so every existing InitializeEngineIfNeededAsync test keeps passing unchanged.
+        _deviceMemoryUtility.GetAvailableMemoryBytes().Returns(long.MaxValue);
         _sut = new TranslationManager(
             _translationEngine,
             _modelAccess,
@@ -34,7 +39,9 @@ public class TranslationManagerTests
             _booksAccess,
             _parsingEngine,
             _settingsAccess,
-            _snippetTranslationAccess);
+            _snippetTranslationAccess,
+            _deviceMemoryUtility,
+            isTranslationBackendSupported: true);
     }
 
     [Fact]

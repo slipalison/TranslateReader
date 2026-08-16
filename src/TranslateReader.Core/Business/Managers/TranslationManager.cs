@@ -20,7 +20,9 @@ public class TranslationManager(
     IBooksAccess booksAccess,
     IParsingEngine parsingEngine,
     ISettingsAccess settingsAccess,
-    ISnippetTranslationAccess snippetTranslationAccess) : ITranslationManager, ISnippetTranslationManager
+    ISnippetTranslationAccess snippetTranslationAccess,
+    IDeviceMemoryUtility deviceMemoryUtility,
+    bool isTranslationBackendSupported) : ITranslationManager, ISnippetTranslationManager
 {
     private static readonly ModelInfo GemmaModel = new(
         Name: "gemma-2-2b",
@@ -81,8 +83,17 @@ public class TranslationManager(
         if (translationEngine.IsReady)
             return;
 
+        if (!isTranslationBackendSupported)
+            throw new TranslationUnavailableException(
+                "Translation is not available on this device: this platform has no native translation backend.");
+
         var settings = await settingsAccess.FetchSettingsAsync();
         var model = ResolveModel(settings.TranslationModelName);
+
+        if (deviceMemoryUtility.GetAvailableMemoryBytes() < model.RequiredMemoryBytes)
+            throw new TranslationUnavailableException(
+                "Translation is not available on this device: not enough available memory to load this model.");
+
         await translationEngine.InitializeAsync(modelAccess.GetModelPath(model.FileName), ct);
     }
 
