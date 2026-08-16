@@ -47,7 +47,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - Status HONESTOS agora: `windows SUPPORTED`; `android`/`ios`/`maccatalyst` **UNSUPPORTED**. Android so vira SUPPORTED em T-6 (depois do `.so` medido) e iOS so vira UNVERIFIED em T-8. Escrever SUPPORTED antes da prova e hollow PASS.
 - **Dependencies:** none
 - **Test:** nenhum codigo novo; suite permanece 455/2/0.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 2 (parallel-eligible)
 
@@ -60,7 +60,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - Guarda anti-regressao Windows: plano windows reproduz cuda ON, vulkan OFF, autofallback OFF, search dir `runtimes/win-x64/native/cuda12` — teste nomeado, nao inspecao. Nenhum static mutavel novo.
 - **Dependencies:** none
 - **Test:** `NativeBackendPlanTests.cs` (4 nomes prescritos), cobertura >= 90% no arquivo novo.
-- **Status:** pending
+- **Status:** completed
 
 #### T-3: Hy-MT2 no registry, default de instalacao nova e licencas documentadas
 - **Specialist:** jdi-doer-translatereader
@@ -71,7 +71,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - `grep -qF ': GemmaModel;' src/TranslateReader.Core/Business/Managers/TranslationManager.cs` (fallback INTACTO) e `grep -c 'Orientation="Horizontal"' src/TranslateReader/Pages/Controls/SettingsOverlay.xaml` == 0. `SettingsAccessTests` atualizado SEM renomear nem remover teste.
 - **Dependencies:** none
 - **Test:** `TranslationManagerTests.cs` (+ os 4 nomes do DoD 3), `PixelSpecTests.ModelRowNames` com `HyMt2ModelButton`, `SettingsAccessTests` com o default novo.
-- **Status:** pending
+- **Status:** completed
 
 #### T-4: backend Android oficial + minSdk alinhado ao binario
 - **Specialist:** jdi-doer-translatereader
@@ -83,7 +83,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
 - **Dependencies:** none
 - **Test:** build Android/Windows (gate de build); suite inalterada.
 - **Deferred:** inferencia real em Android e numeros de tokens/s -> `## Deferred to PR review`.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 3 (parallel-eligible)
 
@@ -98,7 +98,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - Nota aceita: o ctor de `TranslationManager` vai de 9 -> 11 params (o seam de memoria + o bool). Tensao com `.claude/rules/csharp.md` §7 / S107 e PRE-EXISTENTE (ja eram 9); NAO refatorar os 9 antigos — churn fora do escopo da phase.
 - **Dependencies:** T-2, T-3
 - **Test:** `TranslationEngineAvailabilityTests.cs` (3 nomes prescritos) + cobertura >= 90% nos 4 arquivos novos do Core.
-- **Status:** pending
+- **Status:** completed
 
 #### T-6: provar o `.so` no APK e promover Android a gate bloqueante
 - **Specialist:** jdi-doer-translatereader
@@ -111,7 +111,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
 - **Dependencies:** T-4
 - **Test:** o proprio script (caminho feliz + 2 caminhos de falha executados); suite inalterada.
 - **Deferred:** veredito de 16 KB da ferramenta do Google Play e crescimento do pacote -> `## Deferred to PR review`.
-- **Status:** pending
+- **Status:** completed
 
 ### Wave 4
 
@@ -125,7 +125,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
 - **Dependencies:** T-5
 - **Test:** `LlamaCppTranslationEngineTests.cs` com NSubstitute sobre `ILlamaNativeAccess` — sem device, sem GGUF.
 - **Deferred:** o teste prova o LOOP, nunca a inferencia; execucao real -> `## Deferred to PR review`.
-- **Status:** pending
+- **Status:** completed
 
 #### T-8: linkagem nativa do iOS, cadeia de suprimento fail-closed e job de CI macOS
 - **Specialist:** jdi-doer-translatereader
@@ -137,7 +137,7 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - **ACEITACAO ESTRUTURAL APENAS.** Build iOS verde, inferencia real em iPhone/iPad, tokens/s e aceitacao de loja estao em `## Deferred to PR review`. Se o job nao puder ser dado como verde, D-10 manda NAO commitar o job: T-8 reporta entrega parcial e o Bloco 1 permanece completo e coerente sozinho.
 - **Dependencies:** T-6, T-7
 - **Test:** `--verify-only` (2 execucoes: aceita e rejeita) + suite inalterada; nenhum teste novo de unidade (arquivo de declaracoes).
-- **Status:** pending
+- **Status:** completed
 
 ## Execution
 
