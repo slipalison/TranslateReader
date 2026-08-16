@@ -12,6 +12,24 @@ public partial class ReaderPage : ContentPage
 {
     private const uint TocAnimationDurationMs = 260;
     private const uint TranslationIndicatorFadeMs = 200;
+    private const string SnipPrefix = "snip|";
+    private const string SnipTogglePrefix = "snip-toggle|";
+    private const string SnipRemovePrefix = "snip-remove|";
+
+    private static readonly IReadOnlyDictionary<string, string> SnippetLanguageShortCodes =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["English"] = "EN",
+            ["Brazilian Portuguese (PT-BR)"] = "PT-BR",
+            ["Spanish"] = "ES",
+            ["French"] = "FR",
+            ["German"] = "DE",
+            ["Italian"] = "IT",
+            ["Japanese"] = "JA",
+            ["Korean"] = "KO",
+            ["Chinese (Simplified)"] = "ZH",
+            ["Russian"] = "RU",
+        };
 
     private readonly ReaderPageModel _pageModel;
     private int _currentPage;
@@ -20,6 +38,7 @@ public partial class ReaderPage : ContentPage
     private bool _isWebViewReady;
     private bool _needsInjection;
     private CancellationTokenSource? _pageTranslationCts;
+    private CancellationTokenSource? _snippetCts;
     private int _translationVersion;
 
     public ReaderPage(ReaderPageModel pageModel)
@@ -56,6 +75,9 @@ public partial class ReaderPage : ContentPage
     {
         base.OnDisappearing();
         CancelPageTranslation();
+        _snippetCts?.Cancel();
+        _snippetCts?.Dispose();
+        _snippetCts = null;
         _pageModel.PropertyChanged -= OnPageModelPropertyChanged;
         SettingsOverlay.SettingsChanged -= OnSettingsChanged;
         SettingsOverlay.CloseRequested -= OnSettingsCloseRequested;
@@ -78,6 +100,22 @@ public partial class ReaderPage : ContentPage
         {
             _isWebViewReady = true;
             await InjectChapterAsync();
+            return;
+        }
+
+        try
+        {
+            if (e.Message.StartsWith(SnipPrefix, StringComparison.Ordinal))
+                await HandleSnipRequestAsync(e.Message[SnipPrefix.Length..]);
+            else if (e.Message.StartsWith(SnipTogglePrefix, StringComparison.Ordinal))
+                await HandleSnipToggleAsync(e.Message[SnipTogglePrefix.Length..]);
+            else if (e.Message.StartsWith(SnipRemovePrefix, StringComparison.Ordinal))
+                await HandleSnipRemoveAsync(e.Message[SnipRemovePrefix.Length..]);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error handling snippet message: {ex}");
         }
     }
 
@@ -148,6 +186,15 @@ public partial class ReaderPage : ContentPage
         {
             System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error injecting chapter: {ex.Message}");
             return;
+        }
+
+        try
+        {
+            await SetupSnippetLayerAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error setting up snippet layer: {ex}");
         }
 
         await Task.Delay(300);
@@ -368,6 +415,9 @@ public partial class ReaderPage : ContentPage
 
             var items = results.Select(r => new { index = r.Index, translated = r.Translated });
             var itemsJson = JsonSerializer.Serialize(items, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            // D-2026-08-09-snippet-translation-3: the two layers never overlay the same paragraph
+            // at once, so the snippet layer steps out before the paragraph translation steps in.
+            await ContentWebView.EvaluateJavaScriptAsync("unmountSnippetLayer()");
             await ContentWebView.EvaluateJavaScriptAsync($"applyTranslations({itemsJson})");
         }
         catch (OperationCanceledException) { }
@@ -387,6 +437,7 @@ public partial class ReaderPage : ContentPage
         try
         {
             await ContentWebView.EvaluateJavaScriptAsync("clearTranslations()");
+            await ContentWebView.EvaluateJavaScriptAsync("mountSnippetLayer()");
         }
         catch { }
     }
@@ -398,8 +449,147 @@ public partial class ReaderPage : ContentPage
         _pageTranslationCts = null;
     }
 
-    private void OnCancelDownloadClicked(object? sender, EventArgs e) =>
+    // A run's chapterHRef arrives null from the WebView only in paginated mode (a single
+    // always-mounted root that never learns which chapter it currently holds); scroll mode's
+    // roots already know their own href, so this only ever fills the paginated gap.
+    private List<SnippetRequest> FillCurrentChapter(IReadOnlyList<SnippetRequest> requests)
+    {
+        if (requests.All(r => r.ChapterHRef is not null))
+            return requests.ToList();
+
+        var chapterHRef = ResolveCurrentChapterHRef();
+        return requests
+            .Select(r => r.ChapterHRef is null ? r with { ChapterHRef = chapterHRef } : r)
+            .ToList();
+    }
+
+    private string ResolveCurrentChapterHRef() =>
+        _pageModel.Chapters.Count == 0
+            ? string.Empty
+            : _pageModel.Chapters[_pageModel.CurrentChapterIndex].HRef;
+
+    private async Task HandleSnipRequestAsync(string json)
+    {
+        var requests = JsonSerializer.Deserialize(json, ReaderJsonContext.Default.ListSnippetRequest);
+        if (requests is null || requests.Count == 0) return;
+
+        var filled = FillCurrentChapter(requests);
+        var keys = filled.Select(r => $"{r.ChapterHRef}:{r.ParagraphIndex}:{r.SentenceStart}:{r.SentenceEnd}").ToList();
+        var keysJson = JsonSerializer.Serialize(keys, ReaderJsonContext.Default.ListString);
+        await ContentWebView.EvaluateJavaScriptAsync($"setSnippetLoading({keysJson})");
+
+        _snippetCts?.Cancel();
+        _snippetCts?.Dispose();
+        _snippetCts = new CancellationTokenSource();
+        var ct = _snippetCts.Token;
+
+        IReadOnlyList<SnippetTranslation> results;
+        try
+        {
+            results = await _pageModel.TranslateSnippetsAsync(filled, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // This run was superseded by a newer selection (or the model download overlay's
+            // Cancel button); its own placeholders must stop pulsing even though the app keeps
+            // going for whatever replaced it. The exception still flows to the caller (csharp.md
+            // §1: cancellation is never swallowed here, only cleaned up after).
+            await ContentWebView.EvaluateJavaScriptAsync($"clearSnippetLoading({keysJson})");
+            throw;
+        }
+
+        if (results.Count == 0)
+        {
+            // The PageModel already converted the failure into a friendly DisplayAlert at its
+            // single exception boundary (csharp.md §1); this only undoes the loading placeholder
+            // so it does not pulse forever with no feedback.
+            await ContentWebView.EvaluateJavaScriptAsync($"clearSnippetLoading({keysJson})");
+            return;
+        }
+
+        var resultsJson = JsonSerializer.Serialize(results.ToList(), ReaderJsonContext.Default.ListSnippetTranslation);
+        await ContentWebView.EvaluateJavaScriptAsync($"applySnippetTranslation({resultsJson})");
+    }
+
+    private async Task HandleSnipToggleAsync(string json)
+    {
+        var request = JsonSerializer.Deserialize(json, ReaderJsonContext.Default.SnippetToggleRequest);
+        if (request is null) return;
+        await _pageModel.SetSnippetShowingOriginalAsync(request);
+    }
+
+    private async Task HandleSnipRemoveAsync(string json)
+    {
+        var request = JsonSerializer.Deserialize(json, ReaderJsonContext.Default.SnippetRemoveRequest);
+        if (request is null) return;
+        await _pageModel.RemoveSnippetAsync(request);
+    }
+
+    private SnippetLabels BuildSnippetLabels()
+    {
+        var isPhone = DeviceInfo.Current.Idiom == DeviceIdiom.Phone;
+        var theme = _pageModel.CurrentThemeColors;
+        return new SnippetLabels(
+            SelectHint: isPhone
+                ? "Toque em um período; outro toque adiciona"
+                : "Toque em um período; toque em outro para estender a seleção",
+            ExtendTip: "toque em outro período para estender",
+            SentenceOne: isPhone ? "período" : "período selecionado",
+            SentenceMany: isPhone ? "períodos" : "períodos selecionados",
+            TranslateSnip: isPhone ? "Traduzir" : "Traduzir trecho",
+            ExtendSel: "Estender ao próximo período",
+            ShrinkSel: "Reduzir seleção",
+            OnlySentence: "único período deste parágrafo",
+            ToggleSnip: "Alternar original / tradução",
+            RemoveSnip: "Descartar tradução",
+            LangMap: SnippetLanguageShortCodes,
+            Theme: new SnippetTheme(theme.Background, theme.Accent),
+            SourceLanguage: _pageModel.CurrentSettings.SourceLanguage,
+            TargetLanguage: _pageModel.CurrentSettings.TargetLanguage);
+    }
+
+    // Scroll mode mounts every chapter's content at once, so a snippet saved in any of them must
+    // come back; paginated mode only ever has the current chapter's paragraphs on screen.
+    private async Task<List<SnippetTranslation>> LoadVisibleSnippetsAsync()
+    {
+        var results = new List<SnippetTranslation>();
+        if (IsScrollMode())
+        {
+            foreach (var chapter in _pageModel.Chapters)
+                results.AddRange(await _pageModel.LoadSnippetsAsync(chapter.HRef));
+            return results;
+        }
+
+        var chapterHRef = ResolveCurrentChapterHRef();
+        if (!string.IsNullOrEmpty(chapterHRef))
+            results.AddRange(await _pageModel.LoadSnippetsAsync(chapterHRef));
+        return results;
+    }
+
+    private async Task SetupSnippetLayerAsync()
+    {
+        var idiom = DeviceInfo.Current.Idiom == DeviceIdiom.Phone ? "phone" : "desktop";
+        await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
+        await ContentWebView.EvaluateJavaScriptAsync(
+            $"document.documentElement.dataset.idiom = {JsStr(idiom)}");
+
+        var labelsJson = JsonSerializer.Serialize(BuildSnippetLabels(), ReaderJsonContext.Default.SnippetLabels);
+        await ContentWebView.EvaluateJavaScriptAsync($"setSnippetLabels({labelsJson})");
+        await ContentWebView.EvaluateJavaScriptAsync("mountSnippetLayer()");
+
+        var snippets = await LoadVisibleSnippetsAsync();
+        var snippetsJson = JsonSerializer.Serialize(snippets, ReaderJsonContext.Default.ListSnippetTranslation);
+        await ContentWebView.EvaluateJavaScriptAsync($"restoreSnippets({snippetsJson})");
+    }
+
+    private void OnCancelDownloadClicked(object? sender, EventArgs e)
+    {
+        // The download/load overlay is shared by paragraph translation and snippet translation
+        // (ReaderPageModel.TranslateSnippetsAsync reuses IsModelDownloading/IsModelLoading), so
+        // cancelling it must also cancel an in-flight snippet run, not just the paragraph one.
+        _snippetCts?.Cancel();
         _pageModel.CancelTranslationCommand.Execute(null);
+    }
 
     private void OnSettingsButtonClicked(object? sender, EventArgs e)
     {
@@ -433,35 +623,50 @@ public partial class ReaderPage : ContentPage
 
     private async Task GoToPageAsync(int page)
     {
+        await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync($"goToPage({page})", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
 
     private async Task GoToLastPageAsync()
     {
+        await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("goToLastPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
 
     private async Task NextPageAsync()
     {
+        await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("nextPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
 
     private async Task PrevPageAsync()
     {
+        await ContentWebView.EvaluateJavaScriptAsync("clearSnippetSelection()");
         var info = await EvalJsAsync("prevPage()", ReaderJsonContext.Default.PageInfo);
         ApplyPageInfo(info);
+        await RefreshSnippetBlobsAsync();
         if (_pageModel.IsTranslationModeActive)
             await TranslateVisiblePageAsync();
     }
+
+    // Cheap belt-and-suspenders re-measure after any event that can refragment the pager's CSS
+    // columns or scroll the chapter into a new position: the JS-side fonts.ready/ResizeObserver
+    // triggers already cover most reflows, but a page/chapter navigation is driven entirely from
+    // here, so this is the one call site guaranteed to run after every one of them.
+    private Task RefreshSnippetBlobsAsync() =>
+        ContentWebView.EvaluateJavaScriptAsync("refreshSnippetBlobs()");
 
     private void ApplyPageInfo(PageInfo? info)
     {
@@ -516,6 +721,7 @@ public partial class ReaderPage : ContentPage
                 $"scrollToChapter({JsStr(savedHRef)}, {savedPos})");
         }
         _pageModel.SavedScrollPosition = 0;
+        await RefreshSnippetBlobsAsync();
     }
 
     private async Task SafeInjectHtmlAsync(string functionName, string html)
