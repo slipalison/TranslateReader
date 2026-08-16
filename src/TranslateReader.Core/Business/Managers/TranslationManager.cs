@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +19,8 @@ public class TranslationManager(
     IPromptUtility promptUtility,
     IBooksAccess booksAccess,
     IParsingEngine parsingEngine,
-    ISettingsAccess settingsAccess) : ITranslationManager
+    ISettingsAccess settingsAccess,
+    ISnippetTranslationAccess snippetTranslationAccess) : ITranslationManager, ISnippetTranslationManager
 {
     private static readonly ModelInfo GemmaModel = new(
         Name: "gemma-2-2b",
@@ -41,6 +43,12 @@ public class TranslationManager(
 
     private const float TranslationTemperature = 0.1f;
     private const int MaxTokenMultiplier = 3;
+
+    // WHY: folded into the snippet-path cache key only (never the paragraph-path one), so hardening
+    // BuildSnippetTranslationMessages's prompt invalidates every previously-cached snippet
+    // translation at once — including entries that captured the paragraph-context-pollution bug —
+    // without touching the unrelated, still-valid per-paragraph cache entries.
+    private const string SnippetCacheKeySalt = "snippet-prompt-v2|";
 
     // Qwen/Phi are offered in the UI but have no real download URL yet (D-...-4); an unknown or
     // legacy settings value must resolve to a model that is actually downloadable, not throw.
@@ -370,6 +378,129 @@ public class TranslationManager(
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes)[..16];
     }
+
+    // FNV-1a 32-bit, no language salt: the WebView reproduces this exact algorithm in
+    // _snipHash (snippets.js) to decide, without an async digest API, whether a restored
+    // anchor's text still matches what was translated.
+    private static string ComputeSnippetHash(string text)
+    {
+        unchecked
+        {
+            var h = 2166136261u;
+            foreach (var c in text)
+            {
+                h ^= c;
+                h *= 16777619u;
+            }
+            return h.ToString("x8", CultureInfo.InvariantCulture);
+        }
+    }
+
+    public async Task<SnippetTranslation> TranslateSnippetAsync(
+        int bookId, SnippetRequest request, string sourceLanguage, string targetLanguage, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var hash = ComputeHash(SnippetCacheKeySalt + request.Text, sourceLanguage, targetLanguage);
+        var cached = await translationCacheAccess.FetchTranslationAsync(bookId, request.ChapterHRef, hash);
+        var translated = cached is not null &&
+            SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, cached, sourceLanguage, targetLanguage)
+            ? cached
+            : await GenerateValidSnippetTranslationAsync(bookId, request, sourceLanguage, targetLanguage, ct);
+
+        if (!string.Equals(translated, cached, StringComparison.Ordinal))
+            await translationCacheAccess.SaveTranslationAsync(bookId, request.ChapterHRef, hash, translated);
+
+        var snippet = new SnippetTranslation(
+            0, bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart,
+            request.SentenceEnd, ComputeSnippetHash(request.Text), translated, false, DateTime.UtcNow);
+        await snippetTranslationAccess.SaveSnippetAsync(snippet);
+        return snippet;
+    }
+
+    // Iter 11 (A1): D-2026-08-09-snippet-translation-5 ("excerpt + paragraph context") is
+    // EMPIRICALLY SUPERSEDED here after three rounds of user feedback proved the local model cannot
+    // use paragraph/window context without copying chunks of it back into the translation - including
+    // the iter-10 window (prev + excerpt + next), which still leaked the NEIGHBORING sentence into a
+    // persisted translation. The first attempt is now context-FREE (deterministic: with no
+    // surrounding text in the prompt, there is nothing left for the model to leak); the windowed
+    // retry is a second-chance net for pronoun/reference disambiguation, tried ONLY when the
+    // context-free attempt fails validation - never the primary strategy anymore. A cache hit that
+    // fails the guard is treated exactly like a miss (regenerated and overwritten); if both attempts
+    // fail, nothing is ever persisted or applied from a response that never passed.
+    private async Task<string> GenerateValidSnippetTranslationAsync(
+        int bookId, SnippetRequest request, string sourceLanguage, string targetLanguage, CancellationToken ct)
+    {
+        var book = await booksAccess.FetchBookAsync(bookId);
+
+        var withoutContext = await GenerateSnippetTranslationAsync(
+            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: false, ct);
+        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withoutContext, sourceLanguage, targetLanguage))
+            return withoutContext;
+
+        var withContext = await GenerateSnippetTranslationAsync(
+            request, sourceLanguage, targetLanguage, book.Title, includeParagraphContext: true, ct);
+        if (SnippetValidationUtility.IsPlausibleSnippetTranslation(request.Text, withContext, sourceLanguage, targetLanguage))
+            return withContext;
+
+        throw new InvalidOperationException(
+            "The translation model returned an implausible response for this excerpt, both without and with paragraph context.");
+    }
+
+    private async Task<string> GenerateSnippetTranslationAsync(
+        SnippetRequest request, string sourceLanguage, string targetLanguage, string? bookTitle,
+        bool includeParagraphContext, CancellationToken ct)
+    {
+        var (systemMessage, userMessage) = includeParagraphContext
+            ? promptUtility.BuildSnippetTranslationMessages(
+                request.Text, request.Paragraph, sourceLanguage, targetLanguage, bookTitle, null)
+            : promptUtility.BuildSnippetTranslationMessages(
+                request.Text, sourceLanguage, targetLanguage, bookTitle, null);
+        var maxTokens = request.Text.Length * MaxTokenMultiplier;
+        var translated = await translationEngine.GenerateAsync(
+            systemMessage, userMessage, TranslationTemperature, maxTokens, ct);
+        return CleanTranslationOutput(translated);
+    }
+
+    // B-4: a row already sitting in SnippetTranslations carries neither its original excerpt nor its
+    // own language pair (only its hash), and the CURRENT settings can have changed since it was
+    // saved - so only IsPlausiblePersistedSnippetTranslation's language-agnostic refusal blocklist
+    // runs here (never the length-ratio or stopword checks, which would misjudge a legitimate row
+    // under a settings language that has since changed). A failing row is deleted rather than handed
+    // back to the reader, so it quietly disappears the next time its chapter opens instead of
+    // resurfacing forever.
+    public async Task<IReadOnlyList<SnippetTranslation>> FetchSnippetsAsync(int bookId, string chapterHRef)
+    {
+        var snippets = await snippetTranslationAccess.FetchSnippetsAsync(bookId, chapterHRef);
+        if (snippets.Count == 0)
+            return snippets;
+
+        var valid = new List<SnippetTranslation>(snippets.Count);
+
+        foreach (var snippet in snippets)
+        {
+            if (SnippetValidationUtility.IsPlausiblePersistedSnippetTranslation(snippet.TranslatedText))
+            {
+                valid.Add(snippet);
+            }
+            else
+            {
+                await snippetTranslationAccess.RemoveSnippetAsync(
+                    bookId, snippet.ChapterHRef, snippet.ParagraphIndex, snippet.SentenceStart, snippet.SentenceEnd);
+            }
+        }
+
+        return valid;
+    }
+
+    public Task SetShowingOriginalAsync(int bookId, SnippetToggleRequest request) =>
+        snippetTranslationAccess.SetShowingOriginalAsync(
+            bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart,
+            request.SentenceEnd, request.ShowingOriginal);
+
+    public Task RemoveSnippetAsync(int bookId, SnippetRemoveRequest request) =>
+        snippetTranslationAccess.RemoveSnippetAsync(
+            bookId, request.ChapterHRef, request.ParagraphIndex, request.SentenceStart, request.SentenceEnd);
 
     private static string CleanTranslationOutput(string output)
     {

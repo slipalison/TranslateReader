@@ -116,7 +116,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `B=.jdi/phases/snippet-translation/BASELINE; test -f "$B" && test "$(git cat-file -t "$(cat "$B")" 2>/dev/null)" = commit && git merge-base --is-ancestor "$(cat "$B")" HEAD && S=design/v0.2.0/PIXEL-SPEC.md && test -f "$S" && for k in "blur(9px) saturate(180%)" "blur(26px) saturate(190%)" "blur(20px) saturate(180%)" "border-radius: 8px" "0.1em 0.24em" "box-decoration-break" "stroke-width" "1.25" "trGlassIn" "trPulse" "rgba(28,30,48,0.58)" "rgba(28,30,48,0.6)" "bottom: 102px" "data-idiom"; do grep -qF "$k" "$S" || { echo "MISSING $k"; exit 1; }; done && test "$(ls design/v0.2.0/screenshots/*.jpg 2>/dev/null | wc -l)" -ge 4`
 - **Dependencies:** none · **Test:** DoD 1 (task de ancoragem, sem teste novo)
 - **Commit:** `docs(snippet-translation): T-1 record phase baseline commit`
-- **Status:** pending
+- **Status:** completed
 
 ### T-2: Harness JS ganha `getClientRects`, `closest` e `elementFromPoint`
 - **Wave:** 2 · **Specialist:** jdi-doer-translatereader
@@ -144,7 +144,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `H=test/js/harness.js; grep -qF 'getClientRects()' "$H" && grep -qF 'closest(selector)' "$H" && grep -qF 'elementFromPoint(' "$H" && mkdir -p TestResults && node --test --test-reporter=tap test/js/harness.test.js > TestResults/snip-t2.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t2.log && BASE=$(git show main:test/js/harness.test.js | grep -cE '^test\(') && NOW=$(grep -cE '^test\(' test/js/harness.test.js) && test "$NOW" -ge "$((BASE+4))"`
 - **Dependencies:** T-1 · **Test:** `test/js/harness.test.js`
 - **Commit:** `test(snippet-translation): T-2 teach the JS harness client rects, closest and elementFromPoint`
-- **Status:** pending
+- **Status:** completed
 
 ### T-3: `snippets.js` nasce — nucleo puro, raizes e gate de cobertura
 - **Wave:** 3 · **Specialist:** jdi-doer-translatereader
@@ -215,7 +215,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `mkdir -p TestResults && bash scripts/coverage-gate.sh > TestResults/snip-t3-gate.log 2>&1 && grep -qE '^COVERAGE_JS .*files=5$' TestResults/snip-t3-gate.log && grep -qF 'Ela disse que sim.' test/js/snippets.test.js`
 - **Dependencies:** T-2 · **Test:** `test/js/snippets.test.js`
 - **Commit:** `feat(snippet-translation): T-3 sentence split, blob geometry and mode-independent roots (D-2026-08-09-snippet-translation-3, -4)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-4: Camada visual — CSS literal, spans de periodo, blob, pill e hint
 - **Wave:** 4 · **Specialist:** jdi-doer-translatereader
@@ -293,7 +293,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `J=src/TranslateReader/Resources/Raw/wwwroot/js/snippets.js; for v in "blur(9px) saturate(180%)" "blur(26px) saturate(190%)" "blur(20px) saturate(180%)" "border-radius: 8px" "0.1em 0.24em" "0 -0.24em" "box-decoration-break: clone" "999px" "rgba(28,30,48,0.58)" "rgba(28,30,48,0.6)" "trGlassIn 0.25s" "trPulse 1.1s" "ph-translate" "ph-cursor-text" "ph-arrows-left-right"; do grep -qF "$v" "$J" || { echo "JS MISSING $v"; exit 1; }; done && test "$(grep -cE 'período|Traduzir|Toque em|Alternar|Descartar|Estender|Reduzir|seleção|tradução' "$J")" -eq 0 && grep -qF 'dataset.idiom' "$J" && for f in Phosphor Inter-Regular Inter-Medium; do test -s "src/TranslateReader/Resources/Raw/wwwroot/fonts/$f.ttf" || exit 1; done && mkdir -p TestResults && node --test --test-reporter=tap test/js/ > TestResults/snip-t4.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t4.log && grep -qE '^# skipped 0$' TestResults/snip-t4.log`
 - **Dependencies:** T-3 · **Test:** `test/js/snippets.test.js`
 - **Commit:** `feat(snippet-translation): T-4 glass blob, selection pill and first-run hint (D-2026-08-09-snippet-translation-2, -4)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-5: Persistencia no JS — restore com guarda de hash, toggle, remove e envio ao C#
 - **Wave:** 5 · **Specialist:** jdi-doer-translatereader
@@ -349,7 +349,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `mkdir -p TestResults && node --test --test-reporter=tap test/js/ > TestResults/snip-t5.log 2>&1 && grep -qE '^# fail 0$' TestResults/snip-t5.log && grep -qE '^# skipped 0$' TestResults/snip-t5.log && grep -qE '^window\.sendRawMessage = function' src/TranslateReader/Resources/Raw/wwwroot/js/bridge.js && for k in "snip|" "snip-toggle|" "snip-remove|"; do grep -qF "$k" src/TranslateReader/Resources/Raw/wwwroot/js/snippets.js || exit 1; done`
 - **Dependencies:** T-4 · **Test:** `test/js/snippets.test.js`, `test/js/bridge.test.js`
 - **Commit:** `feat(snippet-translation): T-5 snippet persistence, language chip and raw message channel (D-2026-08-09-snippet-translation-1, -2)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-6: Tabela, Model, Access e DI de `SnippetTranslations`
 - **Wave:** 2 · **Specialist:** jdi-doer-translatereader
@@ -395,7 +395,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
   `test "$(grep -cE '^\s*\[Fact' test/TranslateReader.Tests/SnippetTranslationAccessTests.cs)" -ge 10`
 - **Dependencies:** T-1 · **Test:** `test/TranslateReader.Tests/SnippetTranslationAccessTests.cs`
 - **Commit:** `feat(snippet-translation): T-6 snippet translations table, model and access (D-2026-08-09-snippet-translation-1)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-7: Contrato do Manager, prompt de trecho, cache e cores do tema
 - **Wave:** 4 · **Specialist:** jdi-doer-translatereader
@@ -467,7 +467,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
 - **Dependencies:** T-6 (Model/Access), T-3 (vetor dourado do hash)
 - **Test:** `SnippetTranslationManagerTests.cs`, `PromptUtilityTests.cs`, `SettingsManagerTests.cs`
 - **Commit:** `feat(snippet-translation): T-7 snippet translation manager, contextual prompt and theme colors (D-2026-08-09-snippet-translation-5)`
-- **Status:** pending
+- **Status:** completed
 
 ### T-8: Ponte no `ReaderPage`, orquestracao com a traducao por paragrafo e fechamento dos gates
 - **Wave:** 6 · **Specialist:** jdi-doer-translatereader
@@ -521,7 +521,7 @@ Testes: `test/js/snippets.test.js`, `test/TranslateReader.Tests/SnippetTranslati
 - **Dependencies:** T-5, T-7
 - **Test:** `test/TranslateReader.Tests/HybridWebViewContractTests.cs` + as duas suites completas
 - **Commit:** `feat(snippet-translation): T-8 raw message bridge, snippet layer lifecycle and gates (D-2026-08-09-snippet-translation-2, -3)`
-- **Status:** pending
+- **Status:** completed
 
 ---
 

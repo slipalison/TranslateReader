@@ -1,5 +1,9 @@
+using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TranslateReader.Models;
+using TranslateReader.Utilities;
 
 namespace TranslateReader.Tests;
 
@@ -231,5 +235,130 @@ public class HybridWebViewContractTests
         var html = File.ReadAllText(htmlPath);
 
         Assert.Contains("id=\"reader-theme\"", html);
+    }
+
+    [Fact]
+    public void SnippetRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":2,"sentenceStart":0,"sentenceEnd":1,"text":"Ela chegou.","paragraph":"Ela chegou. Ele saiu."}""";
+
+        var request = JsonSerializer.Deserialize<SnippetRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.Equal("ch1.html", request.ChapterHRef);
+        Assert.Equal(2, request.ParagraphIndex);
+        Assert.Equal(0, request.SentenceStart);
+        Assert.Equal(1, request.SentenceEnd);
+        Assert.Equal("Ela chegou.", request.Text);
+        Assert.Equal("Ela chegou. Ele saiu.", request.Paragraph);
+    }
+
+    [Fact]
+    public void SnippetToggleRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":0,"sentenceStart":0,"sentenceEnd":0,"showingOriginal":true}""";
+
+        var request = JsonSerializer.Deserialize<SnippetToggleRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.True(request.ShowingOriginal);
+    }
+
+    [Fact]
+    public void SnippetRemoveRequest_DeserializesFromCamelCaseJson()
+    {
+        var json = """{"chapterHRef":"ch1.html","paragraphIndex":1,"sentenceStart":2,"sentenceEnd":3}""";
+
+        var request = JsonSerializer.Deserialize<SnippetRemoveRequest>(json, CamelCaseOptions);
+
+        Assert.NotNull(request);
+        Assert.Equal(1, request.ParagraphIndex);
+        Assert.Equal(2, request.SentenceStart);
+        Assert.Equal(3, request.SentenceEnd);
+    }
+
+    [Fact]
+    public void SnippetTranslation_SerializesToCamelCaseJson()
+    {
+        var snippet = new SnippetTranslation(
+            1, 1, "ch1.html", 0, 0, 1, "abcd1234", "Texto traduzido", false, DateTime.UtcNow);
+
+        var json = JsonSerializer.Serialize(snippet, CamelCaseOptions);
+
+        Assert.Contains("\"translatedText\":\"Texto traduzido\"", json);
+        Assert.Contains("\"showingOriginal\":false", json);
+        Assert.Contains("\"originalHash\":\"abcd1234\"", json);
+        Assert.DoesNotContain("TranslatedText", json);
+        Assert.DoesNotContain("ShowingOriginal", json);
+        Assert.DoesNotContain("OriginalHash", json);
+    }
+
+    [Fact]
+    public void SnippetsJs_ExposesTheSixPrescribedWindowFunctions()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.mountSnippetLayer", js);
+        Assert.Contains("window.unmountSnippetLayer", js);
+        Assert.Contains("window.setSnippetLabels", js);
+        Assert.Contains("window.restoreSnippets", js);
+        Assert.Contains("window.applySnippetTranslation", js);
+        Assert.Contains("window.setSnippetLoading", js);
+    }
+
+    // B-1 fix (snippet-translation review, iter 2): a failed or superseded snip request must be
+    // able to undo setSnippetLoading's pulsing placeholder, or it pulses forever with no feedback.
+    [Fact]
+    public void SnippetsJs_ExposesClearSnippetLoading()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.clearSnippetLoading", js);
+    }
+
+    // Iter 6 fix (D-B): the C# side calls this after every page navigation/scroll-position restore
+    // as a cheap belt-and-suspenders re-measure, alongside the fonts.ready/ResizeObserver triggers.
+    [Fact]
+    public void SnippetsJs_ExposesRefreshSnippetBlobs()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        Assert.Contains("window.refreshSnippetBlobs", js);
+    }
+
+    // A5 (iter 11, resolves W-15): snippets.js's restore-time guards and SnippetValidationUtility's
+    // fresh/inference-time guards implement the SAME plausibility rules independently (JS has no way
+    // to call into the C# side synchronously) - a drift on either side must fail the build, not wait
+    // for the next user report. Reached by reflection because these are private implementation detail
+    // of the Engine-adjacent Utility, not part of its public contract.
+    [Fact]
+    public void SnippetsJs_GuardConstantsMatchSnippetValidationUtility()
+    {
+        var js = ReadJsFile("snippets.js");
+
+        var jsMultiplier = ExtractJsNumericConstant(js, "_LENGTH_RATIO_MULTIPLIER");
+        var jsSlack = ExtractJsNumericConstant(js, "_LENGTH_RATIO_SLACK");
+        var jsMaxExtraSentences = ExtractJsNumericConstant(js, "_MAX_EXTRA_SENTENCES");
+
+        Assert.Equal(SnippetValidationConstant<double>("LengthRatioMultiplier"), jsMultiplier);
+        Assert.Equal(SnippetValidationConstant<int>("LengthRatioSlack"), jsSlack);
+        Assert.Equal(SnippetValidationConstant<int>("MaxExtraSentences"), jsMaxExtraSentences);
+    }
+
+    private static double ExtractJsNumericConstant(string js, string constantName)
+    {
+        var match = Regex.Match(
+            js, $@"var {Regex.Escape(constantName)} = (-?\d+(?:\.\d+)?);", RegexOptions.None,
+            TimeSpan.FromSeconds(1));
+        if (!match.Success)
+            throw new InvalidOperationException($"{constantName} is not a greppable `var X = <number>;` literal in snippets.js.");
+        return double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+    }
+
+    private static T SnippetValidationConstant<T>(string fieldName)
+    {
+        var field = typeof(SnippetValidationUtility).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException($"SnippetValidationUtility.{fieldName} does not exist.");
+        return (T)field.GetValue(null)!;
     }
 }
