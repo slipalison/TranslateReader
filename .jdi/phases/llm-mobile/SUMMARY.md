@@ -112,3 +112,60 @@ Job `build-ios` verde, inferencia real em device (iOS e Android), qualquer numer
 problema de performance do `StatelessExecutor` no Android, qualidade Hy-MT2 vs HY-MT1.5,
 comportamento do MacCatalyst, crescimento do tamanho do pacote, o veredito da propria ferramenta do
 Google Play sobre 16 KB, e resultados do SonarCloud.
+
+## Follow-up (chain `/jdi-issue`, mode=fix_blockers, iter=4): W-4 corrigido
+
+REVIEW.md (iter 3) aprovou a phase com `APPROVED_WITH_WARNINGS` (sem blocker). Esta rodada,
+delimitada explicitamente ao warning **W-4**, corrigiu a ausencia de guarda de concorrencia em
+`LlamaCppTranslationEngine.InitializeAsync` (`.claude/rules/csharp.md` secao 3) e, ao verificar,
+encontrou o **mesmo problema** em `TranslationEngine.InitializeAsync` (engine LLamaSharp
+Windows/Android) — corrigido do mesmo jeito, na mesma task, para nao deixar a inconsistencia sem
+resposta.
+
+- **Commit:** `ef1661a` — `fix(llm-mobile): guard InitializeAsync with a SemaphoreSlim in both translation engines`.
+- **Causa raiz:** `ITranslationEngine` e singleton no DI (`MauiProgram.cs`); `TranslationManager.InitializeEngineIfNeededAsync`
+  nao tinha guarda propria; duas chamadas concorrentes (ex.: traducao de paragrafos visiveis
+  correndo junto com um job de traducao de livro completo em background) podiam ambas observar
+  `IsReady == false` e ambas disparar o load caro (`LoadModel`/`LLamaWeights.LoadFromFile`).
+- **Fix (identico nas duas engines):** campo de instancia `readonly SemaphoreSlim _initLock = new(1, 1)`
+  (nao static — DoD 9 confirmado); `WaitAsync(ct)`; check-lock-check (segunda checagem de `IsReady`
+  e de `_disposed` DEPOIS de adquirir o semaforo); `Release()` em `finally`; `_initLock.Dispose()`
+  junto do resto que a engine ja descartava. `OperationCanceledException` flui sem ser engolida —
+  `WaitAsync(ct)` cancela corretamente quando o token e cancelado enquanto a chamada espera o lock
+  de outra inicializacao.
+- **Testes novos (4, todos passando, zero nome de teste perdido):**
+  - `LlamaCppTranslationEngineTests`: `InitializeAsync_WhenCalledConcurrently_LoadsTheModelOnlyOnce`
+    (NSubstitute sobre `ILlamaNativeAccess`, `LoadModel` bloqueia ate as duas chamadas estarem em
+    voo; conta invocacoes com `Interlocked` — prova UMA unica carga) e
+    `InitializeAsync_WhenCancelledWhileAnotherInitializationHoldsTheLock_ThrowsOperationCanceledWithoutLoadingAgain`.
+  - `TranslationEngineTests`: como `LLamaWeights.LoadFromFile` e uma chamada estatica real do SDK
+    sem seam (sem GGUF nesta maquina, sem backend nativo no projeto de teste, risco real de abort()
+    nativo com caminho invalido), os dois testes equivalentes acessam `_initLock`/`_weights` via
+    reflection (padrao ja usado em `HybridWebViewContractTests`/`ParsingEngineEdgeCaseTests`) para
+    provar a mesma serializacao e o mesmo fluxo de cancelamento SEM jamais chamar o loader real.
+  - Toda espera das 4 novas testes e limitada por `Task.WaitAsync(TimeSpan.FromSeconds(5))`: durante
+    o desenvolvimento, uma primeira versao sem essa protecao travou o processo de teste (nao apenas
+    falhou) ao rodar contra uma versao da engine deliberadamente revertida — corrigido antes do
+    commit final.
+  - Regressao provada por engenharia reversa: as 4 engines revertidas temporariamente (via
+    `git checkout --`) fazem os 3 testes que discriminam a ausencia do guard falhar de forma limpa
+    e rapida (~115ms, sem trava); o 4o teste de cancelamento passa mesmo revertido porque uma
+    checagem pre-existente (`ct.ThrowIfCancellationRequested()` antes do guard) ja cobria parte do
+    cenario — nao invalida o teste, apenas nao discrimina essa regressao especifica sozinho.
+- **Evidencia (nesta maquina, nesta sessao):**
+  - `dotnet test` (Release, solucao de testes completa): **492 passed / 2 skipped / 0 failed**
+    (488 do baseline da phase + 4 nomes novos); `comm -23` contra `BASELINE` vazio.
+  - Build Windows Release e Android Release: **0 Warning(s) / 0 Error(s)** nos dois.
+  - `bash scripts/coverage-gate.sh`: exit 0 — `COVERAGE_SCOPE pct=95.41 files=34` (subiu de 95.30),
+    `COVERAGE_JS pct=99.27 files=5` (inalterado), `COVERAGE_GUARD new_app_cs=1 waived=1` (inalterado).
+    `LlamaCppTranslationEngine.cs covered=47 valid=47` = **100%**.
+  - DoD 1, 2 e 9 (CONTEXT.md) re-executados literalmente contra HEAD: **PASS** nos tres — DoD 9 em
+    especial confirma zero static mutavel novo (`_initLock` e instancia, nao static) e os 12 arquivos
+    fora de escopo seguem byte a byte identicos ao BASELINE. DoD 3-8 nao re-executados no sentido
+    caro (sem rede/APK/xcframework) porque `git diff --name-only` prova que nenhum dos arquivos-alvo
+    deles foi tocado por este commit — o veredito PASS da iter 3 permanece estruturalmente valido.
+  - `dotnet format` (whitespace + style + analyzers, escopo so nos 4 arquivos tocados):
+    `--verify-no-changes` sai 0 — zero ajuste necessario.
+- **Nao tocado (por escopo explicito da rodada):** W-1, W-2, W-3, W-5, W-6, W-7; `CONTEXT.md`;
+  `REVIEW.md`; `ci.yml`; `PLAN.md` (T-1..T-8 permanecem como estavam — este fix nao e uma task
+  numerada do plano original, e sim uma correcao de warning pos-review).
