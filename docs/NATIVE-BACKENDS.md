@@ -20,7 +20,7 @@ Status legend (exactly one of these three tokens per platform, checked by
 ```
 PLATFORM windows STATUS SUPPORTED backend=LLamaSharp.Backend.Cuda12+Cpu evidence=dotnet-test-455-passed+dotnet-build-0-errors
 PLATFORM android STATUS SUPPORTED backend=LLamaSharp.Backend.Cpu.Android evidence=scripts/check-android-so.sh
-PLATFORM ios STATUS UNVERIFIED backend=llama.cpp-XCFramework-b10453 evidence=structural-only-see-notes
+PLATFORM ios STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-mobile-12
 PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-mobile-7
 ```
 
@@ -37,18 +37,43 @@ PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-m
   times more than the negative baseline of zero that T-1 recorded. Re-run with
   `bash scripts/check-android-so.sh --check-doc docs/NATIVE-BACKENDS.md` any time the backend
   package version changes; it fails closed if the measurement below goes stale.
-- **ios** — `UNVERIFIED`, and this is the ceiling, not a step toward `SUPPORTED` in this phase.
-  T-7 built the generation loop (`LlamaCppTranslationEngine`) and proved it with 15 NSubstitute
-  tests over `ILlamaNativeAccess`; T-8 added the pass-through P/Invoke declarations
-  (`Platforms/iOS/LlamaNativeAccess.cs`, 10 native calls, zero control flow), pinned the real
-  llama.cpp XCFramework release `b10453` by SHA-256
-  (`scripts/fetch-llama-xcframework.sh`, verified end to end against the actual downloaded
-  286,349,324-byte asset), and wired `MauiProgram.cs` to select this engine on iOS. None of that
-  has ever been compiled: this machine is Windows without the `maui-ios` workload, so
-  `net10.0-ios` only builds in the `build-ios` CI job on a macOS runner
-  (`.jdi/decisions/D-2026-08-16-llm-mobile-5.md`, `-9`, `-10`). Real inference, token throughput,
-  and store acceptance are `## Deferred to PR review` in `.jdi/phases/llm-mobile/CONTEXT.md` -- not
-  because they were skipped, but because no command run here can honestly prove them.
+- **ios** — `UNSUPPORTED` (corrected in the `/jdi-issue` iteration 2 review from the `UNVERIFIED`
+  originally recorded when T-8 landed; see `.jdi/decisions/D-2026-08-16-llm-mobile-12.md`).
+  `UNVERIFIED` would claim "compiles/links, just not executed on this machine" -- that turned out
+  to be false. `UNSUPPORTED` claims "does not link" -- that is proven, not guessed.
+
+  **What exists today (kept, none of it removed or reworked):** T-7 built the generation loop
+  (`LlamaCppTranslationEngine`) and proved it with 15 NSubstitute tests over
+  `ILlamaNativeAccess` -- zero device, zero GGUF, TFM-agnostic in `TranslateReader.Core`. T-8 pinned
+  the real llama.cpp XCFramework release `b10453` by SHA-256
+  (`scripts/fetch-llama-xcframework.sh`, verified end to end -- `--verify-only` accepts the correct
+  hash and rejects a wrong one -- against the actual downloaded 286,349,324-byte asset), wired
+  `NativeReference Kind="Static" ForceLoad="True" IsCxx="True"` with a literal path and an
+  `<Error Condition="!Exists(...)">` guard in the csproj, and wrote the P/Invoke declarations
+  (`Platforms/iOS/LlamaNativeAccess.cs`, 10 native calls, zero control flow) that `MauiProgram.cs`
+  selects on iOS behind `#if IOS`.
+
+  **What is missing:** the native symbol layer. Every one of those 10 declarations is
+  `[LibraryImport("__Internal", EntryPoint = "tr_llama_*")]`, but the pinned XCFramework does not
+  export `tr_llama_*` -- measured directly against the fetched artifact
+  (`.cache/llama-xcframework/b10453/`): zero occurrences of `tr_llama` in its headers or its
+  binary. The real `llama.h` exports 245 `LLAMA_API` declarations, all `llama_*`, and some of this
+  app's operations (`tr_llama_sample_next_token(ctx, temperature)`) have no 1:1 equivalent there --
+  real sampling requires assembling a sampler chain. No C shim translating `tr_llama_*` calls to
+  the real `llama_*` API exists anywhere in this repository (no `.c`/`.m` file, no build step
+  compiling one, no second `NativeReference`). On full-AOT iOS, `__Internal` symbols resolve at
+  native link time, so 10 undefined symbols is a deterministic link failure, not a runtime risk --
+  knowable without a macOS runner, with the artifact this app itself fetches.
+
+  **Why not now:** writing an untested C shim blind is exactly the kind of code that should not
+  ship -- there is no macOS machine in this phase to compile, link, or validate one. The
+  `build-ios` CI job was therefore removed from `.github/workflows/ci.yml` rather than committed
+  red (`.jdi/decisions/D-2026-08-16-llm-mobile-10.md`'s rule against committing a red job assumed
+  an *unknowable* outcome from this machine; this failure is knowable, so the same rule now means
+  "don't commit the job"). Closing this gap needs, in a future phase: (i) a compiled, pinned C
+  shim exporting `tr_llama_*` over the real `llama_*` API, or (ii) redeclaring the P/Invoke surface
+  directly against `llama_*` (marshalling `llama_batch`/`llama_model_params` structs and building a
+  sampler chain) -- both require macOS to validate and are out of scope here.
 - **maccatalyst** — `UNSUPPORTED` is final for this phase, not a placeholder. Per
   `D-2026-08-16-llm-mobile-7`, MacCatalyst does not gain a backend here: the same
   `PlatformNotSupportedException`-from-static-ctor failure that blocks iOS blocks Catalyst, and there

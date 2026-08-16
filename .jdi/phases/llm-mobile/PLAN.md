@@ -137,7 +137,41 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
   - **ACEITACAO ESTRUTURAL APENAS.** Build iOS verde, inferencia real em iPhone/iPad, tokens/s e aceitacao de loja estao em `## Deferred to PR review`. Se o job nao puder ser dado como verde, D-10 manda NAO commitar o job: T-8 reporta entrega parcial e o Bloco 1 permanece completo e coerente sozinho.
 - **Dependencies:** T-6, T-7
 - **Test:** `--verify-only` (2 execucoes: aceita e rejeita) + suite inalterada; nenhum teste novo de unidade (arquivo de declaracoes).
-- **Status:** completed
+- **Status:** partial — rebaixado na iteracao 2 do `/jdi-issue` (`.jdi/phases/llm-mobile/REVIEW.md` B-1, `.jdi/decisions/D-2026-08-16-llm-mobile-12.md`)
+
+**Resultado real (correcao de B-1, iteracao 2):** a propria clausula desta acceptance ja previa esta
+saida — "se o job nao puder ser dado como verde, D-10 manda NAO commitar o job" — e foi exercida.
+`.jdi/phases/llm-mobile/REVIEW.md` mediu, no artefato REAL baixado por esta task
+(`.cache/llama-xcframework/b10453/llama.framework`), que os 10 entry points
+`[LibraryImport("__Internal", EntryPoint = "tr_llama_*")]` declarados em
+`Platforms/iOS/LlamaNativeAccess.cs` nao correspondem a nenhum simbolo exportado: `tr_llama` tem ZERO
+ocorrencias em headers e binario; `llama.h` real expoe 245 declaracoes `LLAMA_API`, todas `llama_*`; e
+nenhum shim C que traduza `tr_llama_*` para `llama_*` existe em lugar nenhum do repo (nem `.c`/`.m`,
+nem passo de build, nem segunda `NativeReference`) — necessario por design, ja que operacoes como
+`tr_llama_sample_next_token` nao tem equivalente 1:1 na API real. Em `__Internal` + full AOT iOS isso
+e falha de LINK deterministica (10 simbolos indefinidos), nao um risco: cognoscivel sem macOS, com o
+proprio artefato ja baixado nesta maquina.
+
+Por isso, ao contrario do texto original de aceitacao ("nunca SUPPORTED"), a linha correta em
+`docs/NATIVE-BACKENDS.md` e `PLATFORM ios STATUS UNSUPPORTED`, nao `UNVERIFIED` — `UNVERIFIED` diria
+"compila/linka, so nao foi executado aqui", o que e FALSO; `UNSUPPORTED` diz "nao linka", o que e
+verdade PROVADA. O job `build-ios` sai do `ci.yml` (nao fica vermelho e commitado — violaria
+D-2026-08-16-llm-mobile-10) ate a camada de simbolos nativos existir.
+
+**O que permanece entregue, sem retrabalho** (nada de T-7/T-8 foi removido): `ILlamaNativeAccess` +
+`LlamaCppTranslationEngine` com o loop de geracao provado por 15 testes NSubstitute (T-7, intacto);
+`scripts/fetch-llama-xcframework.sh` com fetch pinado por tag + verificacao SHA-256 fail-closed
+provada nos dois sentidos (`--verify-only` aceita hash certo, rejeita hash errado); `NativeReference`
+com caminho literal + `Kind="Static" ForceLoad="True" IsCxx="True"` + `<Error Condition="!Exists(...)">`
+no csproj; as 10 declaracoes de `LlamaNativeAccess.cs` continuam no repo, documentadas como
+INCOMPLETAS (nao removidas, para nao perder o mapeamento de assinatura ja feito). O Bloco 1
+(T-1..T-6, Android) permanece entrega completa e provada, sozinho.
+
+**Caminho para fechar** (fora desta phase): (i) escrever e pinar um shim C compilado que exporte
+`tr_llama_*` sobre a API real `llama_*`; ou (ii) redeclarar o P/Invoke direto contra `llama_*`
+(marshalling de `llama_batch`/`llama_model_params` + sampler chain). Ambos exigem macOS para
+compilar/linkar/validar e nao entram por decisao propria futura — ver
+`.jdi/decisions/D-2026-08-16-llm-mobile-12.md`.
 
 ## Execution
 
@@ -145,6 +179,11 @@ Traducao offline por LLM local passa a funcionar em Android e iOS, com modelo de
 - Waves: 5 — W1 `T-1` | W2 `T-2` `T-3` `T-4` | W3 `T-5` `T-6` | W4 `T-7` | W5 `T-8`
 - Speedup paralelo estimado: 1,6x (8 tasks / 5 waves)
 - Specialist unico: `jdi-doer-translatereader` (`.jdi/specialists.md` e single-stack, glob `**/*`)
+- **Resultado real:** Bloco 1 (T-1..T-6) = entrega completa e provada, Android e alvo de primeira
+  classe nos gates. Bloco 2 = T-7 completo (loop de geracao provado no Core atras de contrato
+  mockavel); T-8 **parcial** (`D-2026-08-16-llm-mobile-12.md`) — fundacao da cadeia de suprimento e
+  do binding pronta, camada de simbolos nativos (`tr_llama_*`) ainda sem shim C, job `build-ios`
+  fora do `ci.yml` ate isso fechar.
 
 ## Files modified (all tasks)
 
