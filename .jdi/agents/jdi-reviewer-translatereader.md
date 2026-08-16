@@ -155,33 +155,39 @@ Reviewer picks implementation based on active shell. When in doubt, prefer bash 
 
 ### Gate 1: Build
 
-Windows TFM is the verification target: LLamaSharp backends (Cpu/Cuda12) ship for Windows only
-today, and a bare solution build attempts Android/iOS TFMs whose workloads may be absent in
-dev/CI. Target the app csproj explicitly — forcing `-f` at solution level fails with NETSDK1005
-on the `net10.0`-only Core/Tests projects (REVIEW ci-seguranca W-5). Mobile TFMs are a documented
-secondary target (CLAUDE.md § Build) — build them only when the phase touched `Platforms/`.
+Windows AND Android are both first-class local build targets (D-2026-08-16-llm-mobile-10):
+LLamaSharp ships a Windows backend (Cpu/Cuda12) and, since the `llm-mobile` phase, an official
+Android backend (`LLamaSharp.Backend.Cpu.Android`) too, and this machine can build both. Target the
+app csproj explicitly for BOTH — forcing `-f` at solution level fails with NETSDK1005 on the
+`net10.0`-only Core/Tests projects (REVIEW ci-seguranca W-5).
 
 **bash:**
 ```bash
 dotnet restore && dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0
+dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android
 ```
 
 **PowerShell:**
 ```powershell
 dotnet restore
 if ($LASTEXITCODE -eq 0) { dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-windows10.0.19041.0 }
+if ($LASTEXITCODE -eq 0) { dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android }
 ```
 
-Failure = block.
+Windows build failure = BLOCK. Android build failure = BLOCK — Android is no longer a
+missing-workload-tolerant secondary target (that premise is retired by D-2026-08-16-llm-mobile-10);
+both TFMs are expected to build at 0 Error(s), and Android is expected at 0 Warning(s) too
+(`.jdi/decisions/D-2026-08-16-llm-mobile-4.md` baseline).
 
-**Secondary (only if the phase touched `src/TranslateReader/Platforms/` or a mobile-specific
-dependency); a missing workload is reported as WARN, never as BLOCK:**
-```bash
-dotnet build -f net10.0-android
-```
-```powershell
-dotnet build -f net10.0-android
-```
+iOS is never a local gate: this machine is Windows without the `maui-ios` workload, so a local
+reviewer run does not attempt `net10.0-ios`/`net10.0-maccatalyst` and their absence here is expected,
+not a finding.
+
+There is currently NO `build-ios` job in `.github/workflows/ci.yml`, and that is deliberate. It was
+removed in `b721fda` because the iOS P/Invoke layer declares `tr_llama_*` entrypoints that no shipped
+artifact exports, which makes the link failure deterministic rather than unknown — see
+`.jdi/decisions/D-2026-08-16-llm-mobile-12.md`. Do not treat the missing job as a regression, and do
+not add one back until the native symbol gap is closed.
 
 ### Gate 2: Tests
 
@@ -753,7 +759,10 @@ Print REVIEW.md path + final verdict.
 - AM scope is empty (no `.cs`/JS change in the phase) -> gate 3 still runs; the floor applies to
   whatever `scripts/coverage-gate.sh` measures at HEAD, never SKIPPED
 - `dotnet format` unavailable -> warn on gate 4, do not block
-- Mobile TFM build fails for a missing workload -> WARN, not BLOCK (Windows TFM is the gate)
+- Android build fails -> BLOCK (D-2026-08-16-llm-mobile-10; Android is a first-class gate now, not
+  a missing-workload-tolerant one). iOS/MacCatalyst are never attempted locally at all (no
+  `maui-ios` workload on this machine) -> that absence is expected, not a finding; iOS build is
+  CI-only.
 - Phase not executed (no SUMMARY.md) -> abort, suggest /jdi-do
 - Windows without Git Bash -> use the PowerShell branch of each gate
 - bash + PowerShell both available -> prefer bash (more portable output)

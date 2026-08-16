@@ -20,11 +20,16 @@ public class TranslationManagerTests
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
     private readonly ISettingsAccess _settingsAccess = Substitute.For<ISettingsAccess>();
     private readonly ISnippetTranslationAccess _snippetTranslationAccess = Substitute.For<ISnippetTranslationAccess>();
+    private readonly IDeviceMemoryUtility _deviceMemoryUtility = Substitute.For<IDeviceMemoryUtility>();
     private readonly TranslationManager _sut;
 
     public TranslationManagerTests()
     {
         _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
+        // Sufficient by default and platform-supported by default: this fixture's tests target
+        // download/cache/translation behavior, not the availability gate (TranslationEngineAvailabilityTests
+        // owns that) -- so every existing InitializeEngineIfNeededAsync test keeps passing unchanged.
+        _deviceMemoryUtility.GetAvailableMemoryBytes().Returns(long.MaxValue);
         _sut = new TranslationManager(
             _translationEngine,
             _modelAccess,
@@ -34,7 +39,9 @@ public class TranslationManagerTests
             _booksAccess,
             _parsingEngine,
             _settingsAccess,
-            _snippetTranslationAccess);
+            _snippetTranslationAccess,
+            _deviceMemoryUtility,
+            isTranslationBackendSupported: true);
     }
 
     [Fact]
@@ -109,6 +116,35 @@ public class TranslationManagerTests
         await _settingsAccess.Received(1).FetchSettingsAsync();
         await _modelAccess.Received(1).DownloadModelAsync(
             "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsAreDefault_DownloadsHyMt2()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsSelectALegacyModel_KeepsThatModel()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+        await _modelAccess.DidNotReceive().DownloadModelAsync(
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
             Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
     }
 

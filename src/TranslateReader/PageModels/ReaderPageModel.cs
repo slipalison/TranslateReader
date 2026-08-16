@@ -255,6 +255,10 @@ public partial class ReaderPageModel(
             IsTranslationModeActive = true;
         }
         catch (OperationCanceledException) { }
+        catch (TranslationUnavailableException ex)
+        {
+            await Shell.Current.DisplayAlert("Erro", ex.Message, "OK");
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error preparing translation: {ex}");
@@ -352,6 +356,11 @@ public partial class ReaderPageModel(
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (TranslationUnavailableException ex)
+        {
+            await Shell.Current.DisplayAlert("Erro", ex.Message, "OK");
+            return [];
         }
         catch (Exception ex)
         {

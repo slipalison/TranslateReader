@@ -268,6 +268,10 @@ public partial class LibraryPageModel(
             }
         }
         catch (OperationCanceledException) { }
+        catch (TranslationUnavailableException ex)
+        {
+            await Shell.Current.DisplayAlert("Erro", ex.Message, "OK");
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error translating book: {ex}");

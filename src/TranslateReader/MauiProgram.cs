@@ -7,6 +7,7 @@ using TranslateReader.Contracts.Access;
 using TranslateReader.Contracts.Engines;
 using TranslateReader.Contracts.Managers;
 using TranslateReader.Contracts.Utilities;
+using TranslateReader.Models;
 using TranslateReader.PageModels;
 using TranslateReader.Pages;
 using TranslateReader.Pages.Controls;
@@ -78,8 +79,25 @@ public static class MauiProgram
         services.AddSingleton<IBookTranslationJobAccess>(_ => new BookTranslationJobAccess(connectionString, initializeOnStartup: true));
         services.AddSingleton<IModelAccess>(_ => new ModelAccess(
             new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, modelsDirectory));
+
+        // The managed, LLamaSharp-backed engine is the only ITranslationEngine that can ever touch
+        // LLamaSharp's native loader, which throws PlatformNotSupportedException from its own
+        // static constructor on iOS/MacCatalyst (D-2026-08-16-llm-mobile-5). iOS gets its own
+        // engine instead, built on the P/Invoke declarations in Platforms/iOS/LlamaNativeAccess.cs
+        // (D-2026-08-16-llm-mobile-5/-9); MacCatalyst still has no backend (D-2026-08-16-llm-mobile-7)
+        // and keeps the null-object engine, so that type stays untouched there and the crash cannot
+        // happen. This is the only #if of the phase; ITranslationEngine stays the single point of
+        // variation by platform (Managers/PageModels never branch on platform).
+#if IOS
+        services.AddSingleton<ILlamaNativeAccess, LlamaNativeAccess>();
+        services.AddSingleton<ITranslationEngine, LlamaCppTranslationEngine>();
+#elif MACCATALYST
+        services.AddSingleton<ITranslationEngine, UnavailableTranslationEngine>();
+#else
         services.AddSingleton<ITranslationEngine, TranslationEngine>();
+#endif
         services.AddSingleton<IFileUtility, FileUtility>();
+        services.AddSingleton<IDeviceMemoryUtility, DeviceMemoryUtility>();
 
         services.AddTransient<IParsingEngine, ParsingEngine>();
         services.AddTransient<IThemeEngine, ThemeEngine>();
@@ -98,8 +116,25 @@ public static class MauiProgram
             sp.GetRequiredService<IParsingEngine>(),
             sp.GetRequiredService<IFileUtility>(),
             booksDirectory));
-        services.AddTransient<ITranslationManager, TranslationManager>();
-        services.AddTransient<ISnippetTranslationManager, TranslationManager>();
+
+        // The Manager must not name NativeBackendPlan itself (it is business data, not business
+        // logic): the platform is detected once, here at the composition root, and only the
+        // resulting bool crosses into TranslationManager's constructor.
+        var isTranslationBackendSupported = NativeBackendPlan.For(DetectCurrentPlatform()).IsManagedBackendSupported;
+        TranslationManager CreateTranslationManager(IServiceProvider sp) => new(
+            sp.GetRequiredService<ITranslationEngine>(),
+            sp.GetRequiredService<IModelAccess>(),
+            sp.GetRequiredService<ITranslationCacheAccess>(),
+            sp.GetRequiredService<IBookTranslationJobAccess>(),
+            sp.GetRequiredService<IPromptUtility>(),
+            sp.GetRequiredService<IBooksAccess>(),
+            sp.GetRequiredService<IParsingEngine>(),
+            sp.GetRequiredService<ISettingsAccess>(),
+            sp.GetRequiredService<ISnippetTranslationAccess>(),
+            sp.GetRequiredService<IDeviceMemoryUtility>(),
+            isTranslationBackendSupported);
+        services.AddTransient<ITranslationManager>(CreateTranslationManager);
+        services.AddTransient<ISnippetTranslationManager>(CreateTranslationManager);
         services.AddTransient<ISettingsManager, SettingsManager>();
 
         services.AddTransient<LibraryPageModel>();
@@ -107,5 +142,14 @@ public static class MauiProgram
         services.AddTransient<LibraryPage>();
         services.AddTransient<ReaderPage>();
         services.AddTransient<SettingsOverlay>();
+    }
+
+    private static TranslationPlatform DetectCurrentPlatform()
+    {
+        if (OperatingSystem.IsWindows()) return TranslationPlatform.Windows;
+        if (OperatingSystem.IsAndroid()) return TranslationPlatform.Android;
+        if (OperatingSystem.IsIOS()) return TranslationPlatform.IOS;
+        if (OperatingSystem.IsMacCatalyst()) return TranslationPlatform.MacCatalyst;
+        return TranslationPlatform.Other;
     }
 }

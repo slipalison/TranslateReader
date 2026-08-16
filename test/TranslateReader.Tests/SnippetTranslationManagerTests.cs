@@ -23,11 +23,15 @@ public class SnippetTranslationManagerTests
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
     private readonly ISettingsAccess _settingsAccess = Substitute.For<ISettingsAccess>();
     private readonly ISnippetTranslationAccess _snippetTranslationAccess = Substitute.For<ISnippetTranslationAccess>();
+    private readonly IDeviceMemoryUtility _deviceMemoryUtility = Substitute.For<IDeviceMemoryUtility>();
     private readonly ISnippetTranslationManager _sut;
 
     public SnippetTranslationManagerTests()
     {
         _booksAccess.FetchBookAsync(1).Returns(new Book { Id = 1, Title = "Test Book", FilePath = "/tmp/test.epub" });
+        // Snippet translation never calls InitializeEngineIfNeededAsync's availability gate (it is
+        // only reached through ITranslationManager), so these two ctor args are unused by every test
+        // in this fixture -- still required because TranslationManager implements both interfaces.
         _sut = new TranslationManager(
             _translationEngine,
             _modelAccess,
@@ -37,7 +41,9 @@ public class SnippetTranslationManagerTests
             _booksAccess,
             _parsingEngine,
             _settingsAccess,
-            _snippetTranslationAccess);
+            _snippetTranslationAccess,
+            _deviceMemoryUtility,
+            isTranslationBackendSupported: true);
     }
 
     private static SnippetRequest MakeRequest(

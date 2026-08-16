@@ -396,6 +396,34 @@
                                 <Label Grid.Column="2" Text="1.1 GB" FontSize="11" TextColor="{StaticResource Neutral600}" VerticalOptions="Center" />
                             </Grid>
                         </Border>
+
+                        <!-- Default model for new installs (D-2026-08-16-llm-mobile-2): Apache-2.0,
+                             no territorial exclusion, drop-in replacement for HY-MT 1.8B above. -->
+                        <Border x:Name="HyMt2ModelButton"
+                                HeightRequest="53"
+                                BackgroundColor="Transparent"
+                                Stroke="{StaticResource Neutral800}"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 8"
+                                Padding="12,10">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnHyMt2Clicked" />
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                <Label x:Name="HyMt2ModelRadioIcon"
+                                       Grid.Column="0"
+                                       FontFamily="Phosphor"
+                                       Text="&#xE18A;"
+                                       FontSize="16"
+                                       TextColor="{StaticResource Neutral500}"
+                                       VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Hy-MT2 1.8B" FontSize="13" TextColor="{StaticResource ColorText}" />
+                                    <Label Text="Hy-MT2-1.8B-Q4_K_M.gguf" FontSize="11" TextColor="{StaticResource Neutral500}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="2" Text="1.1 GB" FontSize="11" TextColor="{StaticResource Neutral600}" VerticalOptions="Center" />
+                            </Grid>
+                        </Border>
                     </VerticalStackLayout>
                     <Label Text="Powered by Tencent HY. Nao afiliado a Tencent. Detalhes em THIRD-PARTY-NOTICES.md."
                            FontSize="12"

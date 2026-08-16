@@ -251,6 +251,7 @@ public partial class SettingsOverlay : ContentView
         SetModelRowSelected(QwenModelButton, QwenModelRadioIcon, modelName == "qwen-2.5-3b");
         SetModelRowSelected(PhiModelButton, PhiModelRadioIcon, modelName == "phi-3.5");
         SetModelRowSelected(HyMtModelButton, HyMtModelRadioIcon, modelName == "hy-mt1.5-1.8b");
+        SetModelRowSelected(HyMt2ModelButton, HyMt2ModelRadioIcon, modelName == "hy-mt2-1.8b");
     }
 
     private static void SetModelRowSelected(Border row, Label radioIcon, bool isSelected)
@@ -293,6 +294,13 @@ public partial class SettingsOverlay : ContentView
     {
         _settings.TranslationModelName = "hy-mt1.5-1.8b";
         UpdateModelButtonBorders("hy-mt1.5-1.8b");
+        NotifySettingsChanged();
+    }
+
+    private void OnHyMt2Clicked(object? sender, EventArgs e)
+    {
+        _settings.TranslationModelName = "hy-mt2-1.8b";
+        UpdateModelButtonBorders("hy-mt2-1.8b");
         NotifySettingsChanged();
     }
 

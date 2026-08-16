@@ -9,6 +9,5 @@
 # the gate prints COVERAGE_WAIVER_INVALID and keeps counting the file as a violation.
 #
 #   src/TranslateReader/Pages/SomeNewPage.xaml.cs  # D-2026-XX-XX-some-phase-N justification
-#
-# No blank waiver rows: today's baseline is zero live entries -- the app has not gained a new
-# .cs file since the boundary commit 4285f25.
+
+src/TranslateReader/Platforms/iOS/LlamaNativeAccess.cs  # D-2026-08-16-llm-mobile-5 pure P/Invoke declarations for the iOS translation backend (zero control flow, >=10 [LibraryImport] calls). The actual generation loop is Business.Engines.LlamaCppTranslationEngine in TranslateReader.Core, unit-tested with NSubstitute over ILlamaNativeAccess; this Windows machine has no maui-ios workload and cannot compile or run this file at all.

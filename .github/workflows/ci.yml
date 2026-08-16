@@ -73,3 +73,12 @@ jobs:
 
       - name: Build Android app
         run: dotnet build src/TranslateReader/TranslateReader.csproj -c Release -f net10.0-android
+
+  # build-ios intentionally absent: the 10 tr_llama_* entry points declared in
+  # src/TranslateReader/Platforms/iOS/LlamaNativeAccess.cs are not exported by the pinned
+  # llama.cpp XCFramework (b10453) -- confirmed by inspecting the fetched headers and binary,
+  # not inferred. On full-AOT iOS this is a deterministic link failure (undefined symbols),
+  # not a risk that CI would sometimes catch. D-2026-08-16-llm-mobile-10's rule is that a red
+  # job is never committed because that assumed an *unknowable* outcome from this Windows
+  # machine; this failure is knowable without macOS, so the job stays out until the native
+  # symbol layer exists (D-2026-08-16-llm-mobile-12).

@@ -154,7 +154,7 @@ public class SettingsAccessTests : IDisposable
         Assert.Equal(0, settings.LetterSpacing);
         Assert.Equal(0, settings.WordSpacing);
         Assert.Equal(ReadingMode.Scroll, settings.ReadingMode);
-        Assert.Equal("gemma-2-2b", settings.TranslationModelName);
+        Assert.Equal("hy-mt2-1.8b", settings.TranslationModelName);
         Assert.Equal(0.1, settings.TranslationTemperature);
         Assert.Equal("English", settings.SourceLanguage);
         Assert.Equal("Brazilian Portuguese (PT-BR)", settings.TargetLanguage);

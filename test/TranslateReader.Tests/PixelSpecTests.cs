@@ -42,7 +42,7 @@ public class PixelSpecTests
         ["BooksListCollection", "GridToggleButton", "ListToggleButton"];
 
     private static readonly string[] ModelRowNames =
-        ["GemmaModelButton", "QwenModelButton", "PhiModelButton", "HyMtModelButton"];
+        ["GemmaModelButton", "QwenModelButton", "PhiModelButton", "HyMtModelButton", "HyMt2ModelButton"];
 
     [Fact]
     public void DesignTokens_ExposeThePixelSpecExtensions()

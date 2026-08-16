@@ -20,7 +20,9 @@ public class TranslationManager(
     IBooksAccess booksAccess,
     IParsingEngine parsingEngine,
     ISettingsAccess settingsAccess,
-    ISnippetTranslationAccess snippetTranslationAccess) : ITranslationManager, ISnippetTranslationManager
+    ISnippetTranslationAccess snippetTranslationAccess,
+    IDeviceMemoryUtility deviceMemoryUtility,
+    bool isTranslationBackendSupported) : ITranslationManager, ISnippetTranslationManager
 {
     private static readonly ModelInfo GemmaModel = new(
         Name: "gemma-2-2b",
@@ -34,11 +36,23 @@ public class TranslationManager(
         DownloadUrl: "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/HY-MT1.5-1.8B-Q4_K_M.gguf",
         SizeBytes: 1_133_080_512);
 
+    // Apache-2.0 (docs/MODEL-LICENSES.md), same hunyuan_v1_dense architecture as HyMtModel above --
+    // a drop-in replacement in the GGUF pipeline without the HY-MT1.5 license's EU/UK/KR exclusion
+    // (D-2026-08-16-llm-mobile-2). Becomes the default for NEW installs (ReadingSettings.cs,
+    // SettingsAccess.cs); Gemma and HY-MT1.5 stay registered and selectable so a user who already
+    // downloaded one of them keeps resolving to that same file.
+    private static readonly ModelInfo HyMt2Model = new(
+        Name: "hy-mt2-1.8b",
+        FileName: "Hy-MT2-1.8B-Q4_K_M.gguf",
+        DownloadUrl: "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+        SizeBytes: 1_133_080_448);
+
     private static readonly IReadOnlyDictionary<string, ModelInfo> ModelRegistry =
         new Dictionary<string, ModelInfo>(StringComparer.Ordinal)
         {
             [GemmaModel.Name] = GemmaModel,
             [HyMtModel.Name] = HyMtModel,
+            [HyMt2Model.Name] = HyMt2Model,
         };
 
     private const float TranslationTemperature = 0.1f;
@@ -69,8 +83,17 @@ public class TranslationManager(
         if (translationEngine.IsReady)
             return;
 
+        if (!isTranslationBackendSupported)
+            throw new TranslationUnavailableException(
+                "Translation is not available on this device: this platform has no native translation backend.");
+
         var settings = await settingsAccess.FetchSettingsAsync();
         var model = ResolveModel(settings.TranslationModelName);
+
+        if (deviceMemoryUtility.GetAvailableMemoryBytes() < model.RequiredMemoryBytes)
+            throw new TranslationUnavailableException(
+                "Translation is not available on this device: not enough available memory to load this model.");
+
         await translationEngine.InitializeAsync(modelAccess.GetModelPath(model.FileName), ct);
     }
 
