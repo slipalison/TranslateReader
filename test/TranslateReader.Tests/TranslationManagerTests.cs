@@ -113,6 +113,35 @@ public class TranslationManagerTests
     }
 
     [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsAreDefault_DownloadsHyMt2()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings());
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DownloadModelIfNeededAsync_WhenSettingsSelectALegacyModel_KeepsThatModel()
+    {
+        _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "gemma-2-2b" });
+        _modelAccess.IsModelAvailable(Arg.Any<string>()).Returns(false);
+
+        await _sut.DownloadModelIfNeededAsync(null, CancellationToken.None);
+
+        await _modelAccess.Received(1).DownloadModelAsync(
+            "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+        await _modelAccess.DidNotReceive().DownloadModelAsync(
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+            Arg.Any<IProgress<double>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InitializeEngineIfNeededAsync_WhenSettingsSelectHyMt_UsesTheHyMtFileName()
     {
         _settingsAccess.FetchSettingsAsync().Returns(new ReadingSettings { TranslationModelName = "hy-mt1.5-1.8b" });

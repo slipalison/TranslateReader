@@ -51,7 +51,7 @@ public class SettingsAccess(string connectionString) : ISettingsAccess
             LetterSpacing = double.TryParse(values.GetValueOrDefault("LetterSpacing"), out var letterSpacing) ? letterSpacing : 0,
             WordSpacing = double.TryParse(values.GetValueOrDefault("WordSpacing"), out var wordSpacing) ? wordSpacing : 0,
             ReadingMode = Enum.TryParse<ReadingMode>(values.GetValueOrDefault("ReadingMode"), out var readingMode) ? readingMode : ReadingMode.Scroll,
-            TranslationModelName = values.GetValueOrDefault("TranslationModelName") ?? "gemma-2-2b",
+            TranslationModelName = values.GetValueOrDefault("TranslationModelName") ?? "hy-mt2-1.8b",
             TranslationTemperature = double.TryParse(values.GetValueOrDefault("TranslationTemperature"), out var translationTemp) ? translationTemp : 0.1,
             SourceLanguage = values.GetValueOrDefault("SourceLanguage") ?? "English",
             TargetLanguage = values.GetValueOrDefault("TargetLanguage") ?? "Brazilian Portuguese (PT-BR)"

@@ -9,7 +9,7 @@ public class ReadingSettings
     public double LetterSpacing { get; set; } = 0;
     public double WordSpacing { get; set; } = 0;
     public ReadingMode ReadingMode { get; set; } = ReadingMode.Paginated;
-    public string TranslationModelName { get; set; } = "gemma-2-2b";
+    public string TranslationModelName { get; set; } = "hy-mt2-1.8b";
     public double TranslationTemperature { get; set; } = 0.1;
     public string SourceLanguage { get; set; } = "English";
     public string TargetLanguage { get; set; } = "Brazilian Portuguese (PT-BR)";
