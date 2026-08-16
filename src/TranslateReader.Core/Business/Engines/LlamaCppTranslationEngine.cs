@@ -18,24 +18,41 @@ public sealed class LlamaCppTranslationEngine(ILlamaNativeAccess nativeAccess) :
 {
     private const int ContextSize = 2048;
 
+    // Guards the one-time, expensive model load (csharp.md S3): without it, two callers racing
+    // InitializeAsync on this singleton (e.g. a visible-paragraph translation and a background
+    // book-translation job) would both observe IsReady == false and both call LoadModel.
+    private readonly SemaphoreSlim _initLock = new(1, 1);
+
     private bool _modelLoaded;
     private bool _disposed;
 
     public bool IsReady => _modelLoaded && !_disposed;
 
-    public Task InitializeAsync(string modelPath, CancellationToken ct)
+    public async Task InitializeAsync(string modelPath, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ct.ThrowIfCancellationRequested();
 
         if (IsReady)
-            return Task.CompletedTask;
+            return;
 
-        nativeAccess.LoadModel(modelPath);
-        nativeAccess.CreateContext(ContextSize);
-        _modelLoaded = true;
+        await _initLock.WaitAsync(ct);
+        try
+        {
+            // Re-check after acquiring the lock: the caller that won the race already finished
+            // loading while this one was waiting, so this one must not load a second time.
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (IsReady)
+                return;
 
-        return Task.CompletedTask;
+            nativeAccess.LoadModel(modelPath);
+            nativeAccess.CreateContext(ContextSize);
+            _modelLoaded = true;
+        }
+        finally
+        {
+            _initLock.Release();
+        }
     }
 
     public async IAsyncEnumerable<string> GenerateStreamingAsync(
@@ -105,5 +122,7 @@ public sealed class LlamaCppTranslationEngine(ILlamaNativeAccess nativeAccess) :
             nativeAccess.FreeModel();
             _modelLoaded = false;
         }
+
+        _initLock.Dispose();
     }
 }

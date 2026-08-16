@@ -55,6 +55,80 @@ public class LlamaCppTranslationEngineTests
         _nativeAccess.DidNotReceive().LoadModel(Arg.Any<string>());
     }
 
+    // Bounds every wait in the two concurrency tests below: a correct guard resolves them almost
+    // instantly, so this only ever fires if a future regression turns a wait into a hang -- turning
+    // that into a fast, readable test failure instead of an indefinitely stuck test host process.
+    private static readonly TimeSpan LockGuardTimeout = TimeSpan.FromSeconds(5);
+
+    // csharp.md S3: proves the SemaphoreSlim guard actually serializes the one-time model load.
+    // LoadModel is made to block (as the real native call would take real time) until both calls
+    // are in flight, so an unguarded implementation would let the second one race in and call
+    // LoadModel a second time -- this is the scenario W-4 flagged as merely "mitigated by the
+    // absence of an await", which does not hold once InitializeAsync is genuinely called from two
+    // concurrent background flows (e.g. visible-paragraph translation racing a book-translation job).
+    [Fact]
+    public async Task InitializeAsync_WhenCalledConcurrently_LoadsTheModelOnlyOnce()
+    {
+        var loadEntered = new SemaphoreSlim(0, 100);
+        var releaseLoad = new SemaphoreSlim(0, 100);
+        var loadCallCount = 0;
+
+        _nativeAccess.When(x => x.LoadModel(Arg.Any<string>())).Do(_ =>
+        {
+            Interlocked.Increment(ref loadCallCount);
+            loadEntered.Release();
+            releaseLoad.Wait();
+        });
+
+        var first = Task.Run(() => _sut.InitializeAsync("/models/model.gguf", CancellationToken.None));
+        await loadEntered.WaitAsync().WaitAsync(LockGuardTimeout);
+
+        // Started only after `first` is confirmed to be inside LoadModel (blocked), so this is a
+        // genuine overlap, not two sequential calls.
+        var second = Task.Run(() => _sut.InitializeAsync("/models/model.gguf", CancellationToken.None));
+
+        // Generous release count: if the guard regressed and a second LoadModel call is blocked
+        // too, this must fail the loadCallCount assertion below instead of hanging forever.
+        releaseLoad.Release(10);
+        await Task.WhenAll(first, second).WaitAsync(LockGuardTimeout);
+
+        Assert.Equal(1, loadCallCount);
+        _nativeAccess.Received(1).LoadModel(Arg.Any<string>());
+        _nativeAccess.Received(1).CreateContext(Arg.Any<int>());
+        Assert.True(_sut.IsReady);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenCancelledWhileAnotherInitializationHoldsTheLock_ThrowsOperationCanceledWithoutLoadingAgain()
+    {
+        var loadEntered = new SemaphoreSlim(0, 100);
+        var releaseLoad = new SemaphoreSlim(0, 100);
+
+        _nativeAccess.When(x => x.LoadModel(Arg.Any<string>())).Do(_ =>
+        {
+            loadEntered.Release();
+            releaseLoad.Wait();
+        });
+
+        var first = Task.Run(() => _sut.InitializeAsync("/models/model.gguf", CancellationToken.None));
+        await loadEntered.WaitAsync().WaitAsync(LockGuardTimeout);
+
+        // Task.Run (not a direct call) so this thread is never at the mercy of InitializeAsync's
+        // own synchronization behavior: it must stay free to call cts.Cancel() right away.
+        using var cts = new CancellationTokenSource();
+        var second = Task.Run(() => _sut.InitializeAsync("/models/model.gguf", cts.Token));
+        cts.Cancel();
+
+        // Never swallowed, never turned into an error state (csharp.md S1): OperationCanceledException
+        // must flow out of the pending WaitAsync exactly as it would from any other await.
+        await Assert.ThrowsAsync<OperationCanceledException>(() => second.WaitAsync(LockGuardTimeout));
+        _nativeAccess.Received(1).LoadModel(Arg.Any<string>());
+
+        releaseLoad.Release(10);
+        await first.WaitAsync(LockGuardTimeout);
+        Assert.True(_sut.IsReady);
+    }
+
     [Fact]
     public async Task GenerateAsync_WhenNotInitialized_ThrowsInvalidOperation()
     {
