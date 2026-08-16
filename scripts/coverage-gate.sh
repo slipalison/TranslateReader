@@ -243,7 +243,7 @@ done < "$JS_LCOV"
 JS_TOTAL_COVERED=0
 JS_TOTAL_VALID=0
 JS_FILES=0
-for name in bridge paginated scroll translation; do
+for name in bridge paginated scroll snippets translation; do
   expected="$JS_DIR/$name.js"
   match=""
   for sf in "${!JS_VALID[@]}"; do
@@ -259,8 +259,8 @@ for name in bridge paginated scroll translation; do
   fi
 done
 
-if [[ "$JS_FILES" -ne 4 ]]; then
-  echo "ERROR: expected exactly 4 production JS files in lcov, found $JS_FILES" >&2
+if [[ "$JS_FILES" -ne 5 ]]; then
+  echo "ERROR: expected exactly 5 production JS files in lcov, found $JS_FILES" >&2
   exit 3
 fi
 

@@ -10,7 +10,8 @@ namespace TranslateReader.PageModels;
 public partial class ReaderPageModel(
     IReadingManager readingManager,
     ISettingsManager settingsManager,
-    ITranslationManager translationManager) : ObservableObject
+    ITranslationManager translationManager,
+    ISnippetTranslationManager snippetTranslationManager) : ObservableObject
 {
     [ObservableProperty]
     public partial int BookId { get; set; }
@@ -69,6 +70,8 @@ public partial class ReaderPageModel(
     private CancellationTokenSource? _translationCts;
 
     public ReadingSettings CurrentSettings { get; private set; } = new();
+
+    public ThemeColors CurrentThemeColors => settingsManager.ResolveThemeColors(CurrentSettings);
 
     public bool IsModelAvailable { get; private set; }
 
@@ -332,4 +335,55 @@ public partial class ReaderPageModel(
         IsModelAvailable = false;
         DeactivateTranslationMode();
     }
+
+    // Snippet translation has no dependency on paragraph translation mode (unlike TranslateAsync,
+    // which refuses Scroll), so it orchestrates its own engine readiness here — the only reader
+    // path that initializes the model for a Scroll-mode session. Reusing the existing download/load
+    // overlay (IsModelDownloading/IsModelLoading) means a cold model is never fetched silently: the
+    // user sees the same progress UI the paragraph-translation flow already shows.
+    public async Task<IReadOnlyList<SnippetTranslation>> TranslateSnippetsAsync(
+        IReadOnlyList<SnippetRequest> requests, CancellationToken ct)
+    {
+        try
+        {
+            await EnsureModelDownloadedAsync(ct);
+            return await RunSnippetTranslationsAsync(requests, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DEBUG_LOG] Error translating snippet: {ex}");
+            await Shell.Current.DisplayAlert("Erro", "Não foi possível traduzir o trecho selecionado.", "OK");
+            return [];
+        }
+    }
+
+    private async Task<IReadOnlyList<SnippetTranslation>> RunSnippetTranslationsAsync(
+        IReadOnlyList<SnippetRequest> requests, CancellationToken ct)
+    {
+        var results = new List<SnippetTranslation>(requests.Count);
+        await Task.Run(async () =>
+        {
+            foreach (var request in requests)
+            {
+                ct.ThrowIfCancellationRequested();
+                var snippet = await snippetTranslationManager.TranslateSnippetAsync(
+                    BookId, request, CurrentSettings.SourceLanguage, CurrentSettings.TargetLanguage, ct);
+                results.Add(snippet);
+            }
+        }, ct);
+        return results;
+    }
+
+    public Task<IReadOnlyList<SnippetTranslation>> LoadSnippetsAsync(string chapterHRef) =>
+        snippetTranslationManager.FetchSnippetsAsync(BookId, chapterHRef);
+
+    public Task SetSnippetShowingOriginalAsync(SnippetToggleRequest request) =>
+        snippetTranslationManager.SetShowingOriginalAsync(BookId, request);
+
+    public Task RemoveSnippetAsync(SnippetRemoveRequest request) =>
+        snippetTranslationManager.RemoveSnippetAsync(BookId, request);
 }

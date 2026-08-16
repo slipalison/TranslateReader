@@ -233,6 +233,12 @@ test('the ready signal retries later when probing the host throws', () => {
     assert.strictEqual(env.timers[0].delay, 100);
 });
 
+test('sendRawMessage reports false when no host is available', () => {
+    const env = loadBridge();
+
+    assert.strictEqual(env.window.sendRawMessage('snip|[]'), false);
+});
+
 test('the ready signal waits for DOMContentLoaded while the document is still loading', () => {
     const messages = [];
     const env = loadBridge({ readyState: 'loading' }, (candidate) => {

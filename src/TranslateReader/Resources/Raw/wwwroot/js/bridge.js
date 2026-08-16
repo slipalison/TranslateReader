@@ -70,22 +70,30 @@ window.flushChunk = function (fn) {
     window.__injectionBuffer = '';
 };
 
-function _sendReady() {
+// The one channel snippets.js also sends through (snip|, snip-toggle|, snip-remove|), so the
+// four-host probing chain lives in exactly one place. Returns whether some host accepted the
+// message, so a caller can decide what "nobody was listening" means for it.
+window.sendRawMessage = function (message) {
     try {
         if (window.HybridWebView && typeof window.HybridWebView.SendRawMessage === 'function') {
-            window.HybridWebView.SendRawMessage('ready');
+            window.HybridWebView.SendRawMessage(message);
         } else if (window.chrome?.webview) {
-            window.chrome.webview.postMessage('__RawMessage|ready');
+            window.chrome.webview.postMessage('__RawMessage|' + message);
         } else if (window.webkit?.messageHandlers?.webwindowinterop) {
-            window.webkit.messageHandlers.webwindowinterop.postMessage('__RawMessage|ready');
+            window.webkit.messageHandlers.webwindowinterop.postMessage('__RawMessage|' + message);
         } else if (window.hybridWebViewHost) {
-            window.hybridWebViewHost.sendMessage('__RawMessage|ready');
+            window.hybridWebViewHost.sendMessage('__RawMessage|' + message);
         } else {
-            setTimeout(_sendReady, 100);
+            return false;
         }
+        return true;
     } catch (e) {
-        setTimeout(_sendReady, 100);
+        return false;
     }
+};
+
+function _sendReady() {
+    if (!window.sendRawMessage('ready')) setTimeout(_sendReady, 100);
 }
 
 if (document.readyState === 'loading') {
