@@ -19,6 +19,7 @@ public class TranslationManagerTests
     private readonly IBooksAccess _booksAccess = Substitute.For<IBooksAccess>();
     private readonly IParsingEngine _parsingEngine = Substitute.For<IParsingEngine>();
     private readonly ISettingsAccess _settingsAccess = Substitute.For<ISettingsAccess>();
+    private readonly ISnippetTranslationAccess _snippetTranslationAccess = Substitute.For<ISnippetTranslationAccess>();
     private readonly TranslationManager _sut;
 
     public TranslationManagerTests()
@@ -32,7 +33,8 @@ public class TranslationManagerTests
             _promptUtility,
             _booksAccess,
             _parsingEngine,
-            _settingsAccess);
+            _settingsAccess,
+            _snippetTranslationAccess);
     }
 
     [Fact]
