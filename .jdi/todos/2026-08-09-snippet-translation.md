@@ -55,3 +55,27 @@ Itens levantados na captura de decisoes e conscientemente empurrados para fora d
 
 - **[DESIGN] `design/v0.2.0/` nao tem DESIGN-REFERENCE.md.** A v0.1.0 tem. Esta phase gera so a
   PIXEL-SPEC (medidas dos elementos novos), nao a referencia de design completa da v0.2.0.
+
+- **[READER] RESOLVIDO (iter 8, 2026-08-10).** ~~Paragrafo com filhos elemento (`<em>`/`<a>`/`<img>`)
+  virava UM periodo unico~~ (derivacao D do `PLAN.md`, marcada la como "a evolucao — split
+  preservando markup no nivel de text node — e phase futura, nao debito escondido"). Entregue: uso
+  real revelou que EPUBs tem markup inline em quase todo paragrafo, tornando a limitacao visivel de
+  imediato (5o feedback do usuario, "nao consigo selecionar um periodo, esta selecionando o paragrafo
+  inteiro"). `_wrapParagraph`/`_wrapMarkupParagraph` (`snippets.js`) agora localizam toda fronteira de
+  periodo real no texto achatado do paragrafo (mesma regex de `_splitSentences`, via
+  `_sentenceBoundaryMatches`) e movem nodes/fracoes de `Text.splitText` para dentro de cada
+  `span.tr-sent` — nunca serializam/reparseiam HTML. Um elemento inline continua atomico: uma
+  fronteira que cairia dentro dele e descartada, entao o periodo que a conteria simplesmente
+  continua ate a proxima fronteira em texto livre (o `<em>` nunca e cortado). O caso "1 periodo so"
+  do mockup (`onlySentence`) continua alcancavel — e so o que sobra quando o paragrafo genuinamente
+  nao tem nenhuma fronteira real fora de markup. UNDO com markup: `setSnippetLoading` agora guarda os
+  NODES originais do range (nao so o texto) num `Map` (`_snipOriginalNodes`), consumido por
+  `_spliceSpanBackToPeriods` ao restaurar um snip removido ou um loading cancelado — fallback para
+  texto (sem markup) quando a sessao foi restaurada do banco (`restoreSnippets` nunca populou o Map).
+  Mapa limpo em `unmountSnippetLayer` (sem leak entre capitulos). Efeito colateral corrigido de
+  brinde: `_originalParagraphText` contribuia so o `childNodes[0]` de um periodo, truncando um
+  periodo com markup no meio do contexto enviado ao modelo (W-13 do `REVIEW.md`) — agora usa
+  `textContent` completo. Ancoras `SnippetTranslations` persistidas ANTES deste fix, sobre um
+  paragrafo que era 1 periodo e agora vira N, terao hash divergente na proxima abertura do livro —
+  descarte silencioso ja existente (`restoreSnippets`), SEM purge (ancora invalida != registro
+  podre); o usuario re-traduz esses trechos manualmente.

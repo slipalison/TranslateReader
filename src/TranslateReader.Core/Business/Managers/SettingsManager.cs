@@ -17,4 +17,7 @@ public class SettingsManager(
 
     public string GenerateReaderCss(ReadingSettings settings) =>
         themeEngine.GenerateReaderCss(settings);
+
+    public ThemeColors ResolveThemeColors(ReadingSettings settings) =>
+        themeEngine.ResolveThemeColors(settings.Theme);
 }
