@@ -82,11 +82,16 @@ public static class MauiProgram
 
         // The managed, LLamaSharp-backed engine is the only ITranslationEngine that can ever touch
         // LLamaSharp's native loader, which throws PlatformNotSupportedException from its own
-        // static constructor on iOS/MacCatalyst (D-2026-08-16-llm-mobile-5). Registering the
-        // null-object engine there instead means that type is never touched on those TFMs, so the
-        // crash cannot happen -- this is the only #if of the phase, and ITranslationEngine stays
-        // the single point of variation by platform (Managers/PageModels never branch on platform).
-#if IOS || MACCATALYST
+        // static constructor on iOS/MacCatalyst (D-2026-08-16-llm-mobile-5). iOS gets its own
+        // engine instead, built on the P/Invoke declarations in Platforms/iOS/LlamaNativeAccess.cs
+        // (D-2026-08-16-llm-mobile-5/-9); MacCatalyst still has no backend (D-2026-08-16-llm-mobile-7)
+        // and keeps the null-object engine, so that type stays untouched there and the crash cannot
+        // happen. This is the only #if of the phase; ITranslationEngine stays the single point of
+        // variation by platform (Managers/PageModels never branch on platform).
+#if IOS
+        services.AddSingleton<ILlamaNativeAccess, LlamaNativeAccess>();
+        services.AddSingleton<ITranslationEngine, LlamaCppTranslationEngine>();
+#elif MACCATALYST
         services.AddSingleton<ITranslationEngine, UnavailableTranslationEngine>();
 #else
         services.AddSingleton<ITranslationEngine, TranslationEngine>();

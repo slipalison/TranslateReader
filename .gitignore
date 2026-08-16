@@ -63,3 +63,8 @@ scripts/.zitadel-setup-done
 .jdi/specialists.md
 .jdi/reviewers.md
 .jdi/skills-registry.md
+
+# llama.cpp XCFramework fetched by scripts/fetch-llama-xcframework.sh (D-2026-08-16-llm-mobile-9).
+# Pinned by tag + SHA-256 in TranslateReader.csproj, never committed -- this repo has never used
+# Git LFS and this artifact is far larger than anything versioned here today.
+.cache/llama-xcframework/

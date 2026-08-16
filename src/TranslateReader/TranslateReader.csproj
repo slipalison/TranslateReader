@@ -42,7 +42,14 @@
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
         <WindowsPackageType>None</WindowsPackageType>
 
-        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+        <!-- 16.4, not the platform-template default of 15.0: llama.cpp's official XCFramework
+             release is built with IOS_MIN_OS_VERSION=16.4 (D-2026-08-16-llm-mobile-6). The app is
+             not published anywhere yet, so this costs zero real users; it is not compiling a
+             lower-minimum build of our own, which would trade a verifiable pinned artifact for a
+             self-built one (contrary to D-2026-08-16-llm-mobile-9). MacCatalyst is untouched: it
+             gets no backend this phase (D-2026-08-16-llm-mobile-7), so raising its minimum would
+             only cut users without shipping anything in return. -->
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">16.4</SupportedOSPlatformVersion>
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
         <!-- 23.0, not the platform-template default of 21.0: the official Android CPU inference
              backend package below ships a .so linked against ANDROID_PLATFORM=android-23 in its
@@ -116,6 +123,53 @@
     </ItemGroup>
     <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
         <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3.ios" Version="2.1.12" />
+    </ItemGroup>
+
+    <!-- iOS translation backend (D-2026-08-16-llm-mobile-5, D-2026-08-16-llm-mobile-9): LLamaSharp
+         cannot run on iOS (its native loader throws PlatformNotSupportedException from its own type
+         initializer there), so iOS links llama.cpp's own official XCFramework release directly.
+         Pinned by tag + SHA-256, both literal, never `latest`/a branch name; bumping either
+         requires re-verifying the P/Invoke surface in Platforms/iOS/LlamaNativeAccess.cs against
+         the new release's llama.h. The XCFramework itself is never committed (.gitignore); it is
+         fetched (or read from a local cache) by scripts/fetch-llama-xcframework.sh, which verifies
+         the SHA-256 before ever extracting anything. -->
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+        <LlamaCppRelease>b10453</LlamaCppRelease>
+        <LlamaCppXcframeworkSha256>c47fb6013e886307a7a0a993a1e6c02ce9a46ba0ef5be01f3eb086a13a61ea6a</LlamaCppXcframeworkSha256>
+        <LlamaXcframeworkCacheDir>$(MSBuildThisFileDirectory)../../.cache/llama-xcframework/$(LlamaCppRelease)/</LlamaXcframeworkCacheDir>
+        <LlamaIosFrameworkPath>$(LlamaXcframeworkCacheDir)llama.framework</LlamaIosFrameworkPath>
+        <!-- SYSLIB1062: the source-generated array marshalling in Platforms/iOS/LlamaNativeAccess.cs
+             (LibraryImport + MarshalUsing over int[]) compiles to pointer-pinning code that requires
+             this. Scoped to iOS only: Windows/Android carry no unsafe code and stay as they are. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <!-- Runs before compilation so the framework is guaranteed present the first time anything
+         needs it; a no-op on every other TFM (the target itself is iOS-conditioned, so Windows and
+         Android builds never invoke this script at all). The <Error> guard turns a silent glob-match-zero
+         failure (the exact xamarin/xamarin-macios#19883 failure mode D-2026-08-16-llm-mobile-9 exists
+         to avoid) into a build break instead of a green build that ships nothing native. -->
+    <Target Name="FetchLlamaXcframework"
+            Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'"
+            BeforeTargets="CoreCompile">
+        <Exec Command="bash &quot;$(MSBuildThisFileDirectory)../../scripts/fetch-llama-xcframework.sh&quot; $(LlamaCppRelease) $(LlamaCppXcframeworkSha256)" />
+        <Error Condition="!Exists('$(LlamaIosFrameworkPath)')"
+               Text="llama.cpp XCFramework missing after fetch-llama-xcframework.sh ran: $(LlamaIosFrameworkPath) does not exist. Check network access and the pinned LlamaCppRelease/LlamaCppXcframeworkSha256 values." />
+    </Target>
+
+    <!-- Kind="Static" + ForceLoad + IsCxx: this XCFramework's slices are static libraries wrapped
+         in a .framework bundle (BUILD_SHARED_LIBS=OFF upstream), which xamarin-macios cannot embed
+         as a normal dynamic framework. SmartLink="False" because its dead-strip heuristics do not
+         handle a static C++ library like this correctly. Frameworks lists exactly what the
+         XCFramework's own modulemap declares (c++/Accelerate/Metal/Foundation). Path is a literal,
+         never a glob: a glob that matches zero files is a build that silently ships nothing. -->
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+        <NativeReference Include="$(LlamaIosFrameworkPath)"
+                          Kind="Static"
+                          ForceLoad="True"
+                          IsCxx="True"
+                          SmartLink="False"
+                          Frameworks="Accelerate Metal Foundation" />
     </ItemGroup>
 
     <ItemGroup>

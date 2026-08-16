@@ -20,7 +20,7 @@ Status legend (exactly one of these three tokens per platform, checked by
 ```
 PLATFORM windows STATUS SUPPORTED backend=LLamaSharp.Backend.Cuda12+Cpu evidence=dotnet-test-455-passed+dotnet-build-0-errors
 PLATFORM android STATUS SUPPORTED backend=LLamaSharp.Backend.Cpu.Android evidence=scripts/check-android-so.sh
-PLATFORM ios STATUS UNSUPPORTED backend=none evidence=pending-T-8-fetch-llama-xcframework
+PLATFORM ios STATUS UNVERIFIED backend=llama.cpp-XCFramework-b10453 evidence=structural-only-see-notes
 PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-mobile-7
 ```
 
@@ -37,10 +37,18 @@ PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-m
   times more than the negative baseline of zero that T-1 recorded. Re-run with
   `bash scripts/check-android-so.sh --check-doc docs/NATIVE-BACKENDS.md` any time the backend
   package version changes; it fails closed if the measurement below goes stale.
-- **ios** — `UNSUPPORTED` until Bloco 2 lands the P/Invoke engine and the pinned XCFramework fetch
-  (T-7/T-8). Even once that code exists, this platform can only ever reach `UNVERIFIED` here: no
-  machine in this phase has macOS or a physical device to compile or execute it
-  (`.jdi/decisions/D-2026-08-16-llm-mobile-5.md`). It is never marked `SUPPORTED` by this phase.
+- **ios** — `UNVERIFIED`, and this is the ceiling, not a step toward `SUPPORTED` in this phase.
+  T-7 built the generation loop (`LlamaCppTranslationEngine`) and proved it with 15 NSubstitute
+  tests over `ILlamaNativeAccess`; T-8 added the pass-through P/Invoke declarations
+  (`Platforms/iOS/LlamaNativeAccess.cs`, 10 native calls, zero control flow), pinned the real
+  llama.cpp XCFramework release `b10453` by SHA-256
+  (`scripts/fetch-llama-xcframework.sh`, verified end to end against the actual downloaded
+  286,349,324-byte asset), and wired `MauiProgram.cs` to select this engine on iOS. None of that
+  has ever been compiled: this machine is Windows without the `maui-ios` workload, so
+  `net10.0-ios` only builds in the `build-ios` CI job on a macOS runner
+  (`.jdi/decisions/D-2026-08-16-llm-mobile-5.md`, `-9`, `-10`). Real inference, token throughput,
+  and store acceptance are `## Deferred to PR review` in `.jdi/phases/llm-mobile/CONTEXT.md` -- not
+  because they were skipped, but because no command run here can honestly prove them.
 - **maccatalyst** — `UNSUPPORTED` is final for this phase, not a placeholder. Per
   `D-2026-08-16-llm-mobile-7`, MacCatalyst does not gain a backend here: the same
   `PlatformNotSupportedException`-from-static-ctor failure that blocks iOS blocks Catalyst, and there
