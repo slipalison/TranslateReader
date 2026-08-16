@@ -5,6 +5,7 @@ using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
 using TranslateReader.Contracts.Engines;
+using TranslateReader.Models;
 
 namespace TranslateReader.Business.Engines;
 
@@ -38,17 +39,31 @@ public sealed class TranslationEngine : ITranslationEngine
 
         _nativeLibraryConfigured = true;
 
-        var cudaSearchDir = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory,
-            "runtimes", "win-x64", "native", "cuda12");
+        ApplyNativeBackendPlan(NativeBackendPlan.For(DetectCurrentPlatform()));
+    }
 
-        NativeLibraryConfig.All
-            .WithCuda(true)
-            .WithVulkan(false)
-            .WithAutoFallback(false)
-            .WithSearchDirectory(cudaSearchDir)
+    private static TranslationPlatform DetectCurrentPlatform()
+    {
+        if (OperatingSystem.IsWindows()) return TranslationPlatform.Windows;
+        if (OperatingSystem.IsAndroid()) return TranslationPlatform.Android;
+        if (OperatingSystem.IsIOS()) return TranslationPlatform.IOS;
+        if (OperatingSystem.IsMacCatalyst()) return TranslationPlatform.MacCatalyst;
+        return TranslationPlatform.Other;
+    }
+
+    private static void ApplyNativeBackendPlan(NativeBackendPlan plan)
+    {
+        var config = NativeLibraryConfig.All
+            .WithCuda(plan.UseCuda)
+            .WithVulkan(plan.UseVulkan)
+            .WithAutoFallback(plan.UseAutoFallback)
             .WithLogCallback((level, message) =>
                 System.Diagnostics.Debug.WriteLine($"[LLamaSharp] {level}: {message}"));
+
+        if (plan.SearchDirectory is not null)
+        {
+            config.WithSearchDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, plan.SearchDirectory));
+        }
     }
 
     public async IAsyncEnumerable<string> GenerateStreamingAsync(
