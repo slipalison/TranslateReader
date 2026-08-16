@@ -45,4 +45,17 @@ public class SettingsManagerTests
         Assert.Equal("<style>body{}</style>", result);
         _themeEngine.Received(1).GenerateReaderCss(settings);
     }
+
+    [Fact]
+    public void ResolveThemeColors_ReturnsTheAccentOfTheRequestedTheme()
+    {
+        var settings = new ReadingSettings { Theme = ThemeType.Sepia };
+        var expected = new ThemeColors("#F4ECD8", "#5B4636", "#8B6914");
+        _themeEngine.ResolveThemeColors(ThemeType.Sepia).Returns(expected);
+
+        var result = CreateSut().ResolveThemeColors(settings);
+
+        Assert.Equal("#8B6914", result.Accent);
+        _themeEngine.Received(1).ResolveThemeColors(ThemeType.Sepia);
+    }
 }
