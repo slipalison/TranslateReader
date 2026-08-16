@@ -19,7 +19,7 @@ Status legend (exactly one of these three tokens per platform, checked by
 
 ```
 PLATFORM windows STATUS SUPPORTED backend=LLamaSharp.Backend.Cuda12+Cpu evidence=dotnet-test-455-passed+dotnet-build-0-errors
-PLATFORM android STATUS UNSUPPORTED backend=none evidence=pending-T-6-check-android-so
+PLATFORM android STATUS SUPPORTED backend=LLamaSharp.Backend.Cpu.Android evidence=scripts/check-android-so.sh
 PLATFORM ios STATUS UNSUPPORTED backend=none evidence=pending-T-8-fetch-llama-xcframework
 PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-mobile-7
 ```
@@ -31,11 +31,12 @@ PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-m
   (`src/TranslateReader.Core/Models/NativeBackendPlan.cs`). This is the baseline the whole phase is
   measured against (`.jdi/phases/llm-mobile/BASELINE`): `dotnet test` = 455 passed / 2 skipped /
   0 failed; `dotnet build -f net10.0-windows10.0.19041.0` = 0 Error(s).
-- **android** — `UNSUPPORTED` is the honest baseline recorded by T-1, before any backend package or
-  `.so` verification landed (the APK today ships 26 `.so` files and zero of llama/ggml — the negative
-  baseline for DoD 5). Flips to `SUPPORTED` only after T-6 measures `libllama.so` inside the built
-  APK with `scripts/check-android-so.sh` and records its alignment below — never before the artifact
-  is actually inspected.
+- **android** — flipped to `SUPPORTED` by T-6, and only here: `scripts/check-android-so.sh` measured
+  `libllama.so` (and its `libggml`/`libggml-base`/`libggml-cpu`/`libmtmd` dependencies) inside the
+  `net10.0-android` Debug APK for both shipped ABIs (`arm64-v8a`, `x86_64`) — 10 `.so` files, ten
+  times more than the negative baseline of zero that T-1 recorded. Re-run with
+  `bash scripts/check-android-so.sh --check-doc docs/NATIVE-BACKENDS.md` any time the backend
+  package version changes; it fails closed if the measurement below goes stale.
 - **ios** — `UNSUPPORTED` until Bloco 2 lands the P/Invoke engine and the pinned XCFramework fetch
   (T-7/T-8). Even once that code exists, this platform can only ever reach `UNVERIFIED` here: no
   machine in this phase has macOS or a physical device to compile or execute it
@@ -47,7 +48,57 @@ PLATFORM maccatalyst STATUS UNSUPPORTED backend=none evidence=D-2026-08-16-llm-m
   (`TranslationUnavailableException`, handled in the PageModel boundary) instead of crashing; a real
   fix is left as a to-do for a future phase (`.jdi/todos/2026-08-16-llm-mobile.md`).
 
-## `.so` alignment (Android, populated by T-6)
+## `.so` alignment (Android)
 
-_(none yet — populated by `scripts/check-android-so.sh` once the Android backend package lands in
-T-4 and gets measured in T-6)_
+Measured by `scripts/check-android-so.sh` against the `net10.0-android` Debug build of
+`LLamaSharp.Backend.Cpu.Android` 0.27.0 (T-4), by reading the `p_align` of each `.so`'s largest
+`PT_LOAD` ELF segment directly (no `readelf`/NDK dependency). Every line below is checked verbatim
+by `scripts/check-android-so.sh --check-doc docs/NATIVE-BACKENDS.md`, which fails closed if a
+future re-measurement disagrees with what is recorded here.
+
+```
+SO_FOUND lib/x86_64/libllama.so
+SO_ALIGN lib/x86_64/libllama.so align=4096
+SO_FOUND lib/x86_64/libggml.so
+SO_ALIGN lib/x86_64/libggml.so align=4096
+SO_FOUND lib/x86_64/libggml-base.so
+SO_ALIGN lib/x86_64/libggml-base.so align=4096
+SO_FOUND lib/x86_64/libggml-cpu.so
+SO_ALIGN lib/x86_64/libggml-cpu.so align=4096
+SO_FOUND lib/x86_64/libmtmd.so
+SO_ALIGN lib/x86_64/libmtmd.so align=4096
+SO_FOUND lib/arm64-v8a/libllama.so
+SO_ALIGN lib/arm64-v8a/libllama.so align=4096
+SO_FOUND lib/arm64-v8a/libggml.so
+SO_ALIGN lib/arm64-v8a/libggml.so align=4096
+SO_FOUND lib/arm64-v8a/libggml-base.so
+SO_ALIGN lib/arm64-v8a/libggml-base.so align=4096
+SO_FOUND lib/arm64-v8a/libggml-cpu.so
+SO_ALIGN lib/arm64-v8a/libggml-cpu.so align=4096
+SO_FOUND lib/arm64-v8a/libmtmd.so
+SO_ALIGN lib/arm64-v8a/libmtmd.so align=4096
+SO_COUNT 10
+```
+
+### Limitation: not yet 16 KB page-size aligned
+
+Google Play requires 16 KB page-size support for apps targeting Android 15+ from 2025-11-01
+onward. Every `.so` above measures `align=4096` (4 KB), not the required 16384 (16 KB) — this is
+upstream fact about `LLamaSharp.Backend.Cpu.Android` 0.27.0's own build, not something this app's
+code controls (D-2026-08-16-llm-mobile-4: record the truth, never hide it behind a green gate).
+
+MITIGATION: libllama.so not 16 KB aligned (align=4096). Fix requires the upstream LLamaSharp
+Android NDK build to link with `-Wl,-z,max-page-size=16384`; track new
+`LLamaSharp.Backend.Cpu.Android` releases and re-run this script against them.
+MITIGATION: libggml.so not 16 KB aligned (align=4096). Same upstream NDK linker fix as libllama.so
+above; both come from the same `LLamaSharp.Backend.Cpu.Android` package build.
+MITIGATION: libggml-base.so not 16 KB aligned (align=4096). Same upstream NDK linker fix as
+libllama.so above; same package build.
+MITIGATION: libggml-cpu.so not 16 KB aligned (align=4096). Same upstream NDK linker fix as
+libllama.so above; same package build.
+MITIGATION: libmtmd.so not 16 KB aligned (align=4096). Same upstream NDK linker fix as libllama.so
+above; same package build.
+
+This does not block local functionality (Android can still load and run the model); it is a
+Google Play submission blocker, tracked here rather than compiled away
+(`## Deferred to PR review` in `.jdi/phases/llm-mobile/CONTEXT.md`).
