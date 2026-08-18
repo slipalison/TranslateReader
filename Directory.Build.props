@@ -19,7 +19,7 @@
       CancellationToken propagation (3), allocation/closure in loops (2.2), empty catch (1).
       StyleCop.Analyzers and SonarAnalyzer.CSharp were rejected in D-...-2.
     -->
-    <PackageReference Include="Meziantou.Analyzer" Version="3.0.141" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.142" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
   </ItemGroup>
 
   <!--
