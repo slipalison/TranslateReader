@@ -67,7 +67,7 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90"/>
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11"/>
         <!-- CommunityToolkit.Maui 14.2.2 requires WindowsAppSDK >= 2.2.0 (NU1605 downgrade
              otherwise). Bumped alongside the CommunityToolkit.Maui update in this PR. -->
         <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1"
