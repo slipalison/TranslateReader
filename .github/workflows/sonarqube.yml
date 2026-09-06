@@ -101,11 +101,15 @@ jobs:
           # coverage a 0% - o Node exclui test file do relatorio por padrao - e tambem
           # renderiam issues de analisador em codigo de teste. Nao contradiz
           # D-2026-07-31-coverage-90-1, que rejeitou excluir o JS de PRODUCAO.
+          # design/**: mockups HTML renderizados (bundles de artifact, nao codigo do
+          # produto). Indexados como MAIN, os 4 arquivos v0.1.0/v0.2.0 respondiam por 100%
+          # das linhas duplicadas novas (1502) e pelos 4 bugs Web:S5254 que reprovavam o
+          # Quality Gate de main desde 475b52a.
           args=(/k:"slipalison_TranslateReader" /o:"slipalison"
                 /d:sonar.host.url=https://sonarcloud.io /d:sonar.token="$SONAR_TOKEN"
                 /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
                 /d:sonar.javascript.lcov.reportPaths=TestResults/js-lcov.info
-                /d:sonar.exclusions="test/js/**"
+                /d:sonar.exclusions="test/js/**,design/**"
                 /d:sonar.issue.ignore.multicriteria=e1,e2
                 /d:sonar.issue.ignore.multicriteria.e1.ruleKey="Web:S7926"
                 /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/index.html"
