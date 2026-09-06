@@ -1,0 +1,14 @@
+# Gitleaks configuration — extends the built-in ruleset.
+# https://github.com/gitleaks/gitleaks#configuration
+
+title = "TranslateReader gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "XAML resource keys are identifiers, not secrets (generic-api-key false positive on x:Key=\"AccentSecondary100\")"
+regexTarget = "match"
+regexes = [
+  '''^Key="[A-Za-z0-9]+"$''',
+]
